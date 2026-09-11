@@ -1,0 +1,9 @@
+opencv-python
+numpy
+ultralytics # YOLOv8
+easyocr # For Scoreboard OCR
+yt-dlp # For downloading SOOP videos
+SQLAlchemy # DB ORM
+beautifulsoup4
+selenium # If dynamic scraping is needed for soop metadata
+pytest
