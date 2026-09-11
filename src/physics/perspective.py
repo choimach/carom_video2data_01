@@ -2,6 +2,17 @@ import cv2
 import numpy as np
 
 class PerspectiveTransformer:
+    """Pixel -> millimetre mapping for a single camera setup.
+
+    Note on orientation: this class defaults to a portrait table (x across the
+    1422 mm width, y along the 2844 mm length), which is what
+    visualization/export_data.py and viewer.html expect. A Calibration produced
+    by table_calibration is landscape (x along the length), matching how the
+    overhead camera frames the table; from_calibration() therefore yields a
+    transformer whose output is landscape, and anything downstream that assumes
+    portrait has to swap the axes.
+    """
+
     def __init__(self, table_width_mm=1422.0, table_height_mm=2844.0):
         """
         Initializes the perspective transformer based on official carom billiard dimensions.
@@ -20,6 +31,21 @@ class PerspectiveTransformer:
         ], dtype=np.float32)
         
         self.matrix = None
+
+    @classmethod
+    def from_calibration(cls, calibration):
+        """Build a transformer from a diamond-based Calibration.
+
+        Prefer this over calculate_matrix(): hand-picked table corners are read
+        off the cloth edge, which sits about 83 mm outside the cushion nose line
+        on each rail and biases the scale by roughly 3%.
+        """
+        from src.physics.table_calibration import TABLE_LENGTH_MM, TABLE_WIDTH_MM
+
+        transformer = cls(table_width_mm=TABLE_LENGTH_MM, table_height_mm=TABLE_WIDTH_MM)
+        transformer.matrix = calibration.matrix
+        transformer.calibration = calibration
+        return transformer
 
     def calculate_matrix(self, src_points):
         """
