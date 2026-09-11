@@ -1,0 +1,27 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Virtual Environment
+venv/
+env/
+.env
+.venv
+
+# Video & Data (Don't push heavy media files)
+data/
+videos/
+outputs/
+*.mp4
+*.avi
+*.mkv
+
+# SQLite Database
+*.db
+*.sqlite3
+
+# IDE
+.vscode/
+.idea/
