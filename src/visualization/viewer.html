@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Carom Billiards Simulator (v001)</title>
+    <style>
+        body {
+            background-color: #1a1a1a;
+            color: #ffffff;
+            font-family: 'Inter', sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 20px;
+        }
+        #controls {
+            margin-bottom: 20px;
+            display: flex;
+            gap: 15px;
+        }
+        button {
+            padding: 10px 20px;
+            background-color: #007bff;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+            transition: background 0.3s;
+        }
+        button:hover { background-color: #0056b3; }
+        #canvas-container {
+            position: relative;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+            border-radius: 10px;
+            overflow: hidden;
+            border: 15px solid #4a3b2c; /* Wooden rail color */
+        }
+        canvas {
+            background-color: #2e8b57; /* Billiard cloth green */
+            display: block;
+        }
+        #hud {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            background: rgba(0,0,0,0.6);
+            padding: 10px;
+            border-radius: 5px;
+            pointer-events: none;
+        }
+    </style>
+</head>
+<body>
+
+    <h2>당구 궤적 시뮬레이터 (Web-based Replay)</h2>
+    
+    <div id="controls">
+        <button id="btn-play">재생 (Play)</button>
+        <button id="btn-pause">일시정지 (Pause)</button>
+        <button id="btn-reset">초기화 (Reset)</button>
+    </div>
+
+    <div id="canvas-container">
+        <canvas id="billiardCanvas"></canvas>
+        <div id="hud">프레임: <span id="frame-counter">0</span></div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('billiardCanvas');
+        const ctx = canvas.getContext('2d');
+        const frameCounter = document.getElementById('frame-counter');
+        
+        // Table specifications
+        const TABLE_WIDTH_MM = 1422;
+        const TABLE_HEIGHT_MM = 2844;
+        const BALL_RADIUS_MM = 30.75;
+        
+        // Scale for rendering (e.g., 1mm = 0.3px)
+        const SCALE = 0.3;
+        canvas.width = TABLE_WIDTH_MM * SCALE;
+        canvas.height = TABLE_HEIGHT_MM * SCALE;
+
+        let animationId = null;
+        let currentFrame = 0;
+        let isPlaying = false;
+        
+        // Dummy data matching export_data.py structure
+        // In a real app, use fetch('data/trajectories.json')
+        const shotData = {
+            white: [
+                {x: 711, y: 711}, 
+                {x: 1000, y: 1400}, 
+                {x: 1422, y: 2000}, 
+                {x: 711, y: 2844}, 
+                {x: 0, y: 2000}, 
+                {x: 711, y: 2133}
+            ],
+            yellow: [{x: 711, y: 2133}, {x: 700, y: 2200}],
+            red: [{x: 300, y: 2000}, {x: 350, y: 2050}]
+        };
+
+        // Interpolate points to simulate smooth 60fps frames
+        function interpolatePath(points, framesPerSegment) {
+            let path = [];
+            for (let i = 0; i < points.length - 1; i++) {
+                let p1 = points[i];
+                let p2 = points[i+1];
+                for(let f = 0; f < framesPerSegment; f++) {
+                    path.push({
+                        x: p1.x + (p2.x - p1.x) * (f / framesPerSegment),
+                        y: p1.y + (p2.y - p1.y) * (f / framesPerSegment)
+                    });
+                }
+            }
+            path.push(points[points.length - 1]);
+            return path;
+        }
+
+        const framesWhite = interpolatePath(shotData.white, 30);
+        const maxFrames = framesWhite.length;
+
+        function drawBall(x_mm, y_mm, color) {
+            ctx.beginPath();
+            ctx.arc(x_mm * SCALE, y_mm * SCALE, BALL_RADIUS_MM * SCALE, 0, Math.PI * 2);
+            ctx.fillStyle = color;
+            ctx.fill();
+            
+            // Add slight 3D shading
+            ctx.beginPath();
+            ctx.arc((x_mm * SCALE) - 2, (y_mm * SCALE) - 2, (BALL_RADIUS_MM * SCALE) * 0.6, 0, Math.PI * 2);
+            ctx.fillStyle = 'rgba(255,255,255,0.4)';
+            ctx.fill();
+        }
+
+        function renderFrame() {
+            // Clear table
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            // Draw diamond marks (simplified)
+            ctx.fillStyle = '#ffffff';
+            for(let i=1; i<=7; i++) { ctx.fillRect(canvas.width, (canvas.height/8)*i, -5, 5); ctx.fillRect(0, (canvas.height/8)*i, 5, 5); }
+            for(let i=1; i<=3; i++) { ctx.fillRect((canvas.width/4)*i, 0, 5, 5); ctx.fillRect((canvas.width/4)*i, canvas.height, 5, -5); }
+
+            // Draw current ball positions
+            let wPos = framesWhite[Math.min(currentFrame, maxFrames - 1)];
+            let yPos = shotData.yellow[0]; // Static for demo simplicity
+            let rPos = shotData.red[0];    // Static for demo simplicity
+
+            drawBall(yPos.x, yPos.y, '#f1c40f'); // Yellow
+            drawBall(rPos.x, rPos.y, '#e74c3c'); // Red
+            drawBall(wPos.x, wPos.y, '#ffffff'); // White
+
+            frameCounter.innerText = currentFrame;
+
+            if (isPlaying && currentFrame < maxFrames - 1) {
+                currentFrame++;
+                animationId = requestAnimationFrame(renderFrame);
+            } else {
+                isPlaying = false;
+            }
+        }
+
+        document.getElementById('btn-play').addEventListener('click', () => {
+            if (!isPlaying && currentFrame < maxFrames - 1) {
+                isPlaying = true;
+                renderFrame();
+            }
+        });
+
+        document.getElementById('btn-pause').addEventListener('click', () => {
+            isPlaying = false;
+            cancelAnimationFrame(animationId);
+        });
+
+        document.getElementById('btn-reset').addEventListener('click', () => {
+            isPlaying = false;
+            cancelAnimationFrame(animationId);
+            currentFrame = 0;
+            renderFrame();
+        });
+
+        // Initial render
+        renderFrame();
+    </script>
+</body>
+</html>
