@@ -23,6 +23,7 @@ import numpy as np
 from src.physics.ball_detector import BallDetector
 from src.physics.carom import judge_shot
 from src.physics.kinematics import KinematicsEngine
+from src.physics.stroke import stroke_of
 from src.physics.table_calibration import calibrate, CalibrationError
 from src.segmentation.scoreboard_ocr import ScoreboardReader
 from src.segmentation.shot_segmenter import (
@@ -316,6 +317,8 @@ def analyse(scan_data, recover=True):
         shot.verdict = details
         shot.verdict_source = "trajectory"
         shot.cue_travel = cue_travel_mm(shot, positions)
+        for field, value in stroke_of(shot, positions, details.get("events") or []).items():
+            setattr(shot, field, value)
         path = positions[shot.cue_ball][shot.start_frame:shot.end_frame + 1]
         shot.cue_speed = kinematics.calculate_speed([p for p in path if np.isfinite(p).all()])
     for shot in ordered:
@@ -325,6 +328,8 @@ def analyse(scan_data, recover=True):
             shot.verdict_source = None
             shot.cue_travel = None
             shot.cue_speed = None
+            for field in ("thickness", "spin_y", "spin_x", "spin_rail"):
+                setattr(shot, field, None)
 
     # The scoreboard is kept as a second opinion, not as the verdict.
     scores = {
@@ -431,6 +436,10 @@ def export_json(result, path):
                 "layout_mm": shot.start_positions,
                 "final_mm": shot.end_positions,
                 "cue_speed_ms": getattr(shot, "cue_speed", None),
+                "thickness": getattr(shot, "thickness", None),
+                "spin_y": getattr(shot, "spin_y", None),
+                "spin_x": getattr(shot, "spin_x", None),
+                "spin_rail": getattr(shot, "spin_rail", None),
                 "cue_travel_mm": getattr(shot, "cue_travel", None),
                 "start_frame": shot.start_frame,
                 "end_frame": shot.end_frame,
