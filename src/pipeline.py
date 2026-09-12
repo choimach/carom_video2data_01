@@ -81,6 +81,53 @@ def find_calibration(video_path, search_from=600.0, search_to=None, step=120.0,
     return best[1], fps
 
 
+def find_play_start(video_path, calibration, search_from=0.0, search_to=None,
+                    coarse_step=120.0, fine_step=10.0, verbose=True):
+    """Where the match actually begins.
+
+    A broadcast opens with a standby card or a reel of promotional video - half
+    an hour on one of these VODs, over an hour on another - and scanning it is
+    pure decoding for nothing. This walks forward coarsely until the table
+    appears, then steps back and finds the first appearance to within a few
+    seconds.
+
+    Returns a second, or None if the table never shows up.
+    """
+    capture = cv2.VideoCapture(video_path)
+    fps = capture.get(cv2.CAP_PROP_FPS) or 60.0
+    if search_to is None:
+        search_to = capture.get(cv2.CAP_PROP_FRAME_COUNT) / fps
+
+    def table_at(second):
+        capture.set(cv2.CAP_PROP_POS_FRAMES, int(second * fps))
+        ok, frame = capture.read()
+        return bool(ok and calibration.is_table_visible(frame))
+
+    coarse = None
+    t = search_from
+    while t < search_to:
+        if table_at(t):
+            coarse = t
+            break
+        t += coarse_step
+    if coarse is None:
+        capture.release()
+        return None
+
+    # Step back over the coarse stride to find where it first appears.
+    start = max(search_from, coarse - coarse_step)
+    while start < coarse:
+        if table_at(start):
+            coarse = start
+            break
+        start += fine_step
+    capture.release()
+    if verbose:
+        print(f"match starts around t={coarse:.0f}s "
+              f"({coarse / 60:.0f} min of it is not the match)", flush=True)
+    return coarse
+
+
 def scan(video_path, track_path, start=0.0, end=None, calibration=None, verbose=True):
     """The expensive pass: ball positions and scoreboard readings, frame by frame.
 

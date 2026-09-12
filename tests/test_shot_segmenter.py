@@ -628,3 +628,75 @@ def test_a_long_absence_ends_the_play():
     shot = segment_shots(positions, live, FPS)[0]
     end = stitch_across_cuts(shot, positions, live, FPS)
     assert end == shot.end_frame
+
+
+# --- finding where a match actually starts ---------------------------------
+
+def test_play_start_skips_the_promotional_opening():
+    """Broadcasts open with a standby card or a promo reel - half an hour on one
+    of these VODs, over an hour on another - and decoding it yields nothing."""
+    import src.pipeline as pipeline
+
+    fps, table_from = 60.0, 1800.0
+
+    class FakeCalibration:
+        def is_table_visible(self, frame):
+            return bool(frame[0][0] >= table_from * fps)
+
+    class FakeCapture:
+        def __init__(self, *_a):
+            self.position = 0
+            self.reads = 0
+
+        def get(self, prop):
+            return fps if prop == pipeline.cv2.CAP_PROP_FPS else 3600.0 * fps
+
+        def set(self, _prop, frame):
+            self.position = frame
+
+        def read(self):
+            self.reads += 1
+            return True, [[self.position]]
+
+        def release(self):
+            pass
+
+    made = []
+    original = pipeline.cv2.VideoCapture
+    pipeline.cv2.VideoCapture = lambda *a: made.append(FakeCapture()) or made[-1]
+    try:
+        found = pipeline.find_play_start("x.mp4", FakeCalibration(), verbose=False)
+    finally:
+        pipeline.cv2.VideoCapture = original
+
+    assert found is not None
+    assert table_from - 10.0 <= found <= table_from, f"found {found}, table appears at {table_from}"
+    assert made[0].reads < 40, "a coarse sweep then a short walk back, not a frame-by-frame search"
+
+
+def test_play_start_is_none_when_the_table_never_appears():
+    import src.pipeline as pipeline
+
+    class NoTable:
+        def is_table_visible(self, frame):
+            return False
+
+    class FakeCapture:
+        def get(self, prop):
+            return 60.0 if prop == pipeline.cv2.CAP_PROP_FPS else 600.0 * 60.0
+
+        def set(self, *_a):
+            pass
+
+        def read(self):
+            return True, [[0]]
+
+        def release(self):
+            pass
+
+    original = pipeline.cv2.VideoCapture
+    pipeline.cv2.VideoCapture = lambda *a: FakeCapture()
+    try:
+        assert pipeline.find_play_start("x.mp4", NoTable(), verbose=False) is None
+    finally:
+        pipeline.cv2.VideoCapture = original

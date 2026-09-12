@@ -17,7 +17,7 @@ import sys
 from src.db.database import SessionLocal, init_db, reset_db
 from src.db.models import Inning, Match, Shot
 from src.pipeline import (analyse, cut_clips, export_json, export_trajectories,
-                          find_calibration, load_scan, report, scan)
+                          find_calibration, find_play_start, load_scan, report, scan)
 
 
 def track_path_for(video_path):
@@ -119,6 +119,8 @@ def main(argv=None):
     parser.add_argument("--title", default=None, help="name for this match")
     parser.add_argument("--start", type=float, default=0.0, help="skip this many seconds")
     parser.add_argument("--end", type=float, default=None)
+    parser.add_argument("--no-seek", action="store_true",
+                        help="scan from --start rather than hunting for where the match begins")
     parser.add_argument("--analyse-only", action="store_true",
                         help="reuse the cached scan instead of reading the video again")
     parser.add_argument("--no-store", action="store_true", help="do not write to the database")
@@ -161,7 +163,12 @@ def main(argv=None):
         if args.analyse_only:
             print(f"no cached scan at {track_path}; scanning", flush=True)
         calibration, _fps = find_calibration(video_path, search_from=max(args.start, 60.0))
-        scan(video_path, track_path, start=args.start, end=args.end, calibration=calibration)
+        start = args.start
+        if not args.no_seek:
+            found = find_play_start(video_path, calibration, search_from=args.start)
+            if found is not None:
+                start = max(args.start, found - 30.0)  # a little room before the first shot
+        scan(video_path, track_path, start=start, end=args.end, calibration=calibration)
     else:
         print(f"using cached scan {track_path}", flush=True)
 
