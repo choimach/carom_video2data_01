@@ -34,9 +34,12 @@ ONSET_SPEED_MS = 0.8
 MIN_REST_SECONDS = 0.35
 MIN_SHOT_SECONDS = 0.4
 MAX_SHOT_SECONDS = 20.0
-# Nobody strikes a carom ball faster than this. A reading above it is the
-# detector jumping to a different object, not a ball accelerating.
-MAX_CUE_SPEED_MS = 9.0
+# The fastest a person can send a ball with a cue is about 14-16 m/s (50-56
+# km/h). At 60 fps that is some 267 mm between frames, so a step of a quarter of
+# a metre is a hard shot, not an error - an earlier limit of 9 m/s was throwing
+# away the openings of the hardest strokes. A reading beyond this is the
+# detector jumping to another object, not a ball accelerating.
+MAX_CUE_SPEED_MS = 16.0
 ONSET_JUMP_MARGIN_MM = 120.0
 # How far a ball must leave its resting place to count as departed: comfortably
 # past centroid jitter, and well inside a ball's own width so the reading comes
