@@ -1,6 +1,13 @@
+import json
 import os
 import subprocess
-import json
+import sys
+
+def _yt_dlp():
+    """The yt-dlp beside the running interpreter, or whatever is on PATH."""
+    beside = os.path.join(os.path.dirname(sys.executable), "yt-dlp")
+    return beside if os.path.exists(beside) else "yt-dlp"
+
 
 def download_soop_video(url: str, output_dir: str = "data/videos"):
     """
@@ -14,7 +21,7 @@ def download_soop_video(url: str, output_dir: str = "data/videos"):
     output_template = os.path.join(output_dir, "%(title)s.%(ext)s")
     
     command = [
-        "yt-dlp",
+        _yt_dlp(),
         "-f", "bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best",
         "--merge-output-format", "mp4",
         "--write-info-json",
@@ -24,7 +31,10 @@ def download_soop_video(url: str, output_dir: str = "data/videos"):
     
     print(f"Starting download for: {url}")
     try:
-        result = subprocess.run(command, check=True, capture_output=True, text=True)
+        # stdin must be closed: run from a loop that pipes a list of videos,
+        # yt-dlp will consume the rest of that list.
+        result = subprocess.run(command, check=True, capture_output=True, text=True,
+                                stdin=subprocess.DEVNULL)
         print("Download completed successfully.")
         return True
     except subprocess.CalledProcessError as e:

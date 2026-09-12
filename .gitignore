@@ -29,3 +29,6 @@ outputs/
 # Model weights
 *.pt
 *.onnx
+
+# screening previews and catalogues are working files
+data/_screen/

@@ -1,9 +1,21 @@
-opencv-python
+# Runs entirely inside WSL. Create the environment outside the project
+# directory - a venv on /mnt/d goes through DrvFs and is markedly slower:
+#
+#   python3 -m venv ~/.venvs/carom
+#   ~/.venvs/carom/bin/pip install -r requirements.txt
+#   ~/.venvs/carom/bin/pip install torch --index-url https://download.pytorch.org/whl/cu124
+#
+# torch is listed separately because the CUDA build comes from PyTorch's own
+# index; the default PyPI wheel is CPU-only and easyocr then runs an order of
+# magnitude slower. WSL reaches the GPU through the Windows driver, so nothing
+# needs installing on the Linux side beyond the wheel.
+
 numpy
-ultralytics # YOLOv8
-easyocr # For Scoreboard OCR
-yt-dlp # For downloading SOOP videos
-SQLAlchemy # DB ORM
-beautifulsoup4
-selenium # If dynamic scraping is needed for soop metadata
+opencv-python-headless   # headless: there is no display to draw on in WSL
+easyocr                  # scoreboard digits
+yt-dlp                   # match VODs
+SQLAlchemy
 pytest
+
+# ffmpeg is required too, and comes from the distribution rather than pip:
+#   sudo apt install ffmpeg
