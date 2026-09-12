@@ -1,127 +1,172 @@
-import os
+"""
+Turn a match video into play data.
+
+    python -m src.main --video data/videos/match.mp4 --title "Jaspers vs Tran"
+    python -m src.main --url https://vod.sooplive.com/player/206343559
+    python -m src.main --video ... --analyse-only      # re-run on the cached scan
+
+The scan is the expensive half, so it is written to a .npz beside the video and
+reused. Every threshold in the judgement was settled by re-running --analyse-only
+over a cached scan; at fifty minutes a scan there is no other way to work.
+"""
+
 import argparse
-import json
-from src.db.database import SessionLocal, init_db
-from src.db.models import Match, Inning, Shot
-from src.physics.ball_tracker import BallTracker
-from src.physics.perspective import PerspectiveTransformer
-from src.physics.kinematics import KinematicsEngine
-from src.visualization.export_data import export_trajectories_to_json
+import os
+import sys
 
-def process_video(video_path: str, title: str):
-    print(f"Starting v002 test pipeline for: {title}")
-    print(f"Processing clip: {video_path}")
-    
-    if not os.path.exists(video_path):
-        print(f"Error: Video file {video_path} not found.")
-        return
+from src.db.database import SessionLocal, init_db, reset_db
+from src.db.models import Inning, Match, Shot
+from src.pipeline import analyse, export_json, find_calibration, load_scan, report, scan
 
-    # 1. Database Session
-    db = SessionLocal()
+
+def track_path_for(video_path):
+    base, _ = os.path.splitext(video_path)
+    return f"{base}.track.npz"
+
+
+def store(result, video_path, track_path, title, url, scan_data):
+    """Write the match, its innings and its plays to the database."""
+    session = SessionLocal()
     try:
+        turns = result["turns"]
+        colours = {colour for *_rest, colour, _points in
+                   ((t[0], t[1], t[2], t[3]) for t in turns)}
         match = Match(
             title=title,
-            video_url="local_test_clip",
-            tournament_name="Test PBA Tour",
-            player_a="Player A",
-            player_b="Player B"
+            video_url=url,
+            video_path=video_path,
+            track_path=track_path,
+            track_start_second=result["start"],
+            fps=result["fps"],
+            mm_per_px=scan_data["mm_per_px"],
+            calibration_error_mm=scan_data["reprojection_error"],
+            player_a_ball="white" if "white" in colours else None,
+            player_b_ball="yellow" if "yellow" in colours else None,
+            expected_plays=result["expected_plays"],
+            detected_plays=len(result["plays"]),
         )
-        db.add(match)
-        db.commit()
-        db.refresh(match)
-        
-        inning = Inning(match_id=match.id, inning_number=1, player_id="Player A")
-        db.add(inning)
-        db.commit()
-        db.refresh(inning)
+        session.add(match)
+        session.flush()
 
-        # 2. Vision & Physics Tracking
-        print("Step 1: Running YOLO Ball Tracker...")
-        tracker = BallTracker('yolov8n.pt')
-        # This will create output_tracked.mp4 for visual verification
-        # Using full video tracking on GPU
-        trajectories = tracker.track_video(video_path, output_path="data/videos/output_tracked.mp4")
-        
-        # We need to map YOLO tracking IDs to 'white', 'yellow', 'red'.
-        # Since yolov8n detects balls as 'sports ball', IDs are arbitrary integers.
-        # For this test, we just pick the top 3 longest tracks.
-        sorted_ids = sorted(trajectories.keys(), key=lambda k: len(trajectories[k]), reverse=True)
-        if len(sorted_ids) < 3:
-            print("Warning: Could not detect 3 distinct balls across the video.")
-            
-        white_pixels = trajectories[sorted_ids[0]] if len(sorted_ids) > 0 else []
-        yellow_pixels = trajectories[sorted_ids[1]] if len(sorted_ids) > 1 else []
-        red_pixels = trajectories[sorted_ids[2]] if len(sorted_ids) > 2 else []
-
-        print("Step 2: Coordinate Transform (Perspective)")
-        transformer = PerspectiveTransformer()
-        # V002 Hardcoded Table Corners (Top-Left, Top-Right, Bottom-Right, Bottom-Left)
-        # These assume a typical wide broadcast view. Will need adjustment per video.
-        # Assuming video is 1920x1080 standard.
-        transformer.calculate_matrix([(200, 200), (1720, 200), (1800, 900), (100, 900)])
-        
-        white_mm = transformer.transform_trajectory(white_pixels)
-        yellow_mm = transformer.transform_trajectory(yellow_pixels)
-        red_mm = transformer.transform_trajectory(red_pixels)
-
-        print("Step 3: Kinematics Engine (Speed & Physics)")
-        kinematics = KinematicsEngine(fps=30.0) # Using 30 fps for test clip
-        speed = kinematics.calculate_speed(white_mm)
-        print(f"Calculated Cue Ball Speed: {speed:.2f} m/s")
-
-        # 3. Save to DB
-        shot = Shot(
-            inning_id=inning.id,
-            shot_number=1,
-            success=False, # We don't have scoring logic yet
-            cue_speed=speed,
-            thickness=0.0, # Placeholder
-            spin_x=0.0,    # Placeholder
-            spin_y=0.0     # Placeholder
-        )
-        db.add(shot)
-        db.commit()
-        db.refresh(shot)
-        
-        # Export logic to update visualization JSON
-        export_data = {
-            "table": {"width": 1422, "height": 2844},
-            "shots": [
-                {
-                    "shot_id": shot.id,
-                    "fps": 30,
-                    "balls": {
-                        "white": [{"x": p[0], "y": p[1]} for p in white_mm],
-                        "yellow": [{"x": p[0], "y": p[1]} for p in yellow_mm],
-                        "red": [{"x": p[0], "y": p[1]} for p in red_mm]
-                    }
-                }
-            ]
-        }
-        
-        json_path = "data/trajectories.json"
-        os.makedirs(os.path.dirname(json_path), exist_ok=True)
-        with open(json_path, "w", encoding="utf-8") as f:
-            json.dump(export_data, f, indent=4)
-            
-        print("Pipeline execution complete! Tracked video and JSON data exported.")
-        
-    except Exception as e:
-        print(f"Error during pipeline execution: {e}")
-        db.rollback()
+        for inning, turn in zip(result["innings"], turns):
+            points = turn[3]
+            row = Inning(
+                match_id=match.id,
+                inning_number=inning.number,
+                cue_ball=inning.cue_ball,
+                player_id=inning.cue_ball,
+                points=points,
+                expected_plays=points + 1,
+                complete=len(inning.shots) == points + 1,
+            )
+            session.add(row)
+            session.flush()
+            for number, shot in enumerate(inning.shots, start=1):
+                verdict = getattr(shot, "verdict", {}) or {}
+                layout = shot.start_positions or {}
+                rejections = getattr(shot, "rejections", [])
+                session.add(Shot(
+                    inning_id=row.id,
+                    shot_number=number,
+                    cue_ball=shot.cue_ball,
+                    success=bool(shot.success),
+                    verdict_source="trajectory",
+                    scoreboard_success=getattr(shot, "scoreboard_success", None),
+                    cushions_before_second=verdict.get("cushions"),
+                    first_object_ball=verdict.get("first_ball"),
+                    second_object_ball=verdict.get("second_ball"),
+                    white_x=layout.get("white", (None, None))[0],
+                    white_y=layout.get("white", (None, None))[1],
+                    yellow_x=layout.get("yellow", (None, None))[0],
+                    yellow_y=layout.get("yellow", (None, None))[1],
+                    red_x=layout.get("red", (None, None))[0],
+                    red_y=layout.get("red", (None, None))[1],
+                    cue_speed=getattr(shot, "cue_speed", None),
+                    cue_travel_mm=getattr(shot, "cue_travel", None),
+                    start_frame=shot.start_frame,
+                    end_frame=shot.end_frame,
+                    start_second=result["start"] + shot.start_frame / result["fps"],
+                    end_second=result["start"] + shot.end_frame / result["fps"],
+                    complete=shot.complete,
+                    inferred=shot.inferred,
+                    is_replay=shot.replay_of is not None,
+                    label_confirmed=getattr(shot, "label_confirmed", False),
+                    usable=not rejections,
+                    rejected_for=";".join(rejections) or None,
+                ))
+        session.commit()
+        return match.id
+    except Exception:
+        session.rollback()
+        raise
     finally:
-        db.close()
+        session.close()
+
+
+def main(argv=None):
+    parser = argparse.ArgumentParser(description="Extract carom plays from a match video")
+    source = parser.add_mutually_exclusive_group()
+    source.add_argument("--video", help="path to a match video")
+    source.add_argument("--url", help="match VOD to download first")
+    parser.add_argument("--title", default=None, help="name for this match")
+    parser.add_argument("--start", type=float, default=0.0, help="skip this many seconds")
+    parser.add_argument("--end", type=float, default=None)
+    parser.add_argument("--analyse-only", action="store_true",
+                        help="reuse the cached scan instead of reading the video again")
+    parser.add_argument("--no-store", action="store_true", help="do not write to the database")
+    parser.add_argument("--json", default=None, help="also write the plays to this JSON file")
+    parser.add_argument("--init-db", action="store_true")
+    parser.add_argument("--reset-db", action="store_true", help="drop and recreate the tables")
+    args = parser.parse_args(argv)
+
+    if args.reset_db:
+        reset_db()
+        print("database reset")
+    elif args.init_db:
+        init_db()
+        print("database initialised")
+    if not (args.video or args.url):
+        if args.init_db or args.reset_db:
+            return 0
+        parser.error("one of --video or --url is required")
+
+    video_path = args.video
+    if args.url:
+        from src.data_acquisition.downloader import download_soop_video
+
+        if not download_soop_video(args.url):
+            print("download failed", file=sys.stderr)
+            return 1
+        if not video_path:
+            parser.error("--url downloaded the video; re-run with --video pointing at it")
+    if not os.path.exists(video_path):
+        print(f"no such video: {video_path}", file=sys.stderr)
+        return 1
+
+    init_db()
+    track_path = track_path_for(video_path)
+    if not args.analyse_only or not os.path.exists(track_path):
+        if args.analyse_only:
+            print(f"no cached scan at {track_path}; scanning", flush=True)
+        calibration, _fps = find_calibration(video_path, search_from=max(args.start, 60.0))
+        scan(video_path, track_path, start=args.start, end=args.end, calibration=calibration)
+    else:
+        print(f"using cached scan {track_path}", flush=True)
+
+    scan_data = load_scan(track_path)
+    result = analyse(scan_data)
+    title = args.title or os.path.splitext(os.path.basename(video_path))[0]
+    print(f"\n{title}")
+    report(result)
+
+    if args.json:
+        count = export_json(result, args.json)
+        print(f"\nwrote {count} plays to {args.json}")
+    if not args.no_store:
+        match_id = store(result, video_path, track_path, title, args.url, scan_data)
+        print(f"stored as match {match_id}")
+    return 0
+
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Billiards Video to Data Pipeline (v002)")
-    parser.add_argument("--video", type=str, help="Path to local video clip", default="data/videos/test_shot.mp4")
-    parser.add_argument("--title", type=str, help="Match Title", default="Test Clip PBA")
-    parser.add_argument("--init-db", action="store_true", help="Initialize the database")
-    
-    args = parser.parse_args()
-    
-    if args.init_db:
-        init_db()
-        print("Database initialized.")
-        
-    process_video(args.video, args.title)
+    raise SystemExit(main())

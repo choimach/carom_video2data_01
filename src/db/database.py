@@ -21,6 +21,18 @@ def init_db():
     from src.db.models import Match, Inning, Shot
     Base.metadata.create_all(bind=engine)
 
+def reset_db():
+    """Drop and recreate every table.
+
+    create_all leaves an existing table alone, so a schema change needs this;
+    the early runs of this project left rows behind that no longer fit.
+    """
+    from src.db.models import Match, Inning, Shot
+
+    Base.metadata.drop_all(bind=engine)
+    Base.metadata.create_all(bind=engine)
+
+
 def get_db():
     db = SessionLocal()
     try:
