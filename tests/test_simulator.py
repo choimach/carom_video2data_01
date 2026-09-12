@@ -45,13 +45,29 @@ def test_a_ball_stays_on_the_table():
         assert path[:, 1].max() <= TABLE_WIDTH_MM - BALL_RADIUS_MM + 1
 
 
-def test_a_cushion_returns_the_measured_share_across_the_rail():
+def test_a_ball_leaves_a_cushion_wider_than_it_arrived():
+    """Measured on 1297 bounces: a ball arriving 18 degrees off the normal
+    leaves at 34. It is the ball's own roll driving it along the rail."""
     table = Table()
     position = np.array([BALL_RADIUS_MM - 5.0, 700.0])
-    _moved, velocity, rail = table.bounce(position, np.array([-1000.0, 400.0]))
+    incoming = np.array([-1000.0, 1000.0 * np.tan(np.radians(18.0))])
+    _moved, velocity, rail = table.bounce(position, incoming)
     assert rail == "left"
-    assert velocity[0] == pytest.approx(1000.0 * CUSHION_RESTITUTION, rel=1e-6)
-    assert velocity[1] == pytest.approx(400.0 * table.tangential, rel=1e-6)
+    assert velocity[0] > 0                      # sent back onto the table
+    assert velocity[1] > 0                      # still going the same way along it
+    out = np.degrees(np.arctan2(abs(velocity[1]), abs(velocity[0])))
+    assert out == pytest.approx(34.0, abs=2.0)
+    assert np.hypot(*velocity) < np.hypot(*incoming)
+
+
+def test_a_ball_arriving_square_comes_straight_back():
+    """It has no direction to open into, so symmetry settles it."""
+    table = Table()
+    _moved, velocity, rail = table.bounce(np.array([BALL_RADIUS_MM - 5.0, 700.0]),
+                                          np.array([-1000.0, 0.0]))
+    assert rail == "left"
+    assert velocity[1] == pytest.approx(0.0, abs=1e-9)
+    assert velocity[0] > 0
 
 
 def test_a_struck_ball_leaves_along_the_line_of_centres():

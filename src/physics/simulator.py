@@ -26,6 +26,31 @@ BALL_RADIUS_MM = BALL_DIAMETER_MM / 2.0
 # sample sizes and how each was arrived at.
 CUSHION_RESTITUTION = 0.69      # of the speed across the rail, 1315 bounces
 CUSHION_TANGENTIAL = 0.92       # of the speed along it, with no side on the ball
+
+# A ball does not leave a cushion at the angle it arrived. It opens up, most of
+# all when it comes in shallow: measured over 1297 bounces, a ball arriving 18
+# degrees off the rail's normal leaves at 34, one arriving at 46 leaves at 55,
+# and one arriving at 79 leaves at 80. Scaling the two components by the
+# coefficients above accounts for about three of those degrees; the rest is the
+# ball's own roll driving it along the rail after the bounce, the same effect
+# that carries a cue ball forward through a contact.
+#
+# Against the component scaling it replaces, on the same 411 plays, this is
+# worth less than the physics of it suggests: the same 107 mm at the first
+# rail, the same half of the plays within one cushion, and 440 mm of drift at
+# two seconds against 473. It is kept because it is what the table does and the
+# components cannot produce it, not because it rescued the simulator. What
+# dominates the error happens before the first cushion.
+#
+# Angles are signed along the direction the ball was already travelling, which
+# matters more than it sounds: measuring them as magnitudes folds every rebound
+# that came back short into one that went long, and inflated the opening at
+# near-square incidence from 10 degrees to 19. Symmetry fixes the first entry -
+# a ball arriving exactly square has no direction to open into - and the rest
+# is the measurement.
+REBOUND_IN = np.array([0.0, 6.7, 17.8, 27.2, 38.0, 46.4, 56.0, 66.1, 79.3, 90.0])
+REBOUND_OUT = np.array([0.0, 16.7, 33.7, 41.8, 50.1, 55.4, 63.0, 70.6, 80.1, 90.0])
+REBOUND_SPEED = np.array([0.817, 0.817, 0.844, 0.829, 0.824, 0.818, 0.808, 0.835, 0.912, 0.912])
 BALL_RESTITUTION = 0.944        # 322 contacts, run back to the moment of contact
 # A frictionless cue ball leaves a cut square to the line joining the centres
 # and no part of it carries on. A real one does, because it arrives rolling and
@@ -43,12 +68,6 @@ DECAY_SPEED = np.array([0.0, 350.0, 700.0, 1200.0, 1950.0, 3000.0, 12000.0])
 DECAY_RATE = np.array([46.0, 46.0, 51.0, 74.0, 216.0, 439.0, 439.0])
 
 REST_SPEED_MM_S = 12.0          # below this a ball has stopped
-# Side on the ball widens or narrows a rebound. Measured on 338 cushions:
-# reverse side keeps 0.35 of the speed along the rail where neutral keeps 0.92
-# and running keeps 1.17, so a degree off the mirror angle is worth about this
-# much of the tangential speed.
-SIDE_PER_DEGREE = 0.020
-
 RAILS = ("left", "right", "top", "bottom")
 
 
@@ -72,26 +91,42 @@ class Table:
         x, y = position
         vx, vy = velocity
         rail = None
-        low, high = BALL_RADIUS_MM, None
+        edge = BALL_RADIUS_MM
 
-        if x < low:
-            x, vx, rail = low + (low - x), -vx, "left"
-        elif x > self.length - low:
-            x, vx, rail = (self.length - low) - (x - (self.length - low)), -vx, "right"
-        if y < low:
-            y, vy, rail = low + (low - y), -vy, "top"
-        elif y > self.width - low:
-            y, vy, rail = (self.width - low) - (y - (self.width - low)), -vy, "bottom"
+        if x < edge:
+            x, vx, rail = edge + (edge - x), -vx, "left"
+        elif x > self.length - edge:
+            x, vx, rail = (self.length - edge) - (x - (self.length - edge)), -vx, "right"
+        if y < edge:
+            y, vy, rail = edge + (edge - y), -vy, "top"
+        elif y > self.width - edge:
+            y, vy, rail = (self.width - edge) - (y - (self.width - edge)), -vy, "bottom"
         if rail is None:
             return position, velocity, None
 
-        across = self.restitution
-        along = self.tangential * (1.0 + SIDE_PER_DEGREE * side_degrees)
-        along = max(0.0, along)
+        # vx, vy already point away from the rail. Split them into the part
+        # across it and the part along it, turn the angle by what the table
+        # actually does, and put them back.
         if rail in ("left", "right"):
-            vx, vy = vx * across, vy * along
+            across, along = vx, vy
         else:
-            vx, vy = vx * along, vy * across
+            across, along = vy, vx
+        speed = float(np.hypot(across, along))
+        if speed <= 0:
+            return np.array([x, y]), np.array([vx, vy]), rail
+
+        incoming = np.degrees(np.arctan2(abs(along), abs(across)))
+        outgoing = float(np.interp(incoming, REBOUND_IN, REBOUND_OUT))
+        outgoing = min(89.0, outgoing + side_degrees)
+        kept = float(np.interp(incoming, REBOUND_IN, REBOUND_SPEED))
+
+        speed *= kept
+        across_out = np.sign(across) * speed * np.cos(np.radians(outgoing))
+        along_out = (np.sign(along) if along != 0 else 1.0) * speed * np.sin(np.radians(outgoing))
+        if rail in ("left", "right"):
+            vx, vy = across_out, along_out
+        else:
+            vy, vx = across_out, along_out
         return np.array([x, y]), np.array([vx, vy]), rail
 
 
