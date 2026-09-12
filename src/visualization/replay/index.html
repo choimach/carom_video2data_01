@@ -1,0 +1,511 @@
+<title>Carom Play Table</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chivo:wght@400;600;800&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+:root{
+  /* The palette is the table's own: tournament azure cloth, warm timber rail,
+     and the three balls. Neutrals carry a blue bias so they sit with the cloth
+     rather than beside it. */
+  --cloth:#1668b8; --cloth-lit:#2a83d4; --cloth-deep:#0d4478;
+  --timber:#b98a4e; --timber-dark:#8a6334;
+  --ball-white:#f2efe6; --ball-yellow:#f0be2a; --ball-red:#d8452f;
+
+  --ground:#f3f5f8; --panel:#ffffff; --sunk:#e7ecf2;
+  --line:#d2dae4; --line-soft:#e6ecf3;
+  --ink:#16202c; --ink-dim:#5d6b7c; --ink-faint:#8796a8;
+  --scored:#12795a; --missed:#7a869a;
+  --accent:var(--cloth);
+  --shadow:0 1px 2px rgba(16,32,48,.08), 0 8px 24px rgba(16,32,48,.06);
+  --radius:10px;
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --ground:#0e141c; --panel:#161f2a; --sunk:#101822;
+    --line:#27333f; --line-soft:#1d2734;
+    --ink:#e6edf5; --ink-dim:#93a3b6; --ink-faint:#6c7d90;
+    --scored:#54c795; --missed:#7a869a;
+    --shadow:0 1px 2px rgba(0,0,0,.4), 0 10px 30px rgba(0,0,0,.3);
+  }
+}
+:root[data-theme="dark"]{
+  --ground:#0e141c; --panel:#161f2a; --sunk:#101822;
+  --line:#27333f; --line-soft:#1d2734;
+  --ink:#e6edf5; --ink-dim:#93a3b6; --ink-faint:#6c7d90;
+  --scored:#54c795; --missed:#7a869a;
+  --shadow:0 1px 2px rgba(0,0,0,.4), 0 10px 30px rgba(0,0,0,.3);
+}
+
+*{box-sizing:border-box}
+body{
+  margin:0; background:var(--ground); color:var(--ink);
+  font-family:Chivo, "Helvetica Neue", Arial, sans-serif;
+  font-size:15px; line-height:1.5;
+  -webkit-font-smoothing:antialiased;
+}
+.wrap{max-width:1280px; margin:0 auto; padding-inline:20px; padding-block:22px 40px}
+
+header{display:flex; flex-wrap:wrap; align-items:baseline; gap:10px 18px; margin-bottom:18px}
+h1{font-size:22px; font-weight:800; letter-spacing:-.015em; margin:0; text-wrap:balance}
+.sub{color:var(--ink-dim); font-size:13.5px; margin:0}
+.matchtag{
+  font-family:"IBM Plex Mono", ui-monospace, monospace; font-size:11.5px;
+  text-transform:uppercase; letter-spacing:.09em; color:var(--ink-faint);
+  border:1px solid var(--line); border-radius:999px; padding:3px 10px; white-space:nowrap;
+}
+
+.layout{display:grid; grid-template-columns:minmax(0,1fr) 330px; gap:22px; align-items:start}
+@media (max-width:940px){ .layout{grid-template-columns:minmax(0,1fr)} }
+
+/* ---- table ---- */
+.stage{background:var(--panel); border:1px solid var(--line); border-radius:var(--radius);
+  box-shadow:var(--shadow); padding:14px}
+canvas{width:100%; height:auto; max-width:100%; display:block; border-radius:6px}
+
+.transport{display:flex; align-items:center; gap:12px; margin-top:12px; flex-wrap:wrap}
+button{
+  font:inherit; color:var(--ink); background:var(--panel);
+  border:1px solid var(--line); border-radius:7px; padding:7px 12px; cursor:pointer;
+}
+button:hover{border-color:var(--ink-faint)}
+button:focus-visible{outline:2px solid var(--accent); outline-offset:2px}
+#play{min-width:82px; font-weight:600; background:var(--accent); color:#fff; border-color:transparent}
+#play:hover{background:var(--cloth-lit)}
+.speeds{display:flex; gap:0; border:1px solid var(--line); border-radius:7px; overflow:hidden}
+.speeds button{border:0; border-radius:0; padding:7px 10px; font-family:"IBM Plex Mono",monospace;
+  font-size:12.5px; color:var(--ink-dim); background:transparent}
+.speeds button[aria-pressed="true"]{background:var(--sunk); color:var(--ink); font-weight:500}
+input[type=range]{flex:1; min-width:140px; accent-color:var(--cloth)}
+.tick{font-family:"IBM Plex Mono",monospace; font-size:12.5px; color:var(--ink-dim);
+  font-variant-numeric:tabular-nums; min-width:76px; text-align:right}
+
+/* ---- readout ---- */
+.readout{margin-top:14px; border-top:1px solid var(--line-soft); padding-top:13px;
+  display:grid; grid-template-columns:repeat(auto-fit,minmax(118px,1fr)); gap:13px 18px}
+.cell dt{font-size:10.5px; text-transform:uppercase; letter-spacing:.08em;
+  color:var(--ink-faint); margin:0 0 2px}
+.cell dd{margin:0; font-family:"IBM Plex Mono",monospace; font-size:14.5px;
+  font-variant-numeric:tabular-nums}
+.cell dd small{font-size:11.5px; color:var(--ink-dim); font-family:Chivo,sans-serif}
+.unconfirmed{color:var(--ink-faint)}
+.unconfirmed::after{content:"?"; font-size:10px; vertical-align:super; margin-left:1px}
+
+/* ---- play list ---- */
+.side{background:var(--panel); border:1px solid var(--line); border-radius:var(--radius);
+  box-shadow:var(--shadow); overflow:hidden; display:flex; flex-direction:column; max-height:78vh}
+.filters{display:flex; gap:6px; padding:12px 12px 10px; border-bottom:1px solid var(--line-soft);
+  flex-wrap:wrap}
+.filters button{padding:5px 10px; font-size:12.5px; border-radius:999px; color:var(--ink-dim)}
+.filters button[aria-pressed="true"]{background:var(--sunk); color:var(--ink);
+  border-color:var(--line); font-weight:600}
+.plays{overflow-y:auto; padding:6px}
+.play{
+  display:grid; grid-template-columns:auto 1fr auto; align-items:center; gap:10px;
+  width:100%; text-align:left; border:0; background:transparent; border-radius:8px;
+  padding:8px 9px; cursor:pointer;
+}
+.play:hover{background:var(--sunk)}
+.play[aria-current="true"]{background:var(--sunk); box-shadow:inset 3px 0 0 var(--accent)}
+.dot{width:13px; height:13px; border-radius:50%; border:1px solid rgba(0,0,0,.28)}
+.who{font-family:"IBM Plex Mono",monospace; font-size:12.5px; color:var(--ink-dim);
+  font-variant-numeric:tabular-nums}
+.who b{color:var(--ink); font-weight:500}
+.chip{font-size:11px; font-weight:600; letter-spacing:.03em; padding:2px 7px; border-radius:999px;
+  border:1px solid currentColor}
+.chip.s{color:var(--scored)}
+.chip.m{color:var(--missed)}
+.note{padding:10px 13px 13px; border-top:1px solid var(--line-soft); color:var(--ink-faint);
+  font-size:11.5px; line-height:1.45}
+</style>
+
+<div class="wrap">
+  <header>
+    <h1>Carom Play Table</h1>
+    <span class="matchtag" id="matchtag">loading</span>
+    <p class="sub">Every captured play, replayed on a 2844 &times; 1422 mm table.</p>
+  </header>
+
+  <div class="layout">
+    <section class="stage">
+      <canvas id="table" width="1200" height="659" aria-label="Billiard table replay"></canvas>
+
+      <div class="transport">
+        <button id="play" aria-label="Play or pause">Play</button>
+        <div class="speeds" role="group" aria-label="Playback speed">
+          <button data-speed="0.25">0.25&times;</button>
+          <button data-speed="0.5">0.5&times;</button>
+          <button data-speed="1" aria-pressed="true">1&times;</button>
+        </div>
+        <input type="range" id="scrub" min="0" max="100" value="0" step="1" aria-label="Scrub">
+        <span class="tick" id="tick">0.00 s</span>
+      </div>
+
+      <dl class="readout" id="readout"></dl>
+    </section>
+
+    <aside class="side">
+      <div class="filters" role="group" aria-label="Filter plays">
+        <button data-filter="all" aria-pressed="true">All</button>
+        <button data-filter="scored">Scored</button>
+        <button data-filter="missed">Missed</button>
+        <button data-filter="white">White cue</button>
+        <button data-filter="yellow">Yellow cue</button>
+      </div>
+      <div class="plays" id="plays"></div>
+      <p class="note" id="note"></p>
+    </aside>
+  </div>
+</div>
+
+<script src="replay-data.js"></script>
+<script>
+(function () {
+  "use strict";
+
+  // Official match table, from the rules: the nose line is 2844 by 1422 mm,
+  // diamonds sit every 355.5 mm along it, and a ball is 61.5 mm across.
+  var LENGTH = 2844, WIDTH = 1422, SPACING = 355.5, BALL = 61.5;
+  var NOSE_OUT = 60;      // cushion face, outside the nose line
+  var DIAMOND_OUT = 95;   // where the markers sit on the rail
+  var MARGIN = 175;       // drawn timber beyond that
+  var BALLS = ["white", "yellow", "red"];
+
+  var data = window.CAROM || { plays: [], fps: 30, match: "" };
+  var plays = data.plays;
+  var fps = data.fps || 30;
+
+  var canvas = document.getElementById("table");
+  var ctx = canvas.getContext("2d");
+  var playsEl = document.getElementById("plays");
+  var readoutEl = document.getElementById("readout");
+  var scrub = document.getElementById("scrub");
+  var tick = document.getElementById("tick");
+  var playBtn = document.getElementById("play");
+
+  var current = plays[0] || null;
+  var frame = 0, running = false, speed = 1, last = 0, filter = "all";
+
+  function css(name) {
+    return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+  }
+  function frames(play) { return play ? play.paths.white.length / 2 : 0; }
+  function at(play, colour, i) {
+    var p = play.paths[colour], k = i * 2;
+    if (k + 1 >= p.length) k = p.length - 2;
+    var x = p[k], y = p[k + 1];
+    return x < 0 ? null : [x, y];
+  }
+
+  /* ---------- drawing ---------- */
+
+  function geometry() {
+    var totalW = LENGTH + MARGIN * 2, totalH = WIDTH + MARGIN * 2;
+    var box = canvas.getBoundingClientRect();
+    var cssW = Math.max(320, box.width || 900);
+    var cssH = cssW * totalH / totalW;
+    var dpr = Math.min(window.devicePixelRatio || 1, 2);
+    if (canvas.width !== Math.round(cssW * dpr)) {
+      canvas.width = Math.round(cssW * dpr);
+      canvas.height = Math.round(cssH * dpr);
+    }
+    canvas.style.height = cssH + "px";
+    var scale = (cssW * dpr) / totalW;
+    return { scale: scale, ox: MARGIN * scale, oy: MARGIN * scale, w: canvas.width, h: canvas.height };
+  }
+
+  function drawTable(g) {
+    var s = g.scale, ox = g.ox, oy = g.oy;
+    function X(mm) { return ox + mm * s; }
+    function Y(mm) { return oy + mm * s; }
+
+    ctx.clearRect(0, 0, g.w, g.h);
+
+    // Timber frame, then the cushion face, then the cloth itself.
+    var r = 18 * s;
+    ctx.fillStyle = css("--timber");
+    roundRect(X(-MARGIN), Y(-MARGIN), (LENGTH + MARGIN * 2) * s, (WIDTH + MARGIN * 2) * s, r);
+    ctx.fill();
+    ctx.fillStyle = css("--timber-dark");
+    roundRect(X(-NOSE_OUT - 14), Y(-NOSE_OUT - 14),
+              (LENGTH + (NOSE_OUT + 14) * 2) * s, (WIDTH + (NOSE_OUT + 14) * 2) * s, r * .5);
+    ctx.fill();
+    ctx.fillStyle = css("--cloth-deep");
+    roundRect(X(-NOSE_OUT), Y(-NOSE_OUT),
+              (LENGTH + NOSE_OUT * 2) * s, (WIDTH + NOSE_OUT * 2) * s, r * .4);
+    ctx.fill();
+
+    var sheen = ctx.createLinearGradient(X(0), Y(0), X(LENGTH), Y(WIDTH));
+    sheen.addColorStop(0, css("--cloth-lit"));
+    sheen.addColorStop(.45, css("--cloth"));
+    sheen.addColorStop(1, css("--cloth-deep"));
+    ctx.fillStyle = sheen;
+    ctx.fillRect(X(0), Y(0), LENGTH * s, WIDTH * s);
+
+    // The nose line, which is what every measurement in the dataset is against.
+    ctx.strokeStyle = "rgba(255,255,255,.22)";
+    ctx.lineWidth = Math.max(1, 2 * s);
+    ctx.strokeRect(X(0), Y(0), LENGTH * s, WIDTH * s);
+
+    // Nine markers along each long rail, five along each short one, 355.5 apart.
+    ctx.fillStyle = "rgba(255,255,255,.82)";
+    var dot = Math.max(1.6, 11 * s);
+    for (var k = 0; k <= 8; k++) {
+      diamond(X(k * SPACING), Y(-DIAMOND_OUT), dot);
+      diamond(X(k * SPACING), Y(WIDTH + DIAMOND_OUT), dot);
+    }
+    for (var j = 1; j <= 3; j++) {
+      diamond(X(-DIAMOND_OUT), Y(j * SPACING), dot);
+      diamond(X(LENGTH + DIAMOND_OUT), Y(j * SPACING), dot);
+    }
+  }
+
+  function diamond(cx, cy, r) {
+    ctx.beginPath();
+    ctx.moveTo(cx, cy - r); ctx.lineTo(cx + r * .62, cy);
+    ctx.lineTo(cx, cy + r); ctx.lineTo(cx - r * .62, cy);
+    ctx.closePath(); ctx.fill();
+  }
+
+  function roundRect(x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.arcTo(x + w, y, x + w, y + h, r);
+    ctx.arcTo(x + w, y + h, x, y + h, r);
+    ctx.arcTo(x, y + h, x, y, r);
+    ctx.arcTo(x, y, x + w, y, r);
+    ctx.closePath();
+  }
+
+  var INK = { white: "--ball-white", yellow: "--ball-yellow", red: "--ball-red" };
+
+  function drawPlay(g) {
+    if (!current) return;
+    var s = g.scale, ox = g.ox, oy = g.oy;
+    var n = frames(current), upto = Math.min(frame, n - 1);
+
+    BALLS.forEach(function (colour) {
+      var ink = css(INK[colour]);
+
+      // The whole path, faint: the still frame should show where the play went,
+      // not just where it started.
+      ctx.strokeStyle = ink;
+      ctx.globalAlpha = .17;
+      ctx.lineWidth = Math.max(1, 3 * s);
+      ctx.lineJoin = ctx.lineCap = "round";
+      stroke(colour, 0, n - 1, s, ox, oy);
+
+      // The part already played, solid.
+      ctx.globalAlpha = .95;
+      ctx.lineWidth = Math.max(1.4, 5 * s);
+      stroke(colour, 0, upto, s, ox, oy);
+      ctx.globalAlpha = 1;
+    });
+
+    BALLS.forEach(function (colour) {
+      var p = at(current, colour, upto);
+      if (!p) return;
+      var x = ox + p[0] * s, y = oy + p[1] * s, r = BALL / 2 * s;
+      ctx.beginPath(); ctx.arc(x, y + r * .28, r * .98, 0, 6.2832);
+      ctx.fillStyle = "rgba(6,26,44,.33)"; ctx.fill();
+      var shade = ctx.createRadialGradient(x - r * .3, y - r * .35, r * .1, x, y, r);
+      shade.addColorStop(0, "#fff");
+      shade.addColorStop(.35, css(INK[colour]));
+      shade.addColorStop(1, css(INK[colour]));
+      ctx.beginPath(); ctx.arc(x, y, r, 0, 6.2832);
+      ctx.fillStyle = shade; ctx.fill();
+      ctx.lineWidth = Math.max(.6, 1.4 * s);
+      ctx.strokeStyle = "rgba(6,26,44,.35)"; ctx.stroke();
+
+      if (colour === current.cue) {
+        ctx.beginPath(); ctx.arc(x, y, r * 1.5, 0, 6.2832);
+        ctx.strokeStyle = "rgba(255,255,255,.75)";
+        ctx.lineWidth = Math.max(1, 2.4 * s);
+        ctx.setLineDash([Math.max(2, 9 * s), Math.max(2, 7 * s)]);
+        ctx.stroke(); ctx.setLineDash([]);
+      }
+    });
+  }
+
+  function stroke(colour, from, to, s, ox, oy) {
+    ctx.beginPath();
+    var drawing = false;
+    for (var i = from; i <= to; i++) {
+      var p = at(current, colour, i);
+      if (!p) { drawing = false; continue; }   // ball unseen: break the line
+      var x = ox + p[0] * s, y = oy + p[1] * s;
+      if (drawing) ctx.lineTo(x, y); else { ctx.moveTo(x, y); drawing = true; }
+    }
+    ctx.stroke();
+  }
+
+  function render() {
+    var g = geometry();
+    drawTable(g);
+    drawPlay(g);
+  }
+
+  /* ---------- readout ---------- */
+
+  function num(v, digits, suffix) {
+    if (v === null || v === undefined) return "&mdash;";
+    return v.toFixed(digits) + (suffix || "");
+  }
+
+  function fillReadout() {
+    if (!current) { readoutEl.innerHTML = ""; return; }
+    var p = current;
+    var verdict = p.scored
+      ? '<span style="color:var(--scored)">scored</span>'
+      : '<span style="color:var(--missed)">missed</span>';
+    var source = p.source === "inning" ? "from the inning" : "from the path";
+    var hit = p.first ? p.first + (p.second ? " then " + p.second : " only") : "&mdash;";
+
+    var cells = [
+      ["Verdict", verdict + ' <small>' + source + "</small>"],
+      ["Cue ball", p.cue],
+      ["Struck", hit],
+      ["Cushions before 2nd", p.cushions === null || p.cushions === undefined
+        ? "&mdash;" : p.cushions],
+      ["Cue speed", num(p.speed, 2, " m/s")],
+      ["Thickness", p.thickness === null || p.thickness === undefined ? "&mdash;"
+        : num(p.thickness, 2) + ' <small>of a ball</small>'],
+      ["Side", p.spinX === null || p.spinX === undefined ? "&mdash;"
+        : (p.spinX > 0 ? "+" : "") + p.spinX.toFixed(1) + "&deg; <small>off mirror</small>"],
+      ["Follow / draw", p.spinY === null || p.spinY === undefined
+        ? "&mdash;"
+        : '<span class="unconfirmed">' + (p.spinY > 0 ? "+" : "") + p.spinY.toFixed(2) + "</span>"],
+    ];
+    readoutEl.innerHTML = cells.map(function (c) {
+      return '<div class="cell"><dt>' + c[0] + "</dt><dd>" + c[1] + "</dd></div>";
+    }).join("");
+  }
+
+  /* ---------- play list ---------- */
+
+  function visible() {
+    return plays.filter(function (p) {
+      if (filter === "scored") return p.scored;
+      if (filter === "missed") return !p.scored;
+      if (filter === "white" || filter === "yellow") return p.cue === filter;
+      return true;
+    });
+  }
+
+  function buildList() {
+    var rows = visible();
+    playsEl.innerHTML = rows.map(function (p) {
+      var cushions = (p.cushions === null || p.cushions === undefined) ? "&ndash;" : p.cushions;
+      return '<button class="play" data-key="' + p.key + '"' +
+        (current && p.key === current.key ? ' aria-current="true"' : "") + ">" +
+        '<span class="dot" style="background:var(--ball-' + p.cue + ')"></span>' +
+        '<span class="who">inning <b>' + p.inning + "</b> &middot; play <b>" + p.shot +
+        "</b> &middot; " + cushions + " cush</span>" +
+        '<span class="chip ' + (p.scored ? "s" : "m") + '">' +
+        (p.scored ? "score" : "miss") + "</span></button>";
+    }).join("");
+    document.getElementById("note").innerHTML =
+      rows.length + " of " + plays.length + " plays &middot; " +
+      "a dashed ring marks the cue ball &middot; follow/draw is marked " +
+      '<span class="unconfirmed">?</span> because nothing has confirmed it yet';
+  }
+
+  function select(key) {
+    var found = plays.filter(function (p) { return p.key === key; })[0];
+    if (!found) return;
+    current = found;
+    frame = 0;
+    scrub.max = Math.max(1, frames(current) - 1);
+    scrub.value = 0;
+    running = false;
+    playBtn.textContent = "Play";
+    Array.prototype.forEach.call(playsEl.children, function (el) {
+      if (el.dataset.key === key) el.setAttribute("aria-current", "true");
+      else el.removeAttribute("aria-current");
+    });
+    fillReadout();
+    updateTick();
+    render();
+  }
+
+  function updateTick() {
+    tick.textContent = (frame / fps).toFixed(2) + " s";
+    scrub.value = frame;
+  }
+
+  /* ---------- transport ---------- */
+
+  function step(now) {
+    if (running && current) {
+      if (!last) last = now;
+      var advanced = (now - last) / 1000 * fps * speed;
+      if (advanced >= 1) {
+        frame += Math.floor(advanced);
+        last = now;
+        if (frame >= frames(current) - 1) {
+          frame = frames(current) - 1;
+          running = false;
+          playBtn.textContent = "Replay";
+        }
+        updateTick();
+        render();
+      }
+    }
+    requestAnimationFrame(step);
+  }
+
+  playBtn.addEventListener("click", function () {
+    if (!current) return;
+    if (frame >= frames(current) - 1) frame = 0;
+    running = !running;
+    last = 0;
+    playBtn.textContent = running ? "Pause" : "Play";
+  });
+
+  scrub.addEventListener("input", function () {
+    running = false;
+    playBtn.textContent = "Play";
+    frame = parseInt(scrub.value, 10) || 0;
+    tick.textContent = (frame / fps).toFixed(2) + " s";
+    render();
+  });
+
+  Array.prototype.forEach.call(document.querySelectorAll(".speeds button"), function (b) {
+    b.addEventListener("click", function () {
+      speed = parseFloat(b.dataset.speed);
+      Array.prototype.forEach.call(document.querySelectorAll(".speeds button"), function (o) {
+        o.setAttribute("aria-pressed", o === b ? "true" : "false");
+      });
+      last = 0;
+    });
+  });
+
+  Array.prototype.forEach.call(document.querySelectorAll(".filters button"), function (b) {
+    b.addEventListener("click", function () {
+      filter = b.dataset.filter;
+      Array.prototype.forEach.call(document.querySelectorAll(".filters button"), function (o) {
+        o.setAttribute("aria-pressed", o === b ? "true" : "false");
+      });
+      buildList();
+    });
+  });
+
+  playsEl.addEventListener("click", function (e) {
+    var row = e.target.closest(".play");
+    if (row) select(row.dataset.key);
+  });
+
+  window.addEventListener("resize", render);
+
+  document.getElementById("matchtag").textContent =
+    (data.match || "match").replace(/^soop_\d+_/, "") + " · " + plays.length + " plays";
+
+  buildList();
+  if (current) {
+    scrub.max = Math.max(1, frames(current) - 1);
+    fillReadout();
+    updateTick();
+  }
+  render();
+  requestAnimationFrame(step);
+})();
+</script>

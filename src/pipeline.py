@@ -314,6 +314,10 @@ def analyse(scan_data, recover=True):
         limit = watched[position + 1].start_frame if position + 1 < len(watched) else None
         scored, details = judge_shot(shot, positions, lookahead=lookahead, limit=limit)
         shot.success = bool(scored)
+        # Kept apart from success, which the inning's shape may overwrite, so the
+        # two witnesses can still be compared afterwards - and so a sample of
+        # the plays they disagree on can be pulled out for review.
+        shot.trajectory_success = bool(scored)
         shot.verdict = details
         shot.verdict_source = "trajectory"
         shot.cue_travel = cue_travel_mm(shot, positions)
@@ -430,6 +434,9 @@ def export_json(result, path):
                 "cue_ball": shot.cue_ball,
                 "success": shot.success,
                 "scoreboard_success": getattr(shot, "scoreboard_success", None),
+                "trajectory_success": getattr(shot, "trajectory_success", None),
+                "inning_success": getattr(shot, "inning_success", None),
+                "verdict_source": getattr(shot, "verdict_source", None),
                 "cushions_before_second": verdict.get("cushions"),
                 "first_object_ball": verdict.get("first_ball"),
                 "second_object_ball": verdict.get("second_ball"),

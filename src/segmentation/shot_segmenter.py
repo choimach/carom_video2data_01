@@ -80,6 +80,8 @@ class Shot:
         # What the inning's shape says, kept separately so the two witnesses can
         # be compared after the fact.
         self.inning_success = None
+        # What the cue ball's own path said, likewise.
+        self.trajectory_success = None
         # True when the strike itself was never on screen and the play was
         # reconstructed from the motion that followed it.
         self.inferred = inferred
