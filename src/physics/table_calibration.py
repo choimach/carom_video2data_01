@@ -36,17 +36,80 @@ class CalibrationError(Exception):
 class Calibration:
     """Result of a successful calibration."""
 
-    def __init__(self, matrix, corners, mm_per_px, rail_offset_mm, reprojection_error, diamonds):
+    def __init__(self, matrix, corners, mm_per_px, rail_offset_mm, reprojection_error, diamonds,
+                 cloth_hue=None):
         self.matrix = matrix
         self.corners = corners  # nose-line corners in pixels: TL, TR, BR, BL
         self.mm_per_px = mm_per_px
         self.rail_offset_mm = rail_offset_mm  # (long_rails, short_rails)
         self.reprojection_error = reprojection_error  # mean, in mm
         self.diamonds = diamonds  # {rail: [(index, x, y), ...]}
+        self.cloth_hue = cloth_hue
+        self._probes = None
 
     @property
     def diamond_count(self):
         return sum(len(v) for v in self.diamonds.values())
+
+    def _build_probes(self):
+        """Pixel positions of a handful of points whose appearance identifies this table."""
+        inverse = np.linalg.inv(self.matrix)
+        offset = self.rail_offset_mm[0]
+
+        cloth_mm, rail_mm, diamond_mm = [], [], []
+        for u in (0.2, 0.4, 0.6, 0.8):
+            for w in (0.25, 0.75):
+                cloth_mm.append((u * TABLE_LENGTH_MM, w * TABLE_WIDTH_MM))
+        for k in range(8):  # between diamonds, so these land on bare rail
+            x = (k + 0.5) * DIAMOND_SPACING_MM
+            rail_mm += [(x, -offset), (x, TABLE_WIDTH_MM + offset)]
+        for k in (0, 2, 4, 6, 8):
+            diamond_mm += [(k * DIAMOND_SPACING_MM, -offset),
+                           (k * DIAMOND_SPACING_MM, TABLE_WIDTH_MM + offset)]
+
+        def to_px(points):
+            pts = np.array(points, np.float32).reshape(-1, 1, 2)
+            return cv2.perspectiveTransform(pts, inverse).reshape(-1, 2).astype(int)
+
+        self._probes = (to_px(cloth_mm), to_px(rail_mm), to_px(diamond_mm))
+        return self._probes
+
+    def is_table_visible(self, frame, hue_tol=13, min_ratio=0.6):
+        """Is this frame still showing the calibrated table?
+
+        Testing for cloth-coloured pixels alone is not enough: a full-screen
+        sponsor graphic on a blue field passes that test, and if it happens to
+        carry red, white and yellow circles the ball detector will happily
+        report three balls sitting perfectly still. So this also requires the
+        dark rail between the diamonds, and the diamonds themselves - a
+        combination a graphic will not reproduce at these exact pixels.
+        """
+        if self.cloth_hue is None:
+            return False
+        cloth_px, rail_px, diamond_px = self._probes or self._build_probes()
+        hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
+        h, w = frame.shape[:2]
+
+        def sample(points):
+            inside = [(x, y) for x, y in points if 0 <= x < w and 0 <= y < h]
+            return np.array([hsv[y, x] for x, y in inside]) if inside else np.empty((0, 3))
+
+        cloth = sample(cloth_px)
+        rail = sample(rail_px)
+        diamonds = sample(diamond_px)
+        if len(cloth) == 0 or len(rail) == 0 or len(diamonds) == 0:
+            return False
+
+        hue_delta = np.abs(cloth[:, 0].astype(int) - self.cloth_hue)
+        is_cloth = (hue_delta <= hue_tol) & (cloth[:, 1] > 90) & (cloth[:, 2] > 140)
+        is_rail = rail[:, 2] < 120  # rails are dark timber in shadow
+        is_diamond = (diamonds[:, 2] > 140) & (diamonds[:, 1] < 110)
+
+        return (
+            is_cloth.mean() >= min_ratio
+            and is_rail.mean() >= min_ratio
+            and is_diamond.mean() >= 0.4
+        )
 
     def to_table(self, points):
         """Map pixel points to table millimetres. Accepts a single (x, y) or a sequence."""
@@ -260,6 +323,8 @@ def calibrate(frame, min_diamonds=14, min_rails=3, max_reprojection_mm=12.0):
     that rail's points rather than the whole frame. Raises CalibrationError if
     the frame does not show a full table with enough visible diamonds.
     """
+    hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
+    hue = dominant_cloth_hue(hsv)
     quad = detect_cloth_quad(frame)
     if quad is None:
         raise CalibrationError("no table-sized cloth region found")
@@ -357,4 +422,5 @@ def calibrate(frame, min_diamonds=14, min_rails=3, max_reprojection_mm=12.0):
         rail_offset_mm=(offset_long, offset_short),
         reprojection_error=error,
         diamonds=diamonds,
+        cloth_hue=hue,
     )

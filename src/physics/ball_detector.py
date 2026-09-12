@@ -32,16 +32,20 @@ WHITE_VAL_MIN = 190
 class BallDetector:
     """Finds the white, yellow and red balls in an overhead frame."""
 
-    def __init__(self, calibration=None, area_tolerance=(0.35, 2.0), min_circularity=0.62):
+    def __init__(self, calibration=None, area_tolerance=(0.35, 2.0), min_solidity=0.60,
+                 max_aspect=3.2):
         self.calibration = calibration
         self.area_tolerance = area_tolerance
-        self.min_circularity = min_circularity
+        self.min_solidity = min_solidity
+        self.max_aspect = max_aspect
         self._table_mask = None
         self._expected_radius_px = None
+        self._roi = None  # (x, y, w, h) bounding box of the table within the frame
+        self._frame_shape = None
 
     def _prepare(self, frame):
         """Build the search mask and the expected ball size once per camera setup."""
-        if self._table_mask is not None and self._table_mask.shape == frame.shape[:2]:
+        if self._table_mask is not None and self._frame_shape == frame.shape[:2]:
             return True
 
         if isinstance(self.calibration, Calibration):
@@ -62,7 +66,16 @@ class BallDetector:
         cv2.fillPoly(mask, [quad.astype(np.int32)], 255)
         # Pull in slightly: a ball frozen against the cushion still has its
         # centre inside, and this keeps the dark cushion line out of the mask.
-        self._table_mask = cv2.erode(mask, np.ones((5, 5), np.uint8))
+        mask = cv2.erode(mask, np.ones((5, 5), np.uint8))
+
+        # Everything downstream only looks inside the table, and the table is
+        # about a third of a broadcast frame, so cropping to it before the
+        # colour conversion is the difference between processing a match in
+        # hours and in minutes.
+        x, y, w, h = cv2.boundingRect(mask)
+        self._roi = (x, y, w, h)
+        self._table_mask = mask[y:y + h, x:x + w]
+        self._frame_shape = frame.shape[:2]
         self._expected_radius_px = radius
         return True
 
@@ -97,42 +110,55 @@ class BallDetector:
             area = cv2.contourArea(contour)
             if not (lo < area < hi):
                 continue
-            perimeter = cv2.arcLength(contour, True)
-            if perimeter <= 0:
+            hull_area = cv2.contourArea(cv2.convexHull(contour))
+            if hull_area <= 0:
                 continue
-            # Circularity separates a ball from the cue shaft, an arm, or a
-            # stripe of cloth reflection, all of which are elongated.
-            circularity = 4.0 * np.pi * area / (perimeter ** 2)
-            if circularity < self.min_circularity:
+            # Solidity, not perimeter circularity. A ball crossing the cloth at
+            # speed is smeared by the shutter into a smooth ellipse: still
+            # convex, but elongated enough that circularity collapses to ~0.5
+            # and drops it. That single test was losing a tenth of the white
+            # ball's frames - the fastest tenth, which is exactly the frames a
+            # shot is recognised from. Solidity stays near 0.8 through the blur
+            # while still rejecting ragged reflections.
+            solidity = area / hull_area
+            if solidity < self.min_solidity:
+                continue
+            # Solidity alone would accept the cue shaft, which is perfectly
+            # convex, so cap how elongated the blob may be.
+            (_, (w_rect, h_rect), _) = cv2.minAreaRect(contour)
+            short, long_ = sorted((w_rect, h_rect))
+            if short <= 0 or long_ / short > self.max_aspect:
                 continue
             m = cv2.moments(contour)
             if m["m00"] == 0:
                 continue
             cx, cy = m["m10"] / m["m00"], m["m01"] / m["m00"]
-            score = circularity - abs(np.log(area / expected_area))
+            score = solidity - abs(np.log(area / expected_area))
             if best_score is None or score > best_score:
                 best_score = score
-                best = (cx, cy, float(np.sqrt(area / np.pi)), float(circularity))
+                best = (cx, cy, float(np.sqrt(area / np.pi)), float(solidity))
         return best
 
     def detect(self, frame):
         """Detect the three balls.
 
-        Returns {colour: {"px": (x, y), "radius_px": r, "circularity": c,
+        Returns {colour: {"px": (x, y), "radius_px": r, "solidity": s,
         "mm": (x, y) or None}}. A colour that is hidden or ambiguous is absent
         rather than guessed at.
         """
         if not self._prepare(frame):
             return {}
 
-        hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
+        x0, y0, w, h = self._roi
+        hsv = cv2.cvtColor(frame[y0:y0 + h, x0:x0 + w], cv2.COLOR_BGR2HSV)
         result = {}
         for colour in ("red", "yellow", "white"):
             blob = self._best_blob(self._colour_mask(hsv, colour))
             if blob is None:
                 continue
-            cx, cy, radius, circularity = blob
-            entry = {"px": (cx, cy), "radius_px": radius, "circularity": circularity, "mm": None}
+            cx, cy, radius, solidity = blob
+            cx, cy = cx + x0, cy + y0
+            entry = {"px": (cx, cy), "radius_px": radius, "solidity": solidity, "mm": None}
             if isinstance(self.calibration, Calibration):
                 x, y = self.calibration.to_table((cx, cy))
                 entry["mm"] = (float(x), float(y))
