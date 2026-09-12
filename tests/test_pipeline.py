@@ -35,9 +35,14 @@ def test_a_complete_inning_decides_its_own_labels():
     assert {s.verdict_source for s in inning.shots} == {"inning"}
 
 
-def test_an_inning_that_does_not_add_up_keeps_the_trajectory_verdict():
-    """Where a play was missed or split in two the count will not match, and
-    then the cue ball's path is all there is to go on."""
+def test_a_play_with_another_behind_it_scored_even_if_the_inning_is_short():
+    """A miss ends the turn, so a play that is followed by another one scored.
+
+    This holds whether or not the inning adds up, and it is where the labelling
+    gains most: the trajectory judge misses contacts and calls scoring plays
+    misses, and no path can make a play a miss when the same player went on to
+    play again.
+    """
     inning = make_inning(3)  # three plays against a four-play turn
     for shot, verdict in zip(inning.shots, (True, False, True)):
         shot.success = verdict
@@ -45,8 +50,23 @@ def test_an_inning_that_does_not_add_up_keeps_the_trajectory_verdict():
 
     label_from_inning_shape([inning], [(0, 400, "white", 3)])
 
-    assert [s.success for s in inning.shots] == [True, False, True]
-    assert {s.verdict_source for s in inning.shots} == {"trajectory"}
+    assert [s.success for s in inning.shots] == [True, True, True]
+    assert [s.verdict_source for s in inning.shots] == ["inning", "inning", "trajectory"]
+
+
+def test_the_last_play_of_a_short_inning_keeps_the_trajectory_verdict():
+    """Where plays are missing the turn may have run on past what was seen, so
+    the last play detected need not be the one that ended it."""
+    inning = make_inning(2)  # two plays against a four-play turn
+    for shot, verdict in zip(inning.shots, (False, True)):
+        shot.success = verdict
+        shot.verdict_source = "trajectory"
+
+    label_from_inning_shape([inning], [(0, 400, "white", 3)])
+
+    assert inning.shots[-1].success is True
+    assert inning.shots[-1].verdict_source == "trajectory"
+    assert inning.shots[-1].inning_success is None
 
 
 def test_a_play_never_shown_stays_unusable_even_though_the_shape_knows_it():

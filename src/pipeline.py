@@ -241,32 +241,43 @@ def turns_from_board_rows(rows):
 
 
 def label_from_inning_shape(result_innings, turns):
-    """Let a complete inning say which of its plays scored.
+    """Let the shape of a turn say which of its plays scored.
 
-    A turn of N points holds N scoring plays and then the miss that ends it, so
-    once an inning's play count matches its score there is nothing left to
-    judge: every label in it is already decided by the rules. That is a far
-    better witness than watching the cue ball. Against the clip labels collected
-    by hand on the LIWC match, over the 53 plays both can speak for, the inning
-    shape gets 50 right and the trajectory 45; taking the shape first and
-    falling back to the trajectory takes the match from 84% to 90%.
+    A turn ends when the player misses, so the only miss in it is its last
+    play. Two things follow, and they are worth stating separately because one
+    is much stronger than the other:
 
-    Only complete innings qualify. Where a play was missed or one was split in
-    two the count will not match, and there the trajectory is all there is.
+    * Any play with another play after it in the same inning scored. There is
+      nothing to judge - a miss would have ended the turn. This holds whether
+      or not the inning adds up, and it is where nearly all the gain is.
+    * The last play detected in an inning is the turn's real last play only
+      when the inning adds up: N points and N+1 plays. Where plays are missing,
+      the turn may have gone on past what was seen, and nothing follows about
+      the last one. There the cue ball's path is all there is.
+
+    Measured against the clip labels you wrote by hand on the LIWC match, over
+    the 93 plays this can speak for: 88 right, 95%. Watching the cue ball alone
+    gets 84%. The gain is concentrated exactly where the reasoning above says
+    it should be - innings that do not add up go from 81% to 94%, because the
+    trajectory judge misses contacts and calls scoring plays misses, and a play
+    with another play behind it cannot be a miss whatever its path looked like.
     """
     for inning, (_first, _last, _colour, points) in zip(result_innings, turns):
-        if len(inning.shots) != points + 1:
-            continue
+        complete = len(inning.shots) == points + 1
         for position, shot in enumerate(inning.shots):
-            scored = position < points
+            followed = position < len(inning.shots) - 1
+            if followed:
+                scored = True
+            elif complete:
+                scored = False
+            else:
+                continue  # the turn may have run on unseen; leave the trajectory
             shot.verdict_source = "inning"
-            if shot.inferred:
-                # The shape knows what this play was; the video never showed it,
-                # so it still has no trajectory and cannot be used as data.
-                shot.inning_success = scored
-                continue
-            shot.success = scored
             shot.inning_success = scored
+            if not shot.inferred:
+                # The shape knows what an unseen play was, but the video never
+                # showed it, so it still has no trajectory to be used as data.
+                shot.success = scored
 
 
 def analyse(scan_data, recover=True):
