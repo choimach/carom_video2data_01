@@ -338,3 +338,35 @@ def test_a_false_marker_does_not_inflate_a_good_calibration(frame):
     # The impostors are not reported as diamonds either.
     for _, x, y in calibration.diamonds.get("left", []):
         assert min(abs(y - (y0 + j * h / 4.0)) for j in range(5)) < 6.0
+
+
+def test_printing_on_the_rail_does_not_hide_the_table():
+    """Each visibility probe is checked against its own learned value.
+
+    The Pohang rail carries printing between some of its diamonds, so a third
+    of the rail probes look nothing like the bare timber either side of them.
+    Judging all sixteen against one median failed the test on a table in plain
+    view, and the scan saw 7% of a match where it should have seen a quarter.
+    """
+    positions = {"white": (700.0, 400.0), "yellow": (1900.0, 1000.0), "red": (2400.0, 500.0)}
+    printed = render_table(positions)
+    x0, y0, w, h = _nose_rect()
+    for k in (1, 3, 5):  # between diamonds, where the probes land
+        x = int(x0 + (k + 0.5) * w / 8.0)
+        cv2.rectangle(printed, (x - 14, int(y0 - DIAMOND_MARGIN_PX) - 6),
+                      (x + 14, int(y0 - DIAMOND_MARGIN_PX) + 6), (210, 210, 210), -1)
+
+    calibration = calibrate(printed)
+    assert calibration.is_table_visible(printed)
+
+
+def test_a_sponsor_graphic_is_still_not_a_table(calibration, frame):
+    """The probes have to stay hard to satisfy, not just easy.
+
+    A full-screen graphic on a cloth-coloured field would otherwise pass, and a
+    ball detector would happily report three balls sitting perfectly still.
+    """
+    graphic = np.full_like(frame, CLOTH_BGR)
+    for x, y in ((600, 400), (1200, 700), (1500, 300)):
+        cv2.circle(graphic, (x, y), 24, (240, 240, 240), -1)
+    assert not calibration.is_table_visible(graphic)

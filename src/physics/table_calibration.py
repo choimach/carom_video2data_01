@@ -42,7 +42,7 @@ class Calibration:
     """Result of a successful calibration."""
 
     def __init__(self, matrix, corners, mm_per_px, rail_offset_mm, reprojection_error, diamonds,
-                 cloth_hue=None, polarity="bright"):
+                 cloth_hue=None, polarity="bright", frame_size=None):
         self.matrix = matrix
         self.corners = corners  # nose-line corners in pixels: TL, TR, BR, BL
         self.mm_per_px = mm_per_px
@@ -51,8 +51,11 @@ class Calibration:
         self.diamonds = diamonds  # {rail: [(index, x, y), ...]}
         self.cloth_hue = cloth_hue
         self.polarity = polarity
+        self.frame_size = frame_size  # (height, width), for clipping the probes
         self.rail_value = None  # brightness of bare rail, learned from the frame
         self.diamond_value = None
+        self.rail_reference = None  # what each rail probe looked like, one per pixel
+        self.diamond_reference = None
         self._probes = None
 
     @property
@@ -75,36 +78,47 @@ class Calibration:
             diamond_mm += [(k * DIAMOND_SPACING_MM, -offset),
                            (k * DIAMOND_SPACING_MM, TABLE_WIDTH_MM + offset)]
 
+        height, width = self.frame_size or (10 ** 6, 10 ** 6)
+
         def to_px(points):
             pts = np.array(points, np.float32).reshape(-1, 1, 2)
-            return cv2.perspectiveTransform(pts, inverse).reshape(-1, 2).astype(int)
+            px = cv2.perspectiveTransform(pts, inverse).reshape(-1, 2).astype(int)
+            # Dropping the out-of-frame points here, once, is what lets a later
+            # sample line up one-to-one with the reference taken at calibration.
+            inside = (px[:, 0] >= 0) & (px[:, 0] < width) & (px[:, 1] >= 0) & (px[:, 1] < height)
+            return px[inside]
 
         self._probes = (to_px(cloth_mm), to_px(rail_mm), to_px(diamond_mm))
         return self._probes
 
     def learn_appearance(self, frame):
-        """Record how bare rail and marker look on the frame that calibrated.
+        """Record how each probe pixel looks on the frame that calibrated.
 
-        `is_table_visible` needs to recognise this table again thousands of
-        times a scan, and it does that by probing fixed pixels. Hard-coded grey
-        levels only describe the table they were measured on; these are
-        measured on whatever table is actually in front of the camera.
+        `is_table_visible` recognises the table again thousands of times a scan
+        by reading fixed pixels, and what it is really asking is whether they
+        still look the way they did here. One grey level for the whole rail
+        cannot answer that: the Pohang rail carries printing, so a third of the
+        points between its diamonds are nothing like the bare timber either
+        side of them, and comparing all sixteen against a single median failed
+        the test on a table that was in plain view. Each probe is its own
+        reference instead.
         """
         _, rail_px, diamond_px = self._probes or self._build_probes()
         value = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)[:, :, 2]
-        h, w = frame.shape[:2]
 
-        def median_at(points):
-            inside = [value[y, x] for x, y in points if 0 <= x < w and 0 <= y < h]
-            return float(np.median(inside)) if inside else None
+        def values_at(points):
+            return value[points[:, 1], points[:, 0]].astype(np.int16) if len(points) else None
 
-        self.rail_value = median_at(rail_px)
-        self.diamond_value = median_at(diamond_px)
-        if self.rail_value is None or self.diamond_value is None:
-            self.rail_value = self.diamond_value = None
+        self.rail_reference = values_at(rail_px)
+        self.diamond_reference = values_at(diamond_px)
+        if self.rail_reference is None or self.diamond_reference is None:
+            self.rail_reference = self.diamond_reference = None
+        else:
+            self.rail_value = float(np.median(self.rail_reference))
+            self.diamond_value = float(np.median(self.diamond_reference))
         return self
 
-    def is_table_visible(self, frame, hue_tol=13, min_ratio=0.6, rail_tol=45):
+    def is_table_visible(self, frame, hue_tol=13, min_ratio=0.6, rail_tol=45, diamond_tol=60):
         """Is this frame still showing the calibrated table?
 
         Testing for cloth-coloured pixels alone is not enough: a full-screen
@@ -121,8 +135,7 @@ class Calibration:
         h, w = frame.shape[:2]
 
         def sample(points):
-            inside = [(x, y) for x, y in points if 0 <= x < w and 0 <= y < h]
-            return np.array([hsv[y, x] for x, y in inside]) if inside else np.empty((0, 3))
+            return hsv[points[:, 1], points[:, 0]] if len(points) else np.empty((0, 3))
 
         cloth = sample(cloth_px)
         rail = sample(rail_px)
@@ -132,18 +145,17 @@ class Calibration:
 
         hue_delta = np.abs(cloth[:, 0].astype(int) - self.cloth_hue)
         is_cloth = (hue_delta <= hue_tol) & (cloth[:, 1] > 90) & (cloth[:, 2] > 140)
-        if self.rail_value is None:
+        if self.rail_reference is None:
             is_rail = rail[:, 2] < 120  # rails are dark timber in shadow
             is_diamond = (diamonds[:, 2] > 140) & (diamonds[:, 1] < 110)
         else:
-            # What counts as rail and as marker was measured on the frame this
-            # calibration came from, because "dark rail, bright diamond" only
-            # describes some of the tables in use.
-            is_rail = np.abs(rail[:, 2].astype(int) - self.rail_value) <= rail_tol
-            sign = 1 if self.polarity == "bright" else -1
-            contrast = sign * (diamonds[:, 2].astype(int) - self.rail_value)
-            floor = max(10.0, 0.4 * abs(self.diamond_value - self.rail_value))
-            is_diamond = contrast >= floor
+            # Each probe against what that same pixel looked like when the table
+            # was calibrated: "dark rail, bright diamond" describes only some of
+            # the tables in use, and one grey level describes only a rail with
+            # nothing printed on it.
+            is_rail = np.abs(rail[:, 2].astype(np.int16) - self.rail_reference) <= rail_tol
+            is_diamond = (np.abs(diamonds[:, 2].astype(np.int16) - self.diamond_reference)
+                          <= diamond_tol)
 
         return (
             is_cloth.mean() >= min_ratio
@@ -582,6 +594,7 @@ def _calibrate_one(frame, quad, hue, polarity, min_diamonds, min_rails, max_repr
         diamonds=diamonds,
         cloth_hue=hue,
         polarity=polarity,
+        frame_size=frame.shape[:2],
     )
 
 
