@@ -81,3 +81,26 @@ def test_a_play_never_shown_stays_unusable_even_though_the_shape_knows_it():
     assert inning.shots[1].success is None
     assert inning.shots[1].inning_success is True
     assert [s.success for s in inning.shots] == [True, None, False]
+
+
+def test_a_scoring_play_cut_short_after_the_score_is_still_usable():
+    """What a scoring play is wanted for is the path up to the score.
+
+    Rejecting every play the camera cut away from threw out 28 of the 56
+    dropped in one match, each holding the cue ball's whole path through its
+    cushions and onto the second object ball. The balls had not finished
+    rolling, which is what `complete` records - their end positions are where
+    the balls were when the camera left, not where they stopped.
+    """
+    from src.segmentation.shot_segmenter import play_rejections
+
+    shot = make_inning(1).shots[0]
+    shot.complete = False
+    shot.success = True
+
+    shot.verdict = {"reason": "only red was touched", "cushions": 4, "first_ball": "red"}
+    assert "truncated" in play_rejections(shot, 60.0)
+
+    shot.verdict = {"reason": "3 cushions before white", "cushions": 3,
+                    "first_ball": "red", "second_ball": "white"}
+    assert play_rejections(shot, 60.0) == []

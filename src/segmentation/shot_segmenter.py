@@ -89,6 +89,9 @@ class Shot:
         # Set by mark_replays(): the earlier play this one is a second showing
         # of, or None when it is the live play.
         self.replay_of = None
+        # Set by judge_shot(): what the cue ball was seen to do. Carries
+        # "second_ball" when the scoring contact itself was on screen.
+        self.verdict = None
 
     def duration(self, fps):
         return (self.end_frame - self.start_frame) / fps
@@ -687,7 +690,16 @@ def play_rejections(shot, fps):
     if len(shot.start_positions) != len(BALL_COLOURS):
         reasons.append("layout_incomplete")
     if shot.success:
-        if not shot.complete:
+        # What a scoring play is wanted for is the path up to the score, so a
+        # play whose scoring contact was on screen is usable even though the
+        # camera cut before the balls finished rolling. Rejecting every cut
+        # play threw away 28 of the 56 dropped in one match - more than half -
+        # each with the cue ball's whole path through its cushions and onto the
+        # second object ball. Their end positions are where the balls were when
+        # the camera left, not where they stopped, which is what `complete`
+        # says and is recorded with every play.
+        scored_on_screen = bool((shot.verdict or {}).get("second_ball"))
+        if not shot.complete and not scored_on_screen:
             reasons.append("truncated")
         elif len(shot.end_positions) != len(BALL_COLOURS):
             reasons.append("no_final_layout")
