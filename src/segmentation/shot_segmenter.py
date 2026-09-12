@@ -73,7 +73,13 @@ class Shot:
         self.start_positions = start_positions  # {colour: (x_mm, y_mm)} - the layout played from
         self.end_positions = end_positions
         self.complete = complete  # False when the camera cut away before the balls stopped
-        self.success = None  # True/False once the scoreboard has been read; None while unknown
+        self.success = None  # True/False once the play has been judged; None while unknown
+        # Where that verdict came from: "inning" when the inning's own shape
+        # decided it, "trajectory" when the cue ball's path did.
+        self.verdict_source = None
+        # What the inning's shape says, kept separately so the two witnesses can
+        # be compared after the fact.
+        self.inning_success = None
         # True when the strike itself was never on screen and the play was
         # reconstructed from the motion that followed it.
         self.inferred = inferred
