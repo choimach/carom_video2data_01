@@ -35,11 +35,12 @@ MIN_REST_SECONDS = 0.35
 MIN_SHOT_SECONDS = 0.4
 MAX_SHOT_SECONDS = 20.0
 # The fastest a person can send a ball with a cue is about 14-16 m/s (50-56
-# km/h). At 60 fps that is some 267 mm between frames, so a step of a quarter of
-# a metre is a hard shot, not an error - an earlier limit of 9 m/s was throwing
-# away the openings of the hardest strokes. A reading beyond this is the
-# detector jumping to another object, not a ball accelerating.
-MAX_CUE_SPEED_MS = 16.0
+# km/h); 18 leaves room above that rather than sitting on it. At 60 fps this is
+# 300 mm between frames, so a quarter-metre step is a hard shot and not an
+# error - an earlier limit of 9 m/s was discarding the opening frames of the
+# hardest strokes. The point of the limit is to reject the detector jumping to
+# another object, and the jumps that matter are metres, not centimetres.
+MAX_CUE_SPEED_MS = 18.0
 ONSET_JUMP_MARGIN_MM = 120.0
 # How far a ball must leave its resting place to count as departed: comfortably
 # past centroid jitter, and well inside a ball's own width so the reading comes
