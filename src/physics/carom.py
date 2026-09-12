@@ -130,9 +130,20 @@ def judge_carom(events, required_cushions=REQUIRED_CUSHIONS):
     }
 
 
-def judge_shot(shot, positions):
-    """Judge one segmented play straight from its tracked trajectory."""
-    window = slice(shot.start_frame, shot.end_frame + 1)
+def judge_shot(shot, positions, lookahead=0, limit=None):
+    """Judge one segmented play straight from its tracked trajectory.
+
+    `lookahead` frames past the play's recorded end are included, capped at
+    `limit` (normally the next play's start). The segmenter ends a play once
+    the balls read as at rest, but "at rest" is a speed threshold, and a cue
+    ball can still be creeping the last few centimetres to the second object
+    ball when it trips - four confirmed points on the labelled match landed in
+    the two seconds after the play had officially ended.
+    """
+    end = shot.end_frame + 1 + lookahead
+    if limit is not None:
+        end = min(end, limit)
+    window = slice(shot.start_frame, end)
     cue_xy = positions[shot.cue_ball][window]
     others = {c: xy[window] for c, xy in positions.items() if c != shot.cue_ball}
     events = shot_events_by_motion(cue_xy, others)
@@ -197,6 +208,15 @@ def _departures(xy, rest_window=12, threshold_mm=None, confirmations=3, settle_f
     return out
 
 
+def _nearest_approach(xy, point, frame, before=6, after=3):
+    """Closest a ball came to `point` in the frames around `frame`, ignoring gaps."""
+    segment = xy[max(0, frame - before):frame + after]
+    segment = segment[np.isfinite(segment[:, 0]) & np.isfinite(segment[:, 1])]
+    if not len(segment):
+        return np.inf
+    return float(np.linalg.norm(segment - point, axis=1).min())
+
+
 def contact_events(cue_xy, others, attribution_mm=None, departure_mm=None,
                    touch_mm=BALL_DIAMETER_MM, merge_frames=15):
     """Cue-ball contacts, from the object ball moving or from the balls touching.
@@ -226,15 +246,21 @@ def contact_events(cue_xy, others, attribution_mm=None, departure_mm=None,
                 found.append((middle, xy[middle]))
         for frame, resting in sorted(found):
             # Measure against where the ball was sitting when it was hit, not
-            # where it has got to by the time the move is confirmed.
-            cue_distance = float(np.linalg.norm(cue_xy[frame] - resting)) if np.isfinite(
-                cue_xy[frame]
-            ).all() else np.inf
+            # where it has got to by the time the move is confirmed - and over
+            # a few frames either side, not the one frame of departure. The
+            # first object ball is struck when the cue ball is at its fastest,
+            # which is exactly when the detector is likeliest to have lost it
+            # or to place its blurred centroid a ball's width behind. Judged on
+            # that single frame, the first contact of four confirmed points on
+            # the labelled match went to nobody, and their second contact was
+            # then read as the first.
+            cue_distance = _nearest_approach(cue_xy, resting, frame)
             rivals = [
-                float(np.linalg.norm(other[frame] - resting))
+                _nearest_approach(other, resting, frame)
                 for name, other in others.items()
-                if name != colour and np.isfinite(other[frame]).all()
+                if name != colour
             ]
+            rivals = [r for r in rivals if np.isfinite(r)]
             if cue_distance > attribution_mm:
                 continue
             if rivals and min(rivals) < cue_distance:

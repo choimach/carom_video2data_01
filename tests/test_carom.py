@@ -193,3 +193,35 @@ def test_a_kiss_is_not_credited_to_the_cue_ball():
     yellow[60:] += np.array([300.0, 0.0])  # red, right beside it, sent it off
     events = contact_events(cue, {"red": red, "yellow": yellow})
     assert "yellow" not in [e.detail for e in events]
+
+
+def test_a_contact_just_after_the_recorded_end_still_counts():
+    """The segmenter's rest test is a speed threshold; a cue ball creeping the
+    last centimetres to the second ball trips it before arriving."""
+    from src.segmentation.shot_segmenter import Shot
+    from src.physics.carom import judge_shot
+
+    n = 400
+    cue = np.repeat(np.array([[1400.0, 700.0]]), n, axis=0)
+    cue[:200] = path([(1400.0, 700.0), (2400.0, 300.0)], steps=199)[:200]      # to red
+    cue[200:260] = path([(2400.0, 300.0), (TABLE_LENGTH_MM - BALL_RADIUS_MM, 500.0)], steps=59)[:60]
+    cue[260:320] = path([(TABLE_LENGTH_MM - BALL_RADIUS_MM, 500.0), (1800.0, BALL_RADIUS_MM)], steps=59)[:60]
+    cue[320:370] = path([(1800.0, BALL_RADIUS_MM), (BALL_RADIUS_MM, 400.0)], steps=49)[:50]
+    # creeps the last stretch after the play "ended" at frame 370
+    cue[370:] = path([(BALL_RADIUS_MM, 400.0), (500.0 - BALL_DIAMETER_MM, 150.0)], steps=29)[:30]
+    positions = {"white": cue, "red": parked((2400.0, 300.0), n), "yellow": parked((500.0, 150.0), n)}
+    shot = Shot(0, 369, "white", {}, {}, True)
+    assert judge_shot(shot, positions)[0] is False, "cut at the recorded end, the point is missed"
+    assert judge_shot(shot, positions, lookahead=30)[0] is True
+    assert judge_shot(shot, positions, lookahead=30, limit=372)[0] is False, "but not past the next play"
+
+
+def test_a_contact_is_attributed_even_if_the_cue_ball_is_lost_in_that_frame():
+    """The first object ball is hit when the cue ball is fastest and the
+    detector likeliest to lose it; a single-frame test handed that contact to
+    nobody and made the second ball read as the first."""
+    cue = path([(1000.0, 700.0), (1140.0, 700.0)], steps=120)
+    red = np.repeat(np.array([[1220.0, 700.0]]), len(cue), axis=0)
+    red[60:] = np.array([1600.0, 700.0])
+    cue[55:66] = np.nan  # lost across the strike
+    assert [e.detail for e in contact_events(cue, {"red": red})] == ["red"]
