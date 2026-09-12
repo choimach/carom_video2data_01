@@ -39,6 +39,7 @@ def process_video(video_path: str, title: str):
         print("Step 1: Running YOLO Ball Tracker...")
         tracker = BallTracker('yolov8n.pt')
         # This will create output_tracked.mp4 for visual verification
+        # Using full video tracking on GPU
         trajectories = tracker.track_video(video_path, output_path="data/videos/output_tracked.mp4")
         
         # We need to map YOLO tracking IDs to 'white', 'yellow', 'red'.

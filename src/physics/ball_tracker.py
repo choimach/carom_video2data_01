@@ -46,7 +46,7 @@ class BallTracker:
             
         return detections
 
-    def track_video(self, video_path, output_path=None):
+    def track_video(self, video_path, output_path=None, max_frames=None):
         """
         Track balls across a video and optionally save the annotated video.
         Uses YOLO's built-in tracker (BoT-SORT / ByteTrack).
@@ -61,11 +61,15 @@ class BallTracker:
             out = cv2.VideoWriter(output_path, fourcc, fps, (width, height))
             
         trajectories = {}
+        frame_count = 0
 
         while cap.isOpened():
+            if max_frames and frame_count >= max_frames:
+                break
             success, frame = cap.read()
             if not success:
                 break
+            frame_count += 1
                 
             # Run YOLO tracking (persist tracking IDs across frames)
             results = self.model.track(frame, persist=True, verbose=False)[0]

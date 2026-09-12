@@ -840,3 +840,67 @@ def cue_travel_mm(shot, positions):
     if len(xy) < 2:
         return 0.0
     return float(np.linalg.norm(np.diff(xy, axis=0), axis=1).sum())
+
+
+# Straight-line distance between the furthest corners of the playing surface.
+# No ball can be further from where it was than this, whatever the gap, so a
+# reachability bound on its own admits any layout once the gap passes a third
+# of a second - which is why a shot is carried on by motion, not by distance.
+TABLE_DIAGONAL_MM = float(np.hypot(2844.0, 1422.0))
+
+
+def can_continue(fastest, last_seen, resumed, fps, look_seconds=0.3):
+    """Is the table coming back to the same shot, still in progress?
+
+    A three-cushion shot rolls for several seconds and the director cuts away
+    mid-roll, so ending a play at the cut leaves its path stopping before the
+    second object ball - the part that decides the point. On this match that
+    truncation accounted for 46 of the 49 plays the geometric judge could not
+    call.
+
+    The evidence that the shot is still running is that something is still
+    moving when the table reappears. If everything is at rest, the shot ended
+    while off screen and whatever comes next is a new one.
+    """
+    if resumed <= last_seen or resumed >= len(fastest):
+        return False
+    window = fastest[resumed:resumed + max(1, int(look_seconds * fps))]
+    return bool(window.size) and float(np.nanmax(window)) > REST_SPEED_MS
+
+
+def stitch_across_cuts(shot, positions, live, fps, at_rest=None, fastest=None,
+                       max_gap_seconds=3.0, settle_seconds=MIN_REST_SECONDS):
+    """Extend a play that was cut off, across the gap, while it is still running.
+
+    Returns the new end frame, or the old one when the play cannot be carried
+    on. The gap allowed is short on purpose: over a longer one the table could
+    come back to the *next* shot already rolling, and stitching would join two
+    plays into one.
+    """
+    live = np.asarray(live, dtype=bool)
+    if fastest is None:
+        _, _, _, fastest = _rest_and_motion(speeds(positions, fps), live)
+    n = len(live)
+    end = shot.end_frame
+    max_gap = int(max_gap_seconds * fps)
+    settle = max(1, int(settle_seconds * fps))
+
+    while end < n - 1:
+        resume = end + 1
+        while resume < n and not live[resume]:
+            resume += 1
+        if resume >= n or resume - end > max_gap:
+            break
+        if not can_continue(fastest, end, resume, fps):
+            break
+        cursor, settled = resume, 0
+        while cursor < n and live[cursor]:
+            if at_rest is not None and at_rest[cursor]:
+                settled += 1
+                if settled >= settle:
+                    return cursor
+            else:
+                settled = 0
+            cursor += 1
+        end = cursor - 1
+    return end

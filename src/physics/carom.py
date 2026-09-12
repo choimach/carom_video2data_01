@@ -135,7 +135,74 @@ def judge_shot(shot, positions):
     window = slice(shot.start_frame, shot.end_frame + 1)
     cue_xy = positions[shot.cue_ball][window]
     others = {c: xy[window] for c, xy in positions.items() if c != shot.cue_ball}
-    events = shot_events(cue_xy, others)
+    events = shot_events_by_motion(cue_xy, others)
     scored, details = judge_carom(events)
     details["events"] = events
     return scored, details
+
+
+# An object ball departs its resting place only when something hits it, and
+# that departure is visible long after the frame of contact - unlike the
+# contact itself, which happens when the cue ball is at its fastest and its
+# blurred centroid is least trustworthy. Measured on confirmed successes, the
+# first object ball's closest approach reads 63 mm at the median but 81 mm on a
+# shot struck hard, against a true 61.5: too far for any usable threshold.
+DEPARTURE_MM = 25.0
+ATTRIBUTION_MM = 250.0
+
+
+def _departures(xy, rest_window=12, threshold_mm=DEPARTURE_MM, confirmations=3):
+    """Frames where a ball leaves where it had been sitting."""
+    out = []
+    n = len(xy)
+    resting = None
+    for index in range(n):
+        point = xy[index]
+        if not np.isfinite(point).all():
+            continue
+        if resting is None:
+            window = xy[max(0, index - rest_window):index + 1]
+            window = window[np.isfinite(window[:, 0])]
+            resting = np.median(window, axis=0) if len(window) else point
+            continue
+        if float(np.linalg.norm(point - resting)) <= threshold_mm:
+            continue
+        ahead = xy[index:index + confirmations + 1]
+        ahead = ahead[np.isfinite(ahead[:, 0])]
+        if len(ahead) < confirmations:
+            continue
+        if np.all(np.linalg.norm(ahead - resting, axis=1) > threshold_mm):
+            out.append(index)
+            resting = None  # re-establish a resting place once it settles again
+    return out
+
+
+def contact_events(cue_xy, others, attribution_mm=ATTRIBUTION_MM):
+    """Cue-ball contacts, found from the object balls being set in motion.
+
+    A ball that starts moving was hit by whatever was closest to it at that
+    moment. Checking which ball that was keeps a kiss - the first object ball
+    driving the second - from being read as a carom the cue ball never made.
+    """
+    events = []
+    for colour, xy in others.items():
+        for frame in _departures(xy):
+            cue_distance = float(np.linalg.norm(cue_xy[frame] - xy[frame])) if np.isfinite(
+                cue_xy[frame]
+            ).all() else np.inf
+            rivals = [
+                float(np.linalg.norm(other[frame] - xy[frame]))
+                for name, other in others.items()
+                if name != colour and np.isfinite(other[frame]).all()
+            ]
+            if cue_distance > attribution_mm:
+                continue
+            if rivals and min(rivals) < cue_distance:
+                continue  # another ball was nearer: this is a kiss, not a carom
+            events.append(Event(frame, "ball", colour))
+    return events
+
+
+def shot_events_by_motion(cue_xy, others):
+    """Everything the cue ball touched, ordered, with contacts read from motion."""
+    return sorted(cushion_events(cue_xy) + contact_events(cue_xy, others), key=lambda e: e.frame)

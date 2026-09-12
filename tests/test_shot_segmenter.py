@@ -11,6 +11,7 @@ import pytest
 from src.segmentation.shot_segmenter import (
     BALL_COLOURS,
     Shot,
+    _rest_and_motion,
     group_innings,
     reconcile_with_scoreboard,
     segment_shots,
@@ -575,3 +576,55 @@ def test_cue_travel_measures_the_observed_path():
     travel = cue_travel_mm(shot, positions)
     # 2 m/s for a second, then the ball sits still through the settle.
     assert 1800 < travel < 2600, travel
+
+
+# --- carrying a play across a camera cut -----------------------------------
+
+from src.segmentation.shot_segmenter import can_continue, stitch_across_cuts
+
+
+def test_a_play_is_carried_on_when_the_table_comes_back_to_it():
+    """Ending at the cut leaves the path stopping before the second object
+    ball - the part that decides the point."""
+    positions, live = build_track([("white", 2.0, 4.0)])
+    cut = slice(int((REST_SECONDS + 1.0) * FPS), int((REST_SECONDS + 2.5) * FPS))
+    live[cut] = False
+    shots = segment_shots(positions, live, FPS)
+    assert len(shots) == 1
+    shot = shots[0]
+    assert shot.end_frame < cut.stop, "the strict pass stops at the cut"
+    assert not shot.complete
+
+    v = speeds(positions, FPS)
+    at_rest, _, _, fastest = _rest_and_motion(v, np.asarray(live, dtype=bool))
+    stitched = stitch_across_cuts(shot, positions, live, FPS, at_rest, fastest)
+    assert stitched > cut.stop, "the play should continue past the cut"
+
+
+def _fastest_of(positions, live):
+    return _rest_and_motion(speeds(positions, FPS), np.asarray(live, dtype=bool))[3]
+
+
+def test_balls_still_rolling_when_the_table_returns_means_the_shot_goes_on():
+    positions, live = build_track([("white", 2.0, 3.0)])
+    live[120:150] = False
+    fastest = _fastest_of(positions, live)
+    assert can_continue(fastest, 119, 150, FPS) is True
+
+
+def test_balls_at_rest_when_the_table_returns_means_the_shot_is_over():
+    """Distance cannot decide this: the table's own diagonal is 3.2 m, so after
+    a third of a second any layout is 'reachable' and the bound says nothing."""
+    positions, live = build_track([("white", 2.0, 1.0)])
+    settled = int((REST_SECONDS + 1.3) * FPS)
+    live[settled - 30 : settled] = False
+    fastest = _fastest_of(positions, live)
+    assert can_continue(fastest, settled - 31, settled, FPS) is False
+
+
+def test_a_long_absence_ends_the_play():
+    positions, live = build_track([("white", 2.0, 2.0)])
+    live[120:] = False
+    shot = segment_shots(positions, live, FPS)[0]
+    end = stitch_across_cuts(shot, positions, live, FPS)
+    assert end == shot.end_frame
