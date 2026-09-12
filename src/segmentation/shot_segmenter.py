@@ -673,6 +673,16 @@ def audit_turns(innings, turns, positions, live, fps, window=None):
 # was played from and enough of the stroke to characterise it; the tail of the
 # roll adds little once no point was scored.
 MIN_OBSERVED_SECONDS = 1.0
+# A carom stroke does not finish in two seconds. Three cushions and two object
+# balls is six to ten metres of cue ball, and these players strike at two to
+# three metres a second. The durations bear it out with a gap you could drive
+# through: across five matches the shortest real play runs 2.8 seconds, while a
+# cluster at 0.7 to 1.1 holds the fragments - a player settling over the ball,
+# the camera cutting in early - that carry no stroke at all. Five of
+# twenty-four clips sent for review were these, every one labelled "scored",
+# because the duration floor below was only ever applied to misses and a
+# fragment inside an inning is never the inning's last play.
+MIN_PLAY_SECONDS = 2.0
 
 
 def play_rejections(shot, fps):
@@ -691,6 +701,8 @@ def play_rejections(shot, fps):
         reasons.append("unlabelled")
     if len(shot.start_positions) != len(BALL_COLOURS):
         reasons.append("layout_incomplete")
+    if shot.duration(fps) < MIN_PLAY_SECONDS:
+        reasons.append("no_stroke")
     if shot.success:
         # What a scoring play is wanted for is the path up to the score, so a
         # play whose scoring contact was on screen is usable even though the
@@ -787,6 +799,11 @@ def confirm_labels(innings, scores, fps, quiet_seconds=1.0, settle_seconds=0.5):
 # continuous and a table is never reset mid-match. A repeat is the broadcast
 # showing the play again.
 REPLAY_LAYOUT_TOLERANCE_MM = 60.0
+# The object balls are compared far more tightly than that, because they are
+# standing still in both showings and the measured pairs agreed to 1-5 mm. A
+# loose bar here would start calling an ordinary next play a replay whenever
+# the cue ball had only brushed its object ball.
+REPLAY_OBJECT_TOLERANCE_MM = 25.0
 REPLAY_MAX_GAP_SECONDS = 120.0
 
 
@@ -796,8 +813,28 @@ def _layout_vector(shot):
     return np.array([shot.start_positions[c] for c in BALL_COLOURS], dtype=float)
 
 
+def _object_ball_layout(shot):
+    """Where the two balls that are not the cue ball were standing.
+
+    Comparing all three to spot a replay looks right and is not: the object
+    balls are at rest and identify the state of the table, while the cue ball's
+    recorded starting point is wherever the segmenter happened to open the
+    play, and a replay is cut into at a different moment. On the three replays
+    that got through, the object balls agreed to 1, 4 and 5 mm while the cue
+    ball was out by 269, 1367 and 1402 - so the one ball that cannot be
+    compared was the one deciding the answer.
+    """
+    if len(shot.start_positions) != len(BALL_COLOURS) or shot.cue_ball is None:
+        return None
+    others = [c for c in BALL_COLOURS if c != shot.cue_ball]
+    if len(others) != len(BALL_COLOURS) - 1:
+        return None
+    return np.array([shot.start_positions[c] for c in others], dtype=float)
+
+
 def mark_replays(shots, fps, tolerance_mm=REPLAY_LAYOUT_TOLERANCE_MM,
-                 max_gap_seconds=REPLAY_MAX_GAP_SECONDS):
+                 max_gap_seconds=REPLAY_MAX_GAP_SECONDS,
+                 object_tolerance_mm=REPLAY_OBJECT_TOLERANCE_MM):
     """Flag plays that are a second showing of one already seen.
 
     A replay is tracked exactly like live play and there is nothing in the
@@ -816,20 +853,28 @@ def mark_replays(shots, fps, tolerance_mm=REPLAY_LAYOUT_TOLERANCE_MM,
     for shot in shots:
         shot.replay_of = None
         layout = _layout_vector(shot)
+        objects = _object_ball_layout(shot)
         if layout is None:
-            originals.append((shot, None))
+            originals.append((shot, None, None))
             continue
-        for earlier, earlier_layout in originals:
+        for earlier, earlier_layout, earlier_objects in originals:
             if earlier_layout is None:
                 continue
             if shot.start_frame - earlier.start_frame > max_gap:
                 continue
-            if np.linalg.norm(layout - earlier_layout, axis=1).max() < tolerance_mm:
+            same = np.linalg.norm(layout - earlier_layout, axis=1).max() < tolerance_mm
+            if not same and objects is not None and earlier_objects is not None:
+                # The same player is at the table in a replay, so the cue ball
+                # is the same colour; only where it was caught standing differs.
+                same = (shot.cue_ball == earlier.cue_ball
+                        and np.linalg.norm(objects - earlier_objects, axis=1).max()
+                        < object_tolerance_mm)
+            if same:
                 shot.replay_of = earlier
                 replays += 1
                 break
         if shot.replay_of is None:
-            originals.append((shot, layout))
+            originals.append((shot, layout, objects))
     return replays
 
 

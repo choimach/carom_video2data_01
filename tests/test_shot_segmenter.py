@@ -171,7 +171,8 @@ def _inning(cue, successes):
     """An inning whose plays end in the given outcomes."""
     shots = []
     for i, ok in enumerate(successes):
-        shot = Shot(i * 100, i * 100 + 50, cue, {}, {}, True)
+        # Long enough to be a stroke: a carom play runs three seconds and up.
+        shot = Shot(i * 500, i * 500 + 360, cue, {}, {}, True)
         shot.success = ok
         shots.append(shot)
     return Inning(1, cue, shots)
@@ -395,7 +396,7 @@ from src.segmentation.shot_segmenter import (confirm_labels, play_rejections,
 
 def _play(cue="white", success=True, complete=True, inferred=False, full_layout=True):
     layout = {c: (100.0, 100.0) for c in BALL_COLOURS} if full_layout else {"white": (1.0, 1.0)}
-    shot = Shot(0, 60, cue, layout, dict(layout), complete, inferred=inferred)
+    shot = Shot(0, 360, cue, layout, dict(layout), complete, inferred=inferred)
     shot.success = success
     return shot
 
@@ -700,3 +701,57 @@ def test_play_start_is_none_when_the_table_never_appears():
         assert pipeline.find_play_start("x.mp4", NoTable(), verbose=False) is None
     finally:
         pipeline.cv2.VideoCapture = original
+
+
+def test_a_fragment_too_short_to_hold_a_stroke_is_not_a_play():
+    """A carom stroke does not finish in two seconds.
+
+    The duration floor used to apply only to misses, so a fragment sitting
+    inside an inning - a player settling over the ball, the camera cutting in
+    early - was never its inning's last play, was labelled "scored" by the
+    inning's shape, and went straight into the dataset. Five of twenty-four
+    clips sent out for review were exactly this.
+    """
+    from src.segmentation.shot_segmenter import MIN_PLAY_SECONDS
+
+    fragment = _play(success=True)
+    fragment.end_frame = fragment.start_frame + int(0.7 * FPS)
+    assert "no_stroke" in play_rejections(fragment, FPS)
+
+    stroke = _play(success=True)
+    stroke.end_frame = stroke.start_frame + int((MIN_PLAY_SECONDS + 1.0) * FPS)
+    assert "no_stroke" not in play_rejections(stroke, FPS)
+
+
+def test_a_replay_is_caught_by_its_object_balls_not_its_cue_ball():
+    """A replay is cut into at a different moment than the play it repeats.
+
+    The object balls are standing still in both showings and identify the state
+    of the table; the cue ball's recorded starting point is wherever the
+    segmenter happened to open the play. Comparing all three let three replays
+    through in one match, their object balls agreeing to 1, 4 and 5 mm while
+    the cue ball was out by 269, 1367 and 1402 - the one ball that cannot be
+    compared was deciding the answer.
+    """
+    from src.segmentation.shot_segmenter import mark_replays
+
+    layout = {"white": (400.0, 300.0), "yellow": (1800.0, 900.0), "red": (2200.0, 400.0)}
+    live = Shot(0, 360, "yellow", dict(layout), {}, True)
+    # The same play again, opened after the cue ball had already set off.
+    late = dict(layout, yellow=(2069.0, 900.0))
+    replay = Shot(700, 1060, "yellow", late, {}, True)
+
+    assert mark_replays([live, replay], FPS) == 1
+    assert replay.replay_of is live
+
+
+def test_the_next_play_is_not_mistaken_for_a_replay():
+    """Whatever the cue ball did, a genuine next play moved an object ball."""
+    from src.segmentation.shot_segmenter import mark_replays
+
+    first = Shot(0, 360, "yellow", {"white": (400.0, 300.0), "yellow": (1800.0, 900.0),
+                                    "red": (2200.0, 400.0)}, {}, True)
+    after = Shot(700, 1060, "yellow", {"white": (400.0, 300.0), "yellow": (900.0, 500.0),
+                                       "red": (1500.0, 1100.0)}, {}, True)
+    assert mark_replays([first, after], FPS) == 0
+    assert after.replay_of is None

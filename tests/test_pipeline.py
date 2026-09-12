@@ -8,7 +8,7 @@ from src.segmentation.shot_segmenter import Inning, Shot
 
 def make_inning(count, cue="white", inferred=()):
     shots = [
-        Shot(start_frame=i * 100, end_frame=i * 100 + 60, cue_ball=cue,
+        Shot(start_frame=i * 500, end_frame=i * 500 + 360, cue_ball=cue,
              start_positions={"white": (0, 0), "yellow": (1, 1), "red": (2, 2)},
              end_positions={"white": (3, 3), "yellow": (4, 4), "red": (5, 5)},
              complete=True, inferred=i in inferred)
