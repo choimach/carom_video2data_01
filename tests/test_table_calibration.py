@@ -317,3 +317,24 @@ def test_a_blue_quad_is_not_a_table(frame):
     assert not looks_like_a_table(stage_light)  # aspect 2.4, not 2
     sliver = np.array([[100, 100], [1500, 100], [1500, 300], [100, 300]], np.float32)
     assert not looks_like_a_table(sliver)  # aspect 7
+
+
+def test_a_false_marker_does_not_inflate_a_good_calibration(frame):
+    """The fit is scored on the markers RANSAC kept, not on the ones it rejected.
+
+    A short rail carries five markers, few enough that a couple of knots in the
+    timber can fit a grid well enough to be indexed. On the Ankara table those
+    put 25 mm on a homography whose long rails came out at 2, and the match was
+    rejected for a reprojection error its own calibration did not have.
+    """
+    x0, y0, w, h = _nose_rect()
+    spoiled = frame.copy()
+    _draw_diamond(spoiled, x0 - DIAMOND_MARGIN_PX, y0 + h * 0.40)
+    _draw_diamond(spoiled, x0 - DIAMOND_MARGIN_PX, y0 + h * 0.62)
+
+    calibration = calibrate(spoiled)
+    assert calibration.reprojection_error < 3.0
+    assert calibration.mm_per_px == pytest.approx(MM_PER_PX, rel=0.02)
+    # The impostors are not reported as diamonds either.
+    for _, x, y in calibration.diamonds.get("left", []):
+        assert min(abs(y - (y0 + j * h / 4.0)) for j in range(5)) < 6.0

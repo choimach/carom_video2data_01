@@ -37,8 +37,8 @@ from src.physics.table_calibration import (CalibrationError, calibrate,
 
 STREAM_FORMAT = "hls-original"  # the broadcast's own resolution
 SCREEN_FORMAT = "hls-hd"  # 960x540; only for the whole-preview fallback
-DEFAULT_SAMPLES = 14
-DEEP_SAMPLES = 44  # when a thin sample could not decide
+DEFAULT_SAMPLES = 30
+DEEP_SAMPLES = 70  # when the first pass could not decide
 
 
 def _yt_dlp():
@@ -233,13 +233,14 @@ def screen(url, workdir=None, keep_preview=False, verbose=True, samples=DEFAULT_
     frames = sample_frames(url, samples=samples, workdir=workdir)
     if frames:
         verdict = judge(frames)
-        # A fortnight of these matches spend two thirds of their running time on
-        # standby cards, replays and close-ups, so fourteen samples can leave
-        # only three or four frames of table and the verdict turns on one of
-        # them calibrating. When the table is clearly there but the count came
-        # up short, the sample was too thin to decide and the answer is more
-        # samples, not a rejection.
-        if not verdict["usable"] and verdict["table_share"] >= 0.15:
+        # These matches spend most of their running time on standby cards,
+        # replays and close-ups, so even thirty samples can leave only a
+        # handful of frames of whole table, and the verdict turns on whether
+        # one of them happened to calibrate. A single calibrated frame is
+        # already proof the camera exists, and so is the table being in shot
+        # over and over; either says the sample was too thin to decide, and the
+        # answer to that is more samples rather than a rejection.
+        if not verdict["usable"] and (verdict["calibrated"] or verdict["table_share"] >= 0.12):
             frames += sample_frames(url, samples=DEEP_SAMPLES, workdir=workdir,
                                     exclude={start for start, _ in frames})
             verdict = judge(frames)

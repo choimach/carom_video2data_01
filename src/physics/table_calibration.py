@@ -534,23 +534,38 @@ def _calibrate_one(frame, quad, hue, polarity, min_diamonds, min_rails, max_repr
         "right": lambda k: (TABLE_LENGTH_MM + offset_short, k * DIAMOND_SPACING_MM),
     }
 
-    src, dst, diamonds = [], [], {}
+    src, dst, owner = [], [], []
     for rail, (indices, pts, _, _) in rails.items():
-        diamonds[rail] = [(int(k), float(p[0]), float(p[1])) for k, p in zip(indices, pts)]
         for k, p in zip(indices, pts):
             src.append(p)
             dst.append(ideal[rail](int(k)))
+            owner.append((rail, int(k)))
 
     src = np.array(src, np.float32)
     dst = np.array(dst, np.float32)
-    matrix, _ = cv2.findHomography(src, dst, cv2.RANSAC, 5.0)
+    matrix, mask = cv2.findHomography(src, dst, cv2.RANSAC, 5.0)
     if matrix is None:
         raise CalibrationError("homography fit failed")
 
+    # RANSAC has already decided which markers it believes; scoring the fit
+    # against the ones it threw out measures the blobs, not the calibration. A
+    # short rail carries only five markers, so a couple of knots in the timber
+    # can fit a grid well enough to be indexed, and on the Ankara table they
+    # put 25 mm on a homography whose own rails came out at 2. What the count
+    # has to guarantee is that enough real markers survived.
+    keep = mask.ravel().astype(bool) if mask is not None else np.ones(len(src), bool)
+    if int(keep.sum()) < min_diamonds:
+        raise CalibrationError(f"only {int(keep.sum())} diamonds fit one homography")
+
     projected = cv2.perspectiveTransform(src.reshape(-1, 1, 2), matrix).reshape(-1, 2)
-    error = float(np.mean(np.linalg.norm(projected - dst, axis=1)))
+    error = float(np.mean(np.linalg.norm(projected[keep] - dst[keep], axis=1)))
     if error > max_reprojection_mm:
         raise CalibrationError(f"reprojection error {error:.1f} mm too large")
+
+    diamonds = {}
+    for (rail, k), point, kept in zip(owner, src, keep):
+        if kept:
+            diamonds.setdefault(rail, []).append((k, float(point[0]), float(point[1])))
 
     nose = np.array(
         [[0, 0], [TABLE_LENGTH_MM, 0], [TABLE_LENGTH_MM, TABLE_WIDTH_MM], [0, TABLE_WIDTH_MM]],
