@@ -147,51 +147,91 @@ def judge_shot(shot, positions):
 # blurred centroid is least trustworthy. Measured on confirmed successes, the
 # first object ball's closest approach reads 63 mm at the median but 81 mm on a
 # shot struck hard, against a true 61.5: too far for any usable threshold.
-DEPARTURE_MM = 25.0
+# 5 mm, not 25: a cue ball arriving after five or six cushions barely nudges the
+# object ball, and a threshold set for a firm hit misses exactly the shots the
+# players are proudest of. Measured against the hand-labelled match, lowering it
+# recovered five successes and cost no false ones.
+DEPARTURE_MM = 5.0
 ATTRIBUTION_MM = 250.0
 
 
-def _departures(xy, rest_window=12, threshold_mm=DEPARTURE_MM, confirmations=3):
-    """Frames where a ball leaves where it had been sitting."""
+def _departures(xy, rest_window=12, threshold_mm=None, confirmations=3, settle_frames=5):
+    """Where a ball left its resting place, and where that place was.
+
+    Returns (frame, resting_position) pairs. The resting position is what the
+    contact must be attributed to: by the time a firmly struck ball is first
+    seen to have moved, it may already be far from whatever hit it.
+
+    After a departure the ball is simply given a while to get clear before a new
+    resting place is taken. Requiring it to be seen settled first looked more
+    principled and cost a quarter of the accuracy on real shots - a ball that is
+    struck again while still rolling never settles, and its second contact
+    disappeared.
+    """
+    threshold_mm = DEPARTURE_MM if threshold_mm is None else threshold_mm
     out = []
-    n = len(xy)
     resting = None
-    for index in range(n):
+    index, n = 0, len(xy)
+    while index < n:
         point = xy[index]
         if not np.isfinite(point).all():
+            index += 1
             continue
         if resting is None:
             window = xy[max(0, index - rest_window):index + 1]
             window = window[np.isfinite(window[:, 0])]
             resting = np.median(window, axis=0) if len(window) else point
+            index += 1
             continue
-        if float(np.linalg.norm(point - resting)) <= threshold_mm:
-            continue
-        ahead = xy[index:index + confirmations + 1]
-        ahead = ahead[np.isfinite(ahead[:, 0])]
-        if len(ahead) < confirmations:
-            continue
-        if np.all(np.linalg.norm(ahead - resting, axis=1) > threshold_mm):
-            out.append(index)
-            resting = None  # re-establish a resting place once it settles again
+        if float(np.linalg.norm(point - resting)) > threshold_mm:
+            ahead = xy[index:index + confirmations + 1]
+            ahead = ahead[np.isfinite(ahead[:, 0])]
+            if len(ahead) >= confirmations and np.all(
+                np.linalg.norm(ahead - resting, axis=1) > threshold_mm
+            ):
+                out.append((index, resting))
+                resting = None
+                index += settle_frames  # let it get clear before looking again
+                continue
+        index += 1
     return out
 
 
-def contact_events(cue_xy, others, attribution_mm=ATTRIBUTION_MM):
-    """Cue-ball contacts, found from the object balls being set in motion.
+def contact_events(cue_xy, others, attribution_mm=None, departure_mm=None,
+                   touch_mm=BALL_DIAMETER_MM):
+    """Cue-ball contacts, from the object ball moving or from the balls touching.
 
-    A ball that starts moving was hit by whatever was closest to it at that
-    moment. Checking which ball that was keeps a kiss - the first object ball
-    driving the second - from being read as a carom the cue ball never made.
+    Neither signal is enough alone, and they fail in opposite places. Motion
+    catches a firm hit but not a thin one: a cue ball arriving after five or six
+    cushions has little left, and the object ball shifts 5-30 mm - over in a few
+    frames. Distance catches the thin hit, where both balls are nearly still and
+    the centres read true, but not the firm one: the first object ball is struck
+    when the cue ball is fastest and its blurred centroid lags, so the closest
+    approach can read 80 mm against a true 61.5.
+
+    Taking either as evidence covers both. A ball that starts moving was hit by
+    whatever was closest at that moment; checking which ball that was keeps a
+    kiss - the first object ball driving the second - from being read as a
+    carom the cue ball never made.
     """
+    attribution_mm = ATTRIBUTION_MM if attribution_mm is None else attribution_mm
     events = []
     for colour, xy in others.items():
-        for frame in _departures(xy):
-            cue_distance = float(np.linalg.norm(cue_xy[frame] - xy[frame])) if np.isfinite(
+        found = list(_departures(xy, threshold_mm=departure_mm))
+        # Centres closer than a ball's width can only mean the two touched.
+        distance = np.linalg.norm(cue_xy - xy, axis=1)
+        for start, end in _runs(np.isfinite(distance) & (distance <= touch_mm)):
+            middle = (start + end) // 2
+            if all(abs(middle - f) > 4 for f, _ in found):
+                found.append((middle, xy[middle]))
+        for frame, resting in sorted(found):
+            # Measure against where the ball was sitting when it was hit, not
+            # where it has got to by the time the move is confirmed.
+            cue_distance = float(np.linalg.norm(cue_xy[frame] - resting)) if np.isfinite(
                 cue_xy[frame]
             ).all() else np.inf
             rivals = [
-                float(np.linalg.norm(other[frame] - xy[frame]))
+                float(np.linalg.norm(other[frame] - resting))
                 for name, other in others.items()
                 if name != colour and np.isfinite(other[frame]).all()
             ]

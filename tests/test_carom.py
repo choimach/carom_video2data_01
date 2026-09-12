@@ -153,3 +153,43 @@ def test_untracked_frames_do_not_invent_contacts():
     others = {"red": parked((1200.0 + 61.5, 700.0), len(cue))}
     events = shot_events(cue, others)
     assert all(np.isfinite(cue[e.frame]).all() for e in events if e.kind == "ball")
+
+
+# --- contacts found from motion as well as distance -------------------------
+
+from src.physics.carom import BALL_DIAMETER_MM, contact_events
+
+
+def test_a_thin_hit_that_barely_moves_the_ball_still_counts():
+    """After five or six cushions the cue ball has little left and the object
+    ball shifts a few millimetres. Judging contact by motion alone at a
+    threshold set for a firm hit misses these."""
+    cue = path([(1000.0, 700.0), (1200.0 - BALL_DIAMETER_MM, 700.0)], steps=120)
+    red = np.repeat(np.array([[1200.0, 700.0]]), len(cue), axis=0)
+    red[80:] += np.array([6.0, 0.0])  # nudged 6 mm and stops
+    assert [e.detail for e in contact_events(cue, {"red": red})] == ["red"]
+
+
+def test_a_firm_hit_counts_even_when_the_centres_never_read_close_enough():
+    """The first object ball is struck when the cue ball is fastest, and its
+    blurred centroid lags: closest approach can read 80 mm against a true 61.5."""
+    cue = path([(1000.0, 700.0), (1140.0, 700.0)], steps=120)  # stops 80 mm short
+    red = np.repeat(np.array([[1220.0, 700.0]]), len(cue), axis=0)
+    red[60:] = np.array([1600.0, 700.0])  # driven away
+    assert [e.detail for e in contact_events(cue, {"red": red})] == ["red"]
+
+
+def test_a_ball_that_never_moves_and_is_never_reached_is_not_a_contact():
+    cue = path([(1000.0, 700.0), (1100.0, 700.0)], steps=120)
+    red = np.repeat(np.array([[2000.0, 700.0]]), len(cue), axis=0)
+    assert contact_events(cue, {"red": red}) == []
+
+
+def test_a_kiss_is_not_credited_to_the_cue_ball():
+    """The first object ball driving the second is not a carom."""
+    cue = path([(1000.0, 700.0), (1050.0, 700.0)], steps=120)
+    red = np.repeat(np.array([[1400.0, 700.0]]), len(cue), axis=0)
+    yellow = np.repeat(np.array([[1470.0, 700.0]]), len(cue), axis=0)
+    yellow[60:] += np.array([300.0, 0.0])  # red, right beside it, sent it off
+    events = contact_events(cue, {"red": red, "yellow": yellow})
+    assert "yellow" not in [e.detail for e in events]
