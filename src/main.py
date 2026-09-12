@@ -16,7 +16,8 @@ import sys
 
 from src.db.database import SessionLocal, init_db, reset_db
 from src.db.models import Inning, Match, Shot
-from src.pipeline import analyse, export_json, find_calibration, load_scan, report, scan
+from src.pipeline import (analyse, cut_clips, export_json, export_trajectories,
+                          find_calibration, load_scan, report, scan)
 
 
 def track_path_for(video_path):
@@ -81,6 +82,13 @@ def store(result, video_path, track_path, title, url, scan_data):
                     yellow_y=layout.get("yellow", (None, None))[1],
                     red_x=layout.get("red", (None, None))[0],
                     red_y=layout.get("red", (None, None))[1],
+                    end_white_x=(shot.end_positions or {}).get("white", (None, None))[0],
+                    end_white_y=(shot.end_positions or {}).get("white", (None, None))[1],
+                    end_yellow_x=(shot.end_positions or {}).get("yellow", (None, None))[0],
+                    end_yellow_y=(shot.end_positions or {}).get("yellow", (None, None))[1],
+                    end_red_x=(shot.end_positions or {}).get("red", (None, None))[0],
+                    end_red_y=(shot.end_positions or {}).get("red", (None, None))[1],
+                    video_clip_path=getattr(shot, "clip_path", None),
                     cue_speed=getattr(shot, "cue_speed", None),
                     cue_travel_mm=getattr(shot, "cue_travel", None),
                     start_frame=shot.start_frame,
@@ -115,6 +123,10 @@ def main(argv=None):
                         help="reuse the cached scan instead of reading the video again")
     parser.add_argument("--no-store", action="store_true", help="do not write to the database")
     parser.add_argument("--json", default=None, help="also write the plays to this JSON file")
+    parser.add_argument("--trajectories", default=None,
+                        help="write every usable play's three ball paths to this .npz")
+    parser.add_argument("--clips", default=None,
+                        help="cut one video file per usable play into this directory")
     parser.add_argument("--init-db", action="store_true")
     parser.add_argument("--reset-db", action="store_true", help="drop and recreate the tables")
     args = parser.parse_args(argv)
@@ -159,9 +171,15 @@ def main(argv=None):
     print(f"\n{title}")
     report(result)
 
+    if args.clips:
+        clips = cut_clips(video_path, result, args.clips)
+        print(f"\ncut {len(clips)} clips into {args.clips}")
+    if args.trajectories:
+        count = export_trajectories(scan_data, result, args.trajectories)
+        print(f"wrote {count} plays' trajectories to {args.trajectories}")
     if args.json:
         count = export_json(result, args.json)
-        print(f"\nwrote {count} plays to {args.json}")
+        print(f"wrote {count} plays to {args.json}")
     if not args.no_store:
         match_id = store(result, video_path, track_path, title, args.url, scan_data)
         print(f"stored as match {match_id}")

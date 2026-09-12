@@ -88,6 +88,16 @@ class Shot(Base):
     red_x = Column(Float, nullable=True)
     red_y = Column(Float, nullable=True)
 
+    # Where the balls finished. The layout a play leaves behind is the layout
+    # the next one is played from, so a run of shots is a chain and this is the
+    # link between them.
+    end_white_x = Column(Float, nullable=True)
+    end_white_y = Column(Float, nullable=True)
+    end_yellow_x = Column(Float, nullable=True)
+    end_yellow_y = Column(Float, nullable=True)
+    end_red_x = Column(Float, nullable=True)
+    end_red_y = Column(Float, nullable=True)
+
     cue_speed = Column(Float, nullable=True)  # m/s over the first frames of travel
     cue_travel_mm = Column(Float, nullable=True)
     thickness = Column(Float, nullable=True)

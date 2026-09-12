@@ -26,8 +26,10 @@ REQUIRED_CUSHIONS = 3
 # width, covering the couple of millimetres of centroid error and the frame or
 # two either side of the touch that 60 fps leaves unsampled.
 CONTACT_TOLERANCE_MM = 12.0
-# A cushion is touched when the centre comes within a radius of the nose line.
+# A cushion is touched when the centre comes within a radius of the nose line,
+# and is not touched again until the ball has got clear of it by a good margin.
 CUSHION_TOLERANCE_MM = 12.0
+CUSHION_RELEASE_MM = 60.0  # about a ball's width back off the rail
 
 
 class Event:
@@ -57,24 +59,44 @@ def _runs(flags):
 
 
 def cushion_events(cue_xy, length_mm=TABLE_LENGTH_MM, width_mm=TABLE_WIDTH_MM,
-                   tolerance_mm=CUSHION_TOLERANCE_MM):
+                   tolerance_mm=CUSHION_TOLERANCE_MM, release_mm=CUSHION_RELEASE_MM):
     """Cushion contacts, one per touch.
 
-    A ball running along a rail touches it once, not once per frame, so
-    contiguous frames against the same rail collapse into a single event. The
-    two rails of a corner stay separate events, which is what the rules count.
+    A ball running along a rail touches it once, not once per frame, so it has
+    to get clear of the cushion before it can hit it again - and "clear" needs
+    room, not a millimetre back across the same line, or a ball dying along a
+    rail is counted over and over.
+
+    The event is timed to the middle of the contact, not its first frame: the
+    count that decides a point is of cushions taken *before* the second object
+    ball, and a contact timed early can slip to the wrong side of that
+    boundary.
+
+    The two rails of a corner stay separate events, which is what the rules
+    count.
     """
     events = []
     limits = ((0, length_mm, "left", "right"), (1, width_mm, "top", "bottom"))
     for axis, limit, low_name, high_name in limits:
         coordinate = cue_xy[:, axis]
         seen = np.isfinite(coordinate)
-        for name, near in (
-            (low_name, seen & (coordinate <= BALL_RADIUS_MM + tolerance_mm)),
-            (high_name, seen & (coordinate >= limit - BALL_RADIUS_MM - tolerance_mm)),
-        ):
-            for start, end in _runs(near):
-                events.append(Event((start + end) // 2, "cushion", name))
+        distance_low = coordinate - BALL_RADIUS_MM
+        distance_high = (limit - BALL_RADIUS_MM) - coordinate
+        for name, distance in ((low_name, distance_low), (high_name, distance_high)):
+            began = None
+            last_touch = None
+            for index in range(len(coordinate)):
+                if not seen[index]:
+                    continue
+                if distance[index] <= tolerance_mm:
+                    if began is None:
+                        began = index
+                    last_touch = index
+                elif began is not None and distance[index] > release_mm:
+                    events.append(Event((began + last_touch) // 2, "cushion", name))
+                    began = last_touch = None
+            if began is not None:
+                events.append(Event((began + last_touch) // 2, "cushion", name))
     return events
 
 

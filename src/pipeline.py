@@ -36,6 +36,7 @@ from src.segmentation.shot_segmenter import (
     play_rejections,
     recover_missing_plays,
     segment_shots,
+    drop_unreachable_points,
 )
 
 BALL_ORDER = ("white", "yellow", "red")
@@ -188,8 +189,12 @@ def turns_from_board_rows(rows):
 
 def analyse(scan_data, recover=True):
     """The cheap pass: plays, innings, verdicts, and an account of what was lost."""
-    positions, live = scan_data["positions"], scan_data["live"]
+    live = scan_data["live"]
     fps, start = scan_data["fps"], scan_data["start"]
+    # Clean before anything reads the tracks: a detection that jumped is not
+    # noise to be averaged out, it is a position that was never occupied.
+    positions = drop_unreachable_points(scan_data["positions"], fps)
+    scan_data = dict(scan_data, positions=positions)
 
     turns = turns_from_board_rows(scan_data["boards"])
     shots = segment_shots(positions, live, fps)
@@ -344,3 +349,99 @@ def export_json(result, path):
         json.dump(_plain({"expected_plays": result["expected_plays"], "plays": plays}),
                   handle, indent=1)
     return len(plays)
+
+
+def play_trajectory(scan_data, shot, colours=BALL_ORDER, trim_trailing_rest=True):
+    """The three balls' paths through one play, in table millimetres.
+
+    Returns {colour: (n, 2) array}, NaN where a ball was not detected. This is
+    the record the whole pipeline exists to produce - the layout says what the
+    player faced, the verdict says how it ended, and this says what happened in
+    between.
+
+    Frames after everything has come to rest are dropped by default: a play's
+    tail is the segmenter waiting out its rest window, and it is the same
+    position repeated.
+    """
+    window = slice(shot.start_frame, shot.end_frame + 1)
+    paths = {c: scan_data["positions"][c][window].copy() for c in colours}
+    if trim_trailing_rest and len(paths[colours[0]]) > 1:
+        moving = np.zeros(len(paths[colours[0]]), dtype=bool)
+        for xy in paths.values():
+            step = np.linalg.norm(np.diff(xy, axis=0), axis=1)
+            moving[1:] |= np.nan_to_num(step, nan=0.0) > 1.0
+        last = np.flatnonzero(moving)
+        if last.size:
+            end = min(len(moving), int(last[-1]) + 2)
+            paths = {c: xy[:end] for c, xy in paths.items()}
+    return paths
+
+
+def export_trajectories(scan_data, result, path, usable_only=True):
+    """Write every play's three paths to one .npz, keyed by inning and shot.
+
+    One file per match rather than one per play: a hundred plays is a hundred
+    thousand points, which is nothing to load at once and a nuisance to open a
+    hundred times.
+    """
+    arrays, index = {}, []
+    for inning in result["innings"]:
+        for number, shot in enumerate(inning.shots, start=1):
+            if usable_only and getattr(shot, "rejections", None):
+                continue
+            if shot.inferred:
+                continue
+            key = f"i{inning.number:03d}s{number:02d}"
+            paths = play_trajectory(scan_data, shot)
+            for colour, xy in paths.items():
+                arrays[f"{key}_{colour}"] = xy.astype(np.float32)
+            index.append({
+                "key": key,
+                "inning": inning.number,
+                "shot_number": number,
+                "cue_ball": shot.cue_ball,
+                "success": bool(shot.success) if shot.success is not None else None,
+                "frames": int(len(paths[BALL_ORDER[0]])),
+                "start_second": result["start"] + shot.start_frame / result["fps"],
+            })
+    os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
+    np.savez_compressed(path, index=json.dumps(index), fps=result["fps"], **arrays)
+    return len(index)
+
+
+def cut_clips(video_path, result, directory, usable_only=True, lead_in=4.0, lead_out=7.0,
+              width=960, crf=28, verbose=True):
+    """One video file per play, for looking at what the numbers describe.
+
+    Runs to the balls stopping rather than to the recorded end, and opens well
+    before the strike: a clip that starts on the stroke does not show the layout
+    it was played from.
+    """
+    import subprocess
+
+    os.makedirs(directory, exist_ok=True)
+    made = []
+    for inning in result["innings"]:
+        for number, shot in enumerate(inning.shots, start=1):
+            if usable_only and getattr(shot, "rejections", None):
+                continue
+            if shot.inferred:
+                continue
+            begin = result["start"] + shot.start_frame / result["fps"]
+            finish = result["start"] + shot.end_frame / result["fps"]
+            name = (f"i{inning.number:03d}s{number:02d}_{shot.cue_ball}_"
+                    f"{'score' if shot.success else 'miss'}_t{int(begin)}.mp4")
+            out = os.path.join(directory, name)
+            command = [
+                "ffmpeg", "-v", "error", "-ss", f"{max(0.0, begin - lead_in):.2f}",
+                "-i", video_path, "-t", f"{(finish - begin) + lead_in + lead_out:.2f}",
+                "-an", "-vf", f"scale={width}:-2", "-c:v", "libx264", "-crf", str(crf),
+                "-preset", "veryfast", out, "-y",
+            ]
+            done = subprocess.run(command, capture_output=True, text=True)
+            if done.returncode == 0:
+                shot.clip_path = out
+                made.append(out)
+            elif verbose:
+                print(f"  clip failed for {name}: {done.stderr.strip()[:100]}", flush=True)
+    return made

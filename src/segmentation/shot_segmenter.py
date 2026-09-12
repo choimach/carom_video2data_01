@@ -904,3 +904,50 @@ def stitch_across_cuts(shot, positions, live, fps, at_rest=None, fastest=None,
             cursor += 1
         end = cursor - 1
     return end
+
+
+def drop_unreachable_points(positions, fps, max_speed_ms=MAX_CUE_SPEED_MS, margin=1.4,
+                            agreement=3, agreement_mm=80.0):
+    """Discard detections no ball could have reached, leaving a gap instead.
+
+    At 60 fps a ball at the fastest a cue can send it moves about 150 mm
+    between frames. Steps far beyond that are the detector jumping to something
+    else - a reflection, the other cue ball, a hand - and they are not harmless
+    noise: one play's cue ball accumulated 141 m of travel and appeared to
+    strike the right cushion forty-one times.
+
+    A rejected point is dropped, not interpolated; the ball's position in that
+    frame is simply unknown. When several consecutive readings agree with each
+    other somewhere unreachable, it is the anchor that was wrong, so the track
+    re-anchors there rather than rejecting the rest of the play.
+    """
+    limit = max_speed_ms * 1000.0 / fps * margin
+    cleaned = {}
+    for colour, xy in positions.items():
+        out = np.array(xy, dtype=float, copy=True)
+        finite = np.flatnonzero(np.isfinite(out[:, 0]) & np.isfinite(out[:, 1]))
+        if len(finite) < 2:
+            cleaned[colour] = out
+            continue
+        anchor = finite[0]
+        position = 1
+        while position < len(finite):
+            index = finite[position]
+            gap = max(1, index - anchor)
+            if float(np.linalg.norm(out[index] - out[anchor])) <= limit * gap:
+                anchor = index
+                position += 1
+                continue
+            following = finite[position:position + agreement]
+            consistent = (
+                len(following) >= agreement
+                and np.all(np.linalg.norm(out[following] - out[index], axis=1) <= agreement_mm)
+            )
+            if consistent:
+                anchor = index  # the anchor was the outlier, not this
+                position += 1
+                continue
+            out[index] = np.nan
+            position += 1
+        cleaned[colour] = out
+    return cleaned

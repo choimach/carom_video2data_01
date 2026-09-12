@@ -225,3 +225,22 @@ def test_a_contact_is_attributed_even_if_the_cue_ball_is_lost_in_that_frame():
     red[60:] = np.array([1600.0, 700.0])
     cue[55:66] = np.nan  # lost across the strike
     assert [e.detail for e in contact_events(cue, {"red": red})] == ["red"]
+
+
+def test_a_ball_dying_along_a_rail_is_one_contact():
+    """Without room to count as having left, a ball drifting in and out of the
+    contact band reads as a new cushion every few frames - one play in the
+    sample came out at thirty-seven."""
+    n = 400
+    along = np.zeros((n, 2))
+    along[:, 0] = np.linspace(400.0, 1800.0, n)
+    # weaves either side of the contact threshold as it rolls along the rail
+    along[:, 1] = BALL_RADIUS_MM + 8.0 + 6.0 * np.sin(np.linspace(0, 30, n))
+    assert [e.detail for e in cushion_events(along)] == ["top"]
+
+
+def test_leaving_the_rail_properly_and_returning_counts_twice():
+    out_and_back = path(
+        [(500.0, BALL_RADIUS_MM), (500.0, 700.0), (900.0, BALL_RADIUS_MM)], steps=60
+    )
+    assert len([e for e in cushion_events(out_and_back) if e.detail == "top"]) == 2
