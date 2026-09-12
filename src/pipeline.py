@@ -70,7 +70,13 @@ def find_calibration(video_path, search_from=600.0, search_to=None, step=120.0,
                 score = (found.diamond_count, -found.reprojection_error)
                 if best is None or score > (best[1].diamond_count, -best[1].reprojection_error):
                     best = (t, found)
-                if found.diamond_count == 28 and found.reprojection_error <= target_error_mm:
+                # Stopping early used to wait for all 28 markers. A calibration
+                # now reports the markers its homography actually kept, so a
+                # table whose short rails carry only a few clean ones - the
+                # Ankara table does - never reaches 28 and the search ran to the
+                # end of the match for nothing. What the exit needs to know is
+                # that the fit is good and rests on more than the bare minimum.
+                if found.diamond_count >= 18 and found.reprojection_error <= target_error_mm:
                     break
         t += step
     capture.release()
