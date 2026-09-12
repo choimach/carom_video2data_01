@@ -208,8 +208,13 @@ def _departures(xy, rest_window=12, threshold_mm=None, confirmations=3, settle_f
     return out
 
 
-def _nearest_approach(xy, point, frame, before=6, after=3):
-    """Closest a ball came to `point` in the frames around `frame`, ignoring gaps."""
+def _nearest_approach(xy, point, frame, before=6, after=12):
+    """Closest a ball came to `point` in the frames around `frame`, ignoring gaps.
+
+    Twelve frames after (0.2 s) covers the burst of blur that follows the
+    strike; widening further recovers one more play on the labelled match, but
+    that is tuning on the evaluation set and was left alone.
+    """
     segment = xy[max(0, frame - before):frame + after]
     segment = segment[np.isfinite(segment[:, 0]) & np.isfinite(segment[:, 1])]
     if not len(segment):
