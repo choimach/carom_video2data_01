@@ -370,3 +370,30 @@ def test_a_sponsor_graphic_is_still_not_a_table(calibration, frame):
     for x, y in ((600, 400), (1200, 700), (1500, 300)):
         cv2.circle(graphic, (x, y), 24, (240, 240, 240), -1)
     assert not calibration.is_table_visible(graphic)
+
+
+def test_rail_offset_survives_a_half_hidden_opposite_rail():
+    """The offset between opposite rails is measured marker against marker.
+
+    Averaging each rail's points and measuring between the two averages is
+    right only while both rails are fully visible. With all nine markers on one
+    long rail and the last four on the other, the averages sit diagonally apart
+    and the length of that diagonal is booked as rail offset: on the Pohang
+    table 197 mm where the rail stands 84 mm out, which put every ball on the
+    table 57 mm from where it was.
+    """
+    covered = render_table(BALLS)
+    x0, y0, w, h = _nose_rect()
+    # A player leaning over the near rail hides everything but its far end.
+    cv2.rectangle(covered,
+                  (int(x0 - 60), int(y0 + h + DIAMOND_MARGIN_PX - 14)),
+                  (int(x0 + w * 0.55), int(y0 + h + DIAMOND_MARGIN_PX + 14)),
+                  (70, 60, 55), -1)
+
+    calibration = calibrate(covered)
+    full = calibrate(render_table(BALLS))
+    assert calibration.rail_offset_mm[0] == pytest.approx(full.rail_offset_mm[0], abs=6.0)
+
+    # And what matters downstream: the same pixel lands in the same place.
+    middle = _to_px(TABLE_LENGTH_MM / 2, TABLE_WIDTH_MM / 2)
+    assert np.allclose(calibration.to_table(middle), full.to_table(middle), atol=10.0)

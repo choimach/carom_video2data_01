@@ -518,11 +518,25 @@ def _calibrate_one(frame, quad, hue, polarity, min_diamonds, min_rails, max_repr
     # The markers sit outside the nose line by a constant distance. Recover it
     # from the separation between opposite rails and the known table size.
     def opposite_offset(rail_a, rail_b, true_mm):
+        """Separation of two opposite marker rows, less the table's true width.
+
+        Only markers that both rails have in common may be compared. Averaging
+        each rail's points and measuring between the two averages is right only
+        while both rails are fully visible: with all nine markers on one rail
+        and the last four on the other, the two averages sit diagonally apart,
+        and the length of that diagonal gets booked as rail offset. On the
+        Pohang table that returned 197 mm where the rail stands 84 mm out, and
+        put every ball 57 mm from where it was.
+        """
         if rail_a not in rails or rail_b not in rails:
             return None
-        a = rails[rail_a][1].mean(axis=0)
-        b = rails[rail_b][1].mean(axis=0)
-        return (float(np.hypot(*(a - b))) * mm_per_px - true_mm) / 2.0
+        a = {int(k): p for k, p in zip(rails[rail_a][0], rails[rail_a][1])}
+        b = {int(k): p for k, p in zip(rails[rail_b][0], rails[rail_b][1])}
+        shared = sorted(set(a) & set(b))
+        if len(shared) < 2:
+            return None
+        spans = [float(np.hypot(*(a[k] - b[k]))) * mm_per_px for k in shared]
+        return (float(np.median(spans)) - true_mm) / 2.0
 
     offset_long = opposite_offset("top", "bottom", TABLE_WIDTH_MM)
     offset_short = opposite_offset("left", "right", TABLE_LENGTH_MM)
