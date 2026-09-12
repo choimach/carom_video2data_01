@@ -6,11 +6,17 @@ interpreter, from the project root:
     ~/.venvs/carom/bin/python tools/screen_run.py [listing.txt]
 
 `screen_run.py` takes a listing of `vod_id|event|title` lines and decides which
-matches are worth downloading in full, by fetching the 540p rendition and trying
-to calibrate it. Only a broadcast shot from above the table can be used, and
-that is not something the title says: the 2023 Shanghai final is shot from the
-side and cannot be calibrated at all. Screening costs a gigabyte per match
-against ten for the real thing.
+matches are worth downloading in full. Only a broadcast shot from above the
+table can be used, and that is not something the title says: the 2023 Shanghai
+final is shot from the side and cannot be calibrated at all.
+
+It judges a match by pulling a dozen-odd HLS segments from across it - tens of
+megabytes and half a minute, against ten gigabytes and half an hour for the
+match itself - and calibrating a frame from each. The segments come at the
+broadcast's own resolution, which matters: downloading the 540p rendition
+instead is both slower and wrong, because a camera pulled well back leaves its
+diamonds three pixels across at that size and the match reads as having no
+overhead camera when it plainly has one.
 
 Results accumulate in `data/_screening.json` as each match is judged, so the run
 can be stopped and resumed.

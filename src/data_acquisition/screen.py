@@ -32,11 +32,13 @@ import urllib.request
 import cv2
 
 from src.physics.table_calibration import (CalibrationError, calibrate,
-                                           detect_cloth_quad, table_scale)
+                                           detect_cloth_quad, looks_like_a_table,
+                                           table_scale)
 
 STREAM_FORMAT = "hls-original"  # the broadcast's own resolution
 SCREEN_FORMAT = "hls-hd"  # 960x540; only for the whole-preview fallback
 DEFAULT_SAMPLES = 14
+DEEP_SAMPLES = 44  # when a thin sample could not decide
 
 
 def _yt_dlp():
@@ -111,7 +113,7 @@ def segment_index(playlist):
 
 
 def sample_frames(url, samples=DEFAULT_SAMPLES, skip_fraction=0.25, fmt=STREAM_FORMAT,
-                  workdir=None):
+                  workdir=None, exclude=()):
     """One frame from each of `samples` segments spread across the match.
 
     Sampling starts a quarter of the way in: these VODs open with anything up to
@@ -130,7 +132,7 @@ def sample_frames(url, samples=DEFAULT_SAMPLES, skip_fraction=0.25, fmt=STREAM_F
     workdir = workdir or tempfile.mkdtemp(prefix="carom_screen_")
     os.makedirs(workdir, exist_ok=True)
 
-    frames, used = [], set()
+    frames, used = [], set(exclude)
     for index in range(samples):
         wanted = begin + index * step
         start, name = min(entries, key=lambda entry: abs(entry[0] - wanted))
@@ -160,7 +162,7 @@ def judge(frames):
     calibrated, errors, scales, table_scales, with_table = 0, [], [], [], 0
     for _, frame in frames:
         quad = detect_cloth_quad(frame)
-        if quad is not None:
+        if quad is not None and looks_like_a_table(quad):
             with_table += 1
             table_scales.append(table_scale(frame, quad))
         try:
@@ -231,6 +233,17 @@ def screen(url, workdir=None, keep_preview=False, verbose=True, samples=DEFAULT_
     frames = sample_frames(url, samples=samples, workdir=workdir)
     if frames:
         verdict = judge(frames)
+        # A fortnight of these matches spend two thirds of their running time on
+        # standby cards, replays and close-ups, so fourteen samples can leave
+        # only three or four frames of table and the verdict turns on one of
+        # them calibrating. When the table is clearly there but the count came
+        # up short, the sample was too thin to decide and the answer is more
+        # samples, not a rejection.
+        if not verdict["usable"] and verdict["table_share"] >= 0.15:
+            frames += sample_frames(url, samples=DEEP_SAMPLES, workdir=workdir,
+                                    exclude={start for start, _ in frames})
+            verdict = judge(frames)
+            verdict["deep"] = True
     else:
         verdict = _screen_by_preview(url, workdir, keep_preview, details)
     verdict.update({"url": url, **details})

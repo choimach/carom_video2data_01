@@ -21,6 +21,7 @@ import numpy as np
 TABLE_LENGTH_MM = 2844.0
 TABLE_WIDTH_MM = 1422.0
 DIAMOND_SPACING_MM = 355.5  # 2844/8 == 1422/4
+TABLE_ASPECT = TABLE_LENGTH_MM / TABLE_WIDTH_MM  # exactly 2
 
 LONG_RAIL_DIAMONDS = 9  # indices 0..8
 SHORT_RAIL_DIAMONDS = 5  # indices 0..4
@@ -216,6 +217,25 @@ def detect_cloth_quad(frame, min_area_ratio=0.15):
     if min(sides) < 50 * frame.shape[1] / 1920:
         return None
     return quad
+
+
+def looks_like_a_table(quad, tolerance=0.15):
+    """Is this quad the right shape for a table seen from above?
+
+    A blue quad is not by itself a table. Half the Antalya broadcast is lit in
+    blue from the rig above the arena, and the cloth mask happily returns a
+    table-sized region of empty hall; a close-up of one corner returns a long
+    thin sliver of cloth. Both were being counted as "the table is in shot but
+    would not calibrate", which is the one verdict that buys a match a second,
+    more expensive look. Seen from anywhere near overhead the nose line keeps
+    its 2:1 proportions, and neither of those does.
+    """
+    sides = [float(np.hypot(*(quad[i] - quad[(i + 1) % 4]))) for i in range(4)]
+    shortest = min(sides)
+    if shortest <= 0:
+        return False
+    aspect = max(sides) / shortest
+    return abs(aspect - TABLE_ASPECT) <= TABLE_ASPECT * tolerance
 
 
 def rail_edges(quad):

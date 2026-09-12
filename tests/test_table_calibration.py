@@ -298,3 +298,22 @@ def test_a_stray_blob_does_not_cost_the_whole_rail(frame):
     assert calibration.diamond_count >= 27
     assert calibration.mm_per_px == pytest.approx(MM_PER_PX, rel=0.02)
     assert calibration.reprojection_error < 3.0
+
+
+def test_a_blue_quad_is_not_a_table(frame):
+    """Cloth colour alone does not identify a table.
+
+    The Antalya arena is lit blue from above, and the cloth mask returns a
+    table-sized region of empty hall; a close-up of one corner returns a long
+    sliver of cloth. Both were being read as a table in shot that merely failed
+    to calibrate, the one verdict that earns a match a second, costlier look.
+    """
+    from src.physics.table_calibration import looks_like_a_table
+
+    real = detect_cloth_quad(frame)
+    assert looks_like_a_table(real)
+
+    stage_light = np.array([[100, 100], [900, 120], [880, 460], [120, 440]], np.float32)
+    assert not looks_like_a_table(stage_light)  # aspect 2.4, not 2
+    sliver = np.array([[100, 100], [1500, 100], [1500, 300], [100, 300]], np.float32)
+    assert not looks_like_a_table(sliver)  # aspect 7
