@@ -25,6 +25,10 @@ DIAMOND_SPACING_MM = 355.5  # 2844/8 == 1422/4
 LONG_RAIL_DIAMONDS = 9  # indices 0..8
 SHORT_RAIL_DIAMONDS = 5  # indices 0..4
 
+# Long edge of the cloth quad, in pixels, on the broadcast the detector's
+# pixel sizes below were measured against.
+REFERENCE_TABLE_PX = 1181.0
+
 RAILS = ("top", "right", "bottom", "left")
 LONG_RAILS = ("top", "bottom")
 
@@ -37,7 +41,7 @@ class Calibration:
     """Result of a successful calibration."""
 
     def __init__(self, matrix, corners, mm_per_px, rail_offset_mm, reprojection_error, diamonds,
-                 cloth_hue=None):
+                 cloth_hue=None, polarity="bright"):
         self.matrix = matrix
         self.corners = corners  # nose-line corners in pixels: TL, TR, BR, BL
         self.mm_per_px = mm_per_px
@@ -45,6 +49,9 @@ class Calibration:
         self.reprojection_error = reprojection_error  # mean, in mm
         self.diamonds = diamonds  # {rail: [(index, x, y), ...]}
         self.cloth_hue = cloth_hue
+        self.polarity = polarity
+        self.rail_value = None  # brightness of bare rail, learned from the frame
+        self.diamond_value = None
         self._probes = None
 
     @property
@@ -74,7 +81,29 @@ class Calibration:
         self._probes = (to_px(cloth_mm), to_px(rail_mm), to_px(diamond_mm))
         return self._probes
 
-    def is_table_visible(self, frame, hue_tol=13, min_ratio=0.6):
+    def learn_appearance(self, frame):
+        """Record how bare rail and marker look on the frame that calibrated.
+
+        `is_table_visible` needs to recognise this table again thousands of
+        times a scan, and it does that by probing fixed pixels. Hard-coded grey
+        levels only describe the table they were measured on; these are
+        measured on whatever table is actually in front of the camera.
+        """
+        _, rail_px, diamond_px = self._probes or self._build_probes()
+        value = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)[:, :, 2]
+        h, w = frame.shape[:2]
+
+        def median_at(points):
+            inside = [value[y, x] for x, y in points if 0 <= x < w and 0 <= y < h]
+            return float(np.median(inside)) if inside else None
+
+        self.rail_value = median_at(rail_px)
+        self.diamond_value = median_at(diamond_px)
+        if self.rail_value is None or self.diamond_value is None:
+            self.rail_value = self.diamond_value = None
+        return self
+
+    def is_table_visible(self, frame, hue_tol=13, min_ratio=0.6, rail_tol=45):
         """Is this frame still showing the calibrated table?
 
         Testing for cloth-coloured pixels alone is not enough: a full-screen
@@ -102,8 +131,18 @@ class Calibration:
 
         hue_delta = np.abs(cloth[:, 0].astype(int) - self.cloth_hue)
         is_cloth = (hue_delta <= hue_tol) & (cloth[:, 1] > 90) & (cloth[:, 2] > 140)
-        is_rail = rail[:, 2] < 120  # rails are dark timber in shadow
-        is_diamond = (diamonds[:, 2] > 140) & (diamonds[:, 1] < 110)
+        if self.rail_value is None:
+            is_rail = rail[:, 2] < 120  # rails are dark timber in shadow
+            is_diamond = (diamonds[:, 2] > 140) & (diamonds[:, 1] < 110)
+        else:
+            # What counts as rail and as marker was measured on the frame this
+            # calibration came from, because "dark rail, bright diamond" only
+            # describes some of the tables in use.
+            is_rail = np.abs(rail[:, 2].astype(int) - self.rail_value) <= rail_tol
+            sign = 1 if self.polarity == "bright" else -1
+            contrast = sign * (diamonds[:, 2].astype(int) - self.rail_value)
+            floor = max(10.0, 0.4 * abs(self.diamond_value - self.rail_value))
+            is_diamond = contrast >= floor
 
         return (
             is_cloth.mean() >= min_ratio
@@ -189,30 +228,68 @@ def rail_edges(quad):
     }
 
 
+POLARITIES = ("bright", "dark")
+
+
+def _contrast_mask(value, band, scale, polarity):
+    """Blobs inside the rail band that stand out from the rail around them.
+
+    A top-hat keeps what is brighter than its surroundings and a black-hat what
+    is darker, so the same code finds white markers on a dark rail and the
+    inlaid dark dots that a pale wooden rail carries instead. The threshold is
+    taken from the band's own contrast rather than an absolute grey level,
+    because the rail's brightness varies with the venue lighting.
+    """
+    size = max(5, int(25 * scale) | 1)
+    kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (size, size))
+    operation = cv2.MORPH_TOPHAT if polarity == "bright" else cv2.MORPH_BLACKHAT
+    hat = cv2.morphologyEx(value, operation, kernel)
+    inside = hat[band > 0]
+    if inside.size == 0:
+        return np.zeros_like(band)
+    strongest = float(np.percentile(inside, 99.0))
+    threshold = max(12.0, strongest / 2.0)
+    return cv2.bitwise_and(cv2.inRange(hat, threshold, 255.0), band)
+
+
+def table_scale(frame, quad):
+    """How big this table is against the one the pixel constants were measured on.
+
+    Using the frame width instead is wrong whenever the camera is pulled back:
+    a marker's size in pixels follows the table, not the picture around it. The
+    Ankara final is shot from further away than the SOOP world cup coverage, so
+    its table fills little more than half the frame and its diamonds are half
+    the size the frame width would predict.
+    """
+    sides = [float(np.hypot(*(quad[i] - quad[(i + 1) % 4]))) for i in range(4)]
+    return max(sides) / REFERENCE_TABLE_PX
+
+
 def detect_diamonds(frame, quad, band_outer=None, band_inner=None, area_range=None,
-                    offset_tolerance_px=None, reference_width=1920):
+                    offset_tolerance_px=None, polarity="bright"):
     """Find diamond markers in the rail band just outside the cloth.
 
     Returns {rail: [(x, y), ...]} ordered along the rail. Markers on one rail
     all sit the same distance from the cloth edge, so a blob whose offset
     disagrees with its neighbours - a chalk cube, a shirt, a reflection - is
     dropped before it can corrupt the index assignment.
+
+    `polarity` says whether the markers are lighter or darker than the rail
+    they sit on; both kinds are in use and a table shows only one of them.
     """
-    # Every size here was measured on a 1920-wide broadcast, and they are areas
-    # and distances in pixels, so they do not survive a change of resolution:
-    # at 960 wide a diamond covers a quarter of the area and falls straight
-    # through the lower bound. Scaling them against the frame is what lets the
-    # same code judge a 540p preview and a full-size scan.
-    scale = frame.shape[1] / reference_width
+    # Every size here was measured on one broadcast, and they are areas and
+    # distances in pixels, so they do not survive a change of scale: at half
+    # size a diamond covers a quarter of the area and falls straight through
+    # the lower bound. Scaling them against the table is what lets the same
+    # code judge a 540p preview and a full-size scan.
+    scale = table_scale(frame, quad)
     band_outer = band_outer or max(9, int(61 * scale) | 1)
     band_inner = band_inner or max(3, int(11 * scale) | 1)
     offset_tolerance_px = offset_tolerance_px or 10.0 * scale
     if area_range is None:
         area_range = (max(4.0, 15 * scale * scale), 400 * scale * scale)
 
-    hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
     quad_i = quad.astype(np.int32)
-
     filled = np.zeros(frame.shape[:2], np.uint8)
     cv2.fillPoly(filled, [quad_i], 255)
     band = cv2.subtract(
@@ -220,8 +297,8 @@ def detect_diamonds(frame, quad, band_outer=None, band_inner=None, area_range=No
         cv2.dilate(filled, np.ones((band_inner, band_inner), np.uint8)),
     )
 
-    bright = cv2.inRange(hsv, np.array([0, 0, 150]), np.array([180, 90, 255]))
-    candidates = cv2.bitwise_and(bright, band)
+    value = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)[:, :, 2]
+    candidates = _contrast_mask(value, band, scale, polarity)
     if scale > 0.75:
         # Opening clears speckle at full size, where a diamond covers some forty
         # pixels. On a half-size frame it covers eight, and a 3x3 open erases
@@ -267,12 +344,21 @@ def detect_diamonds(frame, quad, band_outer=None, band_inner=None, area_range=No
     return result
 
 
-def _index_along_rail(points, rail_vector, expected_count, max_residual_ratio=0.25):
+def _index_along_rail(points, rail_vector, expected_count, max_residual_ratio=0.25,
+                      ratio_range=(0.85, 1.15), steps=31):
     """Assign diamond indices to the points detected on one rail.
 
-    Points are projected onto a fitted line and spaced by the median gap, so a
-    marker hidden behind a player or a cue leaves a gap rather than shifting
-    every index after it.
+    Points are projected onto a fitted line and matched against a regular grid,
+    so a marker hidden behind a player or a cue leaves a gap rather than
+    shifting every index after it.
+
+    The grid is searched for rather than read off the gaps between neighbours.
+    Reading it off is only right when nearly every point is a real marker: one
+    stray blob at the end of a rail shifts the phase by a quarter of a spacing
+    and throws out the whole rail, and a rail whose wood grain contributes more
+    blobs than the markers do never recovers a sensible spacing at all. The
+    search starts from the length of the cloth edge, which spans exactly
+    `expected_count - 1` gaps, and keeps whichever grid the most points fall on.
     """
     pts = np.asarray(points, dtype=np.float64)
     if len(pts) < 3:
@@ -289,36 +375,42 @@ def _index_along_rail(points, rail_vector, expected_count, max_residual_ratio=0.
     order = np.argsort(t)
     t, pts = t[order], pts[order]
 
-    gaps = np.diff(t)
-    if len(gaps) == 0 or gaps.min() <= 0:
+    prior = float(np.hypot(*rail_vector)) / (expected_count - 1)
+    if prior <= 0:
         raise CalibrationError("degenerate rail")
-    spacing = float(np.median(gaps))
-    # A gap that spans a missing marker is a multiple of the spacing; dividing
-    # through by that multiple recovers the true spacing from every gap.
-    multiples = np.maximum(1, np.round(gaps / spacing))
-    spacing = float(np.median(gaps / multiples))
-    if spacing <= 0:
-        raise CalibrationError("non-positive diamond spacing")
 
-    indices = np.round((t - t[0]) / spacing).astype(int)
-    residual = np.abs(t - (t[0] + indices * spacing))
+    best = None
+    for spacing in prior * np.linspace(ratio_range[0], ratio_range[1], steps):
+        for anchor in t:
+            indices = np.round((t - anchor) / spacing)
+            residual = np.abs(t - (anchor + indices * spacing))
+            inlier = residual <= spacing * max_residual_ratio
+            if inlier.sum() < 3:
+                continue
+            kept = indices[inlier]
+            if kept.max() - kept.min() > expected_count - 1:
+                continue
+            # More markers on the grid wins; among equals, the tighter fit.
+            score = (int(inlier.sum()), -float(residual[inlier].sum() / spacing))
+            if best is None or score > best[0]:
+                best = (score, spacing, indices, residual, inlier)
+
+    if best is None:
+        raise CalibrationError("no regular spacing fits these points")
+    _, spacing, indices, residual, inlier = best
+    indices, pts, residual = indices[inlier].astype(int), pts[inlier], residual[inlier]
 
     # Two blobs landing on the same index means one of them is not a diamond;
-    # keep whichever sits closest to the regular grid.
+    # keep whichever sits closest to the grid.
     keep = {}
     for i, idx in enumerate(indices):
         if idx not in keep or residual[i] < residual[keep[idx]]:
             keep[idx] = i
     sel = sorted(keep.values())
-    indices, pts, residual = indices[sel], pts[sel], residual[sel]
-
-    sel = residual <= spacing * max_residual_ratio
     indices, pts = indices[sel], pts[sel]
     if len(indices) < 3:
         raise CalibrationError("too few diamonds fit a regular spacing")
-    if indices[-1] - indices[0] > expected_count - 1:
-        raise CalibrationError(f"diamond span {indices[-1] - indices[0] + 1} exceeds {expected_count}")
-    return indices, pts, spacing
+    return indices - indices[0], pts, spacing
 
 
 def _anchor_indices(indices, points, expected_count, quad_start, quad_end):
@@ -334,31 +426,44 @@ def _anchor_indices(indices, points, expected_count, quad_start, quad_end):
     return indices - indices[0] + shift
 
 
-def calibrate(frame, min_diamonds=14, min_rails=3, max_reprojection_mm=12.0):
-    """Calibrate a frame from its rail diamonds.
+def _calibrate_one(frame, quad, hue, polarity, min_diamonds, min_rails, max_reprojection_mm):
+    """One attempt at a calibration, for markers of a single polarity.
 
     Rails are handled independently, so a cue or a player hiding one rail costs
     that rail's points rather than the whole frame. Raises CalibrationError if
     the frame does not show a full table with enough visible diamonds.
     """
-    hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
-    hue = dominant_cloth_hue(hsv)
-    quad = detect_cloth_quad(frame)
-    if quad is None:
-        raise CalibrationError("no table-sized cloth region found")
-
-    detected = detect_diamonds(frame, quad)
+    detected = detect_diamonds(frame, quad, polarity=polarity)
     edges = rail_edges(quad)
 
-    rails, problems = {}, {}
-    for rail in RAILS:
-        expected = LONG_RAIL_DIAMONDS if rail in LONG_RAILS else SHORT_RAIL_DIAMONDS
-        start, end = edges[rail]
-        try:
-            indices, pts, spacing = _index_along_rail(detected[rail], end - start, expected)
-            rails[rail] = (_anchor_indices(indices, pts, expected, start, end), pts, spacing)
-        except CalibrationError as exc:
-            problems[rail] = str(exc)
+    def fit_rails(ratio_range, steps):
+        rails, problems = {}, {}
+        for rail in RAILS:
+            expected = LONG_RAIL_DIAMONDS if rail in LONG_RAILS else SHORT_RAIL_DIAMONDS
+            start, end = edges[rail]
+            try:
+                indices, pts, spacing = _index_along_rail(
+                    detected[rail], end - start, expected, ratio_range=ratio_range, steps=steps)
+                rails[rail] = (_anchor_indices(indices, pts, expected, start, end), pts, spacing,
+                               spacing / (float(np.hypot(*(end - start))) / (expected - 1)))
+            except CalibrationError as exc:
+                problems[rail] = str(exc)
+        return rails, problems
+
+    # The cloth quad overstates the nose line by the width of the cushion cloth,
+    # by the same few per cent on every rail, so the four rails agree on the
+    # ratio between their diamond spacing and their cloth edge. Fitting each
+    # rail alone does not know that, and a rail carrying more wood grain than
+    # markers settles on a grid several per cent off - which costs nothing in
+    # that rail's own residuals but skews the homography for the whole table.
+    # So the rails are fitted loosely once, and then again with the spacing
+    # pinned to the ratio the majority of them agreed on.
+    rails, problems = fit_rails((0.85, 1.15), 31)
+    if len(rails) >= 2:
+        agreed = float(np.median([r[3] for r in rails.values()]))
+        tightened, tight_problems = fit_rails((agreed * 0.98, agreed * 1.02), 9)
+        if len(tightened) >= len(rails):
+            rails, problems = tightened, tight_problems
 
     if len(rails) < min_rails:
         raise CalibrationError(f"only {len(rails)} usable rails ({problems})")
@@ -369,7 +474,7 @@ def calibrate(frame, min_diamonds=14, min_rails=3, max_reprojection_mm=12.0):
     # Scale comes from the longest available baseline on each rail, which is far
     # less noisy than any single gap.
     scales = []
-    for rail, (indices, pts, _) in rails.items():
+    for rail, (indices, pts, _, _) in rails.items():
         span_idx = int(indices[-1] - indices[0])
         span_px = float(np.hypot(*(pts[-1] - pts[0])))
         if span_idx > 0 and span_px > 0:
@@ -410,7 +515,7 @@ def calibrate(frame, min_diamonds=14, min_rails=3, max_reprojection_mm=12.0):
     }
 
     src, dst, diamonds = [], [], {}
-    for rail, (indices, pts, _) in rails.items():
+    for rail, (indices, pts, _, _) in rails.items():
         diamonds[rail] = [(int(k), float(p[0]), float(p[1])) for k, p in zip(indices, pts)]
         for k, p in zip(indices, pts):
             src.append(p)
@@ -441,4 +546,40 @@ def calibrate(frame, min_diamonds=14, min_rails=3, max_reprojection_mm=12.0):
         reprojection_error=error,
         diamonds=diamonds,
         cloth_hue=hue,
+        polarity=polarity,
     )
+
+
+def calibrate(frame, min_diamonds=14, min_rails=3, max_reprojection_mm=12.0):
+    """Calibrate a frame from its rail diamonds.
+
+    Both marker polarities are tried because both are in use: the tables under
+    the SOOP world cup lighting carry white inlays on a dark rail, while the
+    Ankara final is played on a pale wooden rail with dark dots. Assuming the
+    first kind is what made an overhead broadcast look like it had no overhead
+    camera at all. Whichever polarity indexes more diamonds wins, and ties go
+    to the lower reprojection error - a rail's wood grain never produces a row
+    of blobs at 355.5 mm intervals, so the wrong polarity loses on count.
+    """
+    hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
+    hue = dominant_cloth_hue(hsv)
+    quad = detect_cloth_quad(frame)
+    if quad is None:
+        raise CalibrationError("no table-sized cloth region found")
+
+    best, failures = None, []
+    for polarity in POLARITIES:
+        try:
+            found = _calibrate_one(frame, quad, hue, polarity,
+                                   min_diamonds, min_rails, max_reprojection_mm)
+        except CalibrationError as exc:
+            failures.append(f"{polarity}: {exc}")
+            continue
+        rank = (found.diamond_count, -found.reprojection_error)
+        if best is None or rank > best[0]:
+            best = (rank, found)
+    if best is None:
+        raise CalibrationError("; ".join(failures))
+    calibration = best[1]
+    calibration.learn_appearance(frame)
+    return calibration

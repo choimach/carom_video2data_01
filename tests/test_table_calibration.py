@@ -221,3 +221,80 @@ def test_ball_size_scales_with_the_frame_too():
     assert set(found) == {"red", "yellow", "white"}
     for colour, (x, y) in positions.items():
         assert np.allclose(found[colour]["mm"], (x, y), atol=25.0)
+
+
+def render_pale_rail_table(balls_mm=None, frame_size=(1920, 1080), table_px=None):
+    """The other kind of table: dark dots inlaid in a pale wooden rail.
+
+    Both kinds are broadcast. Assuming the first - white inlays on a rail of
+    dark timber - is what made the 2026 Ankara final, an overhead broadcast of
+    exactly the sort this pipeline wants, screen as having no overhead camera.
+    """
+    width, height = frame_size
+    img = np.full((height, width, 3), (90, 90, 90), np.uint8)
+    long_px = table_px or TABLE_LENGTH_MM / MM_PER_PX
+    scale = long_px / (TABLE_LENGTH_MM / MM_PER_PX)
+    w, h = long_px, TABLE_WIDTH_MM / MM_PER_PX * scale
+    x0, y0 = (width - w) / 2.0, (height - h) / 2.0
+    cloth = CLOTH_MARGIN_PX * scale
+    diamond = DIAMOND_MARGIN_PX * scale
+
+    cv2.rectangle(img, (int(x0 - diamond - 22 * scale), int(y0 - diamond - 22 * scale)),
+                  (int(x0 + w + diamond + 22 * scale), int(y0 + h + diamond + 22 * scale)),
+                  (150, 190, 215), -1)  # pale timber
+    cv2.rectangle(img, (int(x0 - cloth), int(y0 - cloth)),
+                  (int(x0 + w + cloth), int(y0 + h + cloth)), CLOTH_BGR, -1)
+
+    dot = max(2, int(round(5 * scale)))
+    for k in range(9):
+        x = x0 + k * w / 8.0
+        cv2.circle(img, (int(round(x)), int(round(y0 - diamond))), dot, (35, 35, 40), -1)
+        cv2.circle(img, (int(round(x)), int(round(y0 + h + diamond))), dot, (35, 35, 40), -1)
+    for j in range(5):
+        y = y0 + j * h / 4.0
+        cv2.circle(img, (int(round(x0 - diamond)), int(round(y))), dot, (35, 35, 40), -1)
+        cv2.circle(img, (int(round(x0 + w + diamond)), int(round(y))), dot, (35, 35, 40), -1)
+
+    for colour, (mx, my) in (balls_mm or {}).items():
+        px, py = x0 + mx / MM_PER_PX * scale, y0 + my / MM_PER_PX * scale
+        cv2.circle(img, (int(round(px)), int(round(py))),
+                   int(round(61.5 / MM_PER_PX * scale / 2)), BALL_BGR[colour], -1)
+    return img
+
+
+def test_dark_markers_on_a_pale_rail_calibrate_too():
+    calibration = calibrate(render_pale_rail_table())
+    assert calibration.polarity == "dark"
+    assert calibration.diamond_count == 28
+    assert calibration.mm_per_px == pytest.approx(MM_PER_PX, rel=0.02)
+
+
+def test_a_pulled_back_overhead_camera_calibrates():
+    """The Ankara camera stands further off than the SOOP world cup one, so its
+    table covers less of the frame and its markers are correspondingly smaller.
+
+    Detection sizes are scaled by the table rather than by the frame width for
+    exactly this reason - what a diamond measures in pixels follows the table,
+    not the picture around it.
+    """
+    pulled_back = render_pale_rail_table(table_px=TABLE_LENGTH_MM / MM_PER_PX * 0.72)
+    calibration = calibrate(pulled_back)
+    assert calibration.diamond_count == 28
+    assert calibration.mm_per_px == pytest.approx(MM_PER_PX / 0.72, rel=0.03)
+
+
+def test_a_stray_blob_does_not_cost_the_whole_rail(frame):
+    """A chalk mark at the end of a rail used to shift the grid's phase.
+
+    Indices were counted from the first point along the rail, so one blob
+    sitting off the grid moved every index by a fraction of a spacing and the
+    rail was thrown out for not fitting a regular spacing at all.
+    """
+    x0, y0, w, h = _nose_rect()
+    marked = frame.copy()
+    _draw_diamond(marked, x0 - w / 8.0 * 0.4, y0 - DIAMOND_MARGIN_PX)
+
+    calibration = calibrate(marked)
+    assert calibration.diamond_count >= 27
+    assert calibration.mm_per_px == pytest.approx(MM_PER_PX, rel=0.02)
+    assert calibration.reprojection_error < 3.0
