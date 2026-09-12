@@ -27,6 +27,10 @@ sys.path.insert(0, ROOT)
 
 from src.pipeline import analyse, export_json, export_trajectories, load_scan  # noqa: E402
 
+
+def turns_of(result):
+    return result["turns"]
+
 SCANS = os.path.join(ROOT, "data", "scans")
 DATASET = os.path.join(ROOT, "data", "dataset")
 SCREENING = os.path.join(ROOT, "data", "_screening.json")
@@ -76,6 +80,14 @@ def main(argv):
             "scored": sum(1 for s in usable if s.success),
             "missed": sum(1 for s in usable if s.success is False),
         }
+        final = result.get("final_board")
+        if final:
+            entry["final_score"] = {"white": final["white"], "yellow": final["yellow"]}
+            entry["match_finished"] = final["finished"]
+            entry["points_counted"] = {
+                "white": sum(p for *_r, c, p in turns_of(result) if c == "white"),
+                "yellow": sum(p for *_r, c, p in turns_of(result) if c == "yellow"),
+            }
         index.append(entry)
         totals["plays"] += written
         totals["usable"] += traced

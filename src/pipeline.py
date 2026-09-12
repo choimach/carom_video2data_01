@@ -225,6 +225,71 @@ MATCH_TARGET = 50  # a carom match ends the moment a player reaches it
 MAX_RUN_STEP = 3   # points a run may gain between two readings a second apart
 
 
+def final_board(rows, settle=3):
+    """The match result, from the last reading the board held still for.
+
+    A scoreboard sits unchanged for a long time once the match is over, so the
+    last value it settles on is the final score, known as certainly as anything
+    in the broadcast. That makes it the anchor every other count can be checked
+    against: the Ankara semi-final ends 50-49 in white's favour and held it for
+    the rest of the VOD, while adding up its run boxes gave 43-50 - a different
+    winner. Adding up the turns is an estimate; this is a reading.
+    """
+    if len(rows) == 0:
+        return None
+
+    # A player's score on the board is the box they started the turn on plus the
+    # run they are making now; reading the first without the second leaves the
+    # player at the table short by their whole run. The inning number is left
+    # out of the comparison because it flickers between readings - one of these
+    # matches shows 54, 34, 54 in consecutive seconds - and a flicker there
+    # would break a stretch that is otherwise perfectly still.
+    def live(row):
+        return (int(row[2]) + max(int(row[3]), 0), int(row[4]) + max(int(row[5]), 0))
+
+    last = live(rows[-1])
+    steady = 0
+    for row in reversed(rows):
+        if live(row) != last:
+            break
+        steady += 1
+    if steady < settle:
+        return None
+    return {"white": last[0], "yellow": last[1],
+            "innings": int(rows[-1][1]), "held": steady,
+            "finished": max(last) >= MATCH_TARGET}
+
+
+def turns_from_score_boxes(rows, target=MATCH_TARGET):
+    """Turns whose points come from the score box moving, not the run box.
+
+    The two disagree often enough to be worth having both. A run box is read
+    every second and a wrong digit in it invents points; a score box only moves
+    once a turn but a wrong digit there is carried until the next turn fixes it.
+    Which one to believe is settled by the final score, not by preference.
+    """
+    turns, seen = [], []
+    for frame, _inning, white, white_run, yellow, yellow_run in rows:
+        active = [(c, r) for c, r in (("white", white_run), ("yellow", yellow_run)) if r >= 0]
+        if len(active) != 1:
+            continue
+        colour = active[0][0]
+        base = int(white if colour == "white" else yellow)
+        if turns and turns[-1][2] == colour:
+            turns[-1] = (turns[-1][0], int(frame), colour, turns[-1][3])
+            seen[-1] = min(seen[-1], base)
+        else:
+            turns.append((int(frame), int(frame), colour, 0))
+            seen.append(base)
+
+    out = []
+    for index, (start, end, colour, _points) in enumerate(turns):
+        later = [seen[j] for j in range(index + 1, len(turns)) if turns[j][2] == colour]
+        gained = (later[0] - seen[index]) if later else 0
+        out.append((start, end, colour, gained if 0 <= gained <= target else 0))
+    return bound_to_match(out, target)
+
+
 def turns_from_board_rows(rows, target=MATCH_TARGET):
     """Player turns from the saved scoreboard readings.
 
@@ -283,6 +348,34 @@ def bound_to_match(turns, target=MATCH_TARGET):
     return bounded
 
 
+def reconciled_turns(rows, target=MATCH_TARGET):
+    """Whichever reading of the board agrees with the final score.
+
+    Both ways of counting a turn's points are estimates built from a thousand
+    one-second readings, and both can be wrong. The final score is not an
+    estimate, so it decides: the derivation whose totals reproduce it is the one
+    to use, and where neither does, the run box stands as it always did.
+    """
+    final = final_board(rows)
+    from_runs = turns_from_board_rows(rows, target)
+    if final is None:
+        return from_runs
+
+    def totals(turns):
+        out = {}
+        for _start, _end, colour, points in turns:
+            out[colour] = out.get(colour, 0) + points
+        return out
+
+    wanted = {"white": final["white"], "yellow": final["yellow"]}
+    if totals(from_runs) == wanted:
+        return from_runs
+    from_scores = turns_from_score_boxes(rows, target)
+    if totals(from_scores) == wanted:
+        return from_scores
+    return from_runs
+
+
 def label_from_inning_shape(result_innings, turns):
     """Let the shape of a turn say which of its plays scored.
 
@@ -332,7 +425,7 @@ def analyse(scan_data, recover=True):
     positions = drop_unreachable_points(scan_data["positions"], fps)
     scan_data = dict(scan_data, positions=positions)
 
-    turns = turns_from_board_rows(scan_data["boards"])
+    turns = reconciled_turns(scan_data["boards"])
     shots = segment_shots(positions, live, fps)
     replays = mark_replays(shots, fps)
     distinct = [s for s in shots if s.replay_of is None]
@@ -409,6 +502,7 @@ def analyse(scan_data, recover=True):
         "expected_plays": sum(points + 1 for *_rest, points in turns),
         "audit": audit_turns(innings, turns, positions, live, fps, (0, n - 1)),
         "failure_budget": check_failure_budget(innings),
+        "final_board": final_board(scan_data["boards"]),
         "start": start,
         "fps": fps,
     }
@@ -428,6 +522,18 @@ def report(result, stream=print):
            f"({len(plays) / expected * 100:.0f}%)")
     for colour, (count, points) in sorted(by_colour.items()):
         stream(f"   {colour:7s} {count:3d} turns, {points:3d} points")
+
+    # The board's own last word, against what adding up the turns came to. The
+    # two agreeing is the strongest evidence a match was read correctly; a gap
+    # of a few points means some turns were missed or misread, and is worth
+    # knowing before the match is used.
+    final = result.get("final_board")
+    if final:
+        counted = (by_colour.get("white", [0, 0])[1], by_colour.get("yellow", [0, 0])[1])
+        gap = (final["white"] - counted[0], final["yellow"] - counted[1])
+        state = "final" if final["finished"] else "match unfinished on screen"
+        note = "turns agree" if gap == (0, 0) else f"turns short by {gap[0]} and {gap[1]}"
+        stream(f"   board says {final['white']}-{final['yellow']} ({state}); {note}")
     scored = sum(1 for s in plays if s.success)
     stream(f"verdicts: {scored} scored / {len(plays) - scored} missed   replays excluded {result['replays']}")
     usable = [s for s in plays if not s.rejections]

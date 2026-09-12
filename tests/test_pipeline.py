@@ -145,3 +145,27 @@ def test_a_run_past_the_match_distance_is_ignored_outright():
 
     rows = [(0, 1, 0, 0, 0, -1), (60, 1, 0, 61, 0, -1), (120, 1, 0, 1, 0, -1)]
     assert [t[3] for t in turns_from_board_rows(rows)] == [1]
+
+
+def test_the_final_score_counts_the_run_box_too():
+    """A player's score is the box they started the turn on plus the run they
+    are making now. Reading the first without the second leaves the player at
+    the table short by their whole run - one match's 50 read as 46."""
+    from src.pipeline import final_board
+
+    rows = [(0, 20, 46, 4, 38, -1)] * 5
+    found = final_board(rows)
+    assert (found["white"], found["yellow"]) == (50, 38)
+    assert found["finished"] is True
+
+
+def test_a_flickering_inning_number_does_not_break_a_settled_board():
+    """The inning box flickers between readings - 54, 34, 54 in consecutive
+    seconds on one match - so it is left out of the comparison."""
+    from src.pipeline import final_board
+
+    rows = [(0, 54, 50, -1, 49, 0), (60, 34, 50, -1, 49, 0), (120, 54, 50, -1, 49, 0),
+            (180, 54, 50, -1, 49, 0)]
+    found = final_board(rows)
+    assert (found["white"], found["yellow"]) == (50, 49)
+    assert found["held"] == 4
