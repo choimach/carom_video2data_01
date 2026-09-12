@@ -104,3 +104,44 @@ def test_a_scoring_play_cut_short_after_the_score_is_still_usable():
     shot.verdict = {"reason": "3 cushions before white", "cushions": 3,
                     "first_ball": "red", "second_ball": "white"}
     assert play_rejections(shot, 60.0) == []
+
+
+def test_a_run_cannot_jump_by_a_misread_digit():
+    """A run climbs a point at a time.
+
+    The board is read once a second and a play takes several, so a run that
+    leaps means a misread digit and not a burst of scoring. One box read as 72
+    where the run stood at 5 took its match to 159 points against a distance of
+    50, and carried the expected play count with it.
+    """
+    from src.pipeline import turns_from_board_rows
+
+    rows = [
+        (0, 1, 0, 0, 0, -1), (60, 1, 0, 1, 0, -1), (120, 1, 0, 2, 0, -1),
+        (180, 1, 0, 72, 0, -1),                      # the misread
+        (240, 1, 0, 3, 0, -1),
+        (300, 2, 3, -1, 0, 0),                       # the other player comes to the table
+    ]
+    turns = turns_from_board_rows(rows)
+    assert [t[3] for t in turns] == [3, 0]
+
+
+def test_a_match_stops_at_the_winning_point():
+    """A carom match ends the moment a player reaches the distance, so the two
+    scores can never sum past 99 and nothing after the winning point belongs to
+    the match."""
+    from src.pipeline import bound_to_match
+
+    turns = [(0, 10, "white", 48), (11, 20, "yellow", 40),
+             (21, 30, "white", 5),          # would take white to 53
+             (31, 40, "yellow", 9)]         # after the win: not part of the match
+    bounded = bound_to_match(turns, target=50)
+    assert [t[3] for t in bounded] == [48, 40, 2]
+    assert sum(t[3] for t in bounded) == 90
+
+
+def test_a_run_past_the_match_distance_is_ignored_outright():
+    from src.pipeline import turns_from_board_rows
+
+    rows = [(0, 1, 0, 0, 0, -1), (60, 1, 0, 61, 0, -1), (120, 1, 0, 1, 0, -1)]
+    assert [t[3] for t in turns_from_board_rows(rows)] == [1]

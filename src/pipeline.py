@@ -221,24 +221,66 @@ def load_scan(track_path):
     }
 
 
-def turns_from_board_rows(rows):
+MATCH_TARGET = 50  # a carom match ends the moment a player reaches it
+MAX_RUN_STEP = 3   # points a run may gain between two readings a second apart
+
+
+def turns_from_board_rows(rows, target=MATCH_TARGET):
     """Player turns from the saved scoreboard readings.
 
     Only the player at the table has a run box, and that box counts the points
     made in this turn - so a turn's boundaries and its point total both come
     straight off the board, including turns whose plays were never shown.
+
+    The match distance bounds what the board can be saying, and that is what
+    keeps one bad reading from poisoning a whole match. A player on 37 cannot
+    make a run of 72, because the match would have ended at 50; and once anyone
+    reaches 50 there are no more turns to have, so the two scores can never sum
+    past 99. Three of the first five matches broke one of those - white on 54,
+    a match standing at 50-50, and a single turn read as 72 points that carried
+    its match to 159 - and each was one misread box, not a broken match.
     """
     turns = []
     for frame, _inning, white, white_run, yellow, yellow_run in rows:
         active = [(c, r) for c, r in (("white", white_run), ("yellow", yellow_run)) if r >= 0]
         if len(active) != 1:
             continue
-        colour, run = active[0]
+        colour, run = active[0][0], int(active[0][1])
+        if run > target:
+            continue  # no run can pass the match distance
         if turns and turns[-1][2] == colour and run >= turns[-1][3]:
-            turns[-1] = (turns[-1][0], int(frame), colour, max(turns[-1][3], int(run)))
+            # A run climbs a point at a time, and the board is read once a
+            # second while a play takes several, so a jump means a misread digit
+            # and not a burst of scoring. One 72 read where the run stood at 5
+            # took its match to 159 points, and clipping it to what was left to
+            # score only moved the damage: the player hit 50 eighteen turns
+            # early and the rest of the match was thrown away as a ceremony.
+            if run - turns[-1][3] > MAX_RUN_STEP:
+                continue
+            turns[-1] = (turns[-1][0], int(frame), colour, run)
         else:
-            turns.append((int(frame), int(frame), colour, int(run)))
-    return turns
+            turns.append((int(frame), int(frame), colour, run))
+    return bound_to_match(turns, target)
+
+
+def bound_to_match(turns, target=MATCH_TARGET):
+    """Hold a run of turns to what the rules allow, and stop it at the win.
+
+    A turn's points are clipped to what the player still had left to score, and
+    everything after the winning point is dropped - it belongs to a ceremony, a
+    replay or a second match on the same VOD, not to this one.
+    """
+    scored, bounded = {}, []
+    for start, end, colour, points in turns:
+        room = target - scored.get(colour, 0)
+        if room <= 0:
+            break
+        points = min(int(points), room)
+        scored[colour] = scored.get(colour, 0) + points
+        bounded.append((start, end, colour, points))
+        if scored[colour] >= target:
+            break  # the match is over; whatever follows is not part of it
+    return bounded
 
 
 def label_from_inning_shape(result_innings, turns):
