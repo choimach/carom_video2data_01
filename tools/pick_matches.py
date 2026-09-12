@@ -27,7 +27,11 @@ import os
 import re
 import sys
 
-NOT_THREE_CUSHION = re.compile(r"artistic|5\s*pin|\bpool\b|snooker|team|mt\b|w3gp", re.I)
+# Scotch doubles is two players alternating on one cue ball, so an inning
+# does not belong to one player and the play-per-point invariant does not
+# hold. It is three-cushion, and it is still no use here.
+NOT_THREE_CUSHION = re.compile(
+    r"artistic|5\s*pin|\bpool\b|snooker|team|mt\b|w3gp|scotch", re.I)
 NOT_A_FULL_MATCH = re.compile(
     r"클립|highlight|\bH\s*/\s*L\b|\bHL\b|sketch|ceremony|interview|shorts|"
     r"\bbest\b|top\s*\d|run\b|편집|요약|replay", re.I)
