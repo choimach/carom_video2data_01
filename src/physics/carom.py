@@ -198,7 +198,7 @@ def _departures(xy, rest_window=12, threshold_mm=None, confirmations=3, settle_f
 
 
 def contact_events(cue_xy, others, attribution_mm=None, departure_mm=None,
-                   touch_mm=BALL_DIAMETER_MM):
+                   touch_mm=BALL_DIAMETER_MM, merge_frames=15):
     """Cue-ball contacts, from the object ball moving or from the balls touching.
 
     Neither signal is enough alone, and they fail in opposite places. Motion
@@ -239,8 +239,12 @@ def contact_events(cue_xy, others, attribution_mm=None, departure_mm=None,
                 continue
             if rivals and min(rivals) < cue_distance:
                 continue  # another ball was nearer: this is a kiss, not a carom
+            # One touch, one event: motion and distance often both witness the
+            # same contact, and a nudged ball can read as leaving twice.
+            if events and events[-1].detail == colour and frame - events[-1].frame <= merge_frames:
+                continue
             events.append(Event(frame, "ball", colour))
-    return events
+    return sorted(events, key=lambda e: e.frame)
 
 
 def shot_events_by_motion(cue_xy, others):
