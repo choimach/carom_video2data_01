@@ -195,3 +195,29 @@ def test_perspective_transformer_accepts_a_calibration(calibration):
     transformer = PerspectiveTransformer.from_calibration(calibration)
     x0, y0, _, _ = _nose_rect()
     assert np.allclose(transformer.transform_point(x0, y0), (0.0, 0.0), atol=6.0)
+
+
+@pytest.mark.parametrize("width,height", [(1920, 1080), (1280, 720), (960, 540)])
+def test_calibration_survives_a_downscaled_frame(frame, width, height):
+    """Screening a match cheaply means judging it at 540p, so the detection
+    sizes cannot be fixed pixel counts measured at 1920.
+
+    They were, and it cost ten matches: a diamond covers some forty pixels at
+    full size and eight at half, which falls through the area floor, and a 3x3
+    opening erases what survives. Ten perfectly good broadcasts were screened
+    out as having no overhead camera at all.
+    """
+    small = cv2.resize(frame, (width, height))
+    calibration = calibrate(small)
+    assert calibration.diamond_count == 28
+    assert calibration.mm_per_px == pytest.approx(MM_PER_PX * 1920 / width, rel=0.02)
+
+
+def test_ball_size_scales_with_the_frame_too():
+    positions = {"white": (700.0, 400.0), "yellow": (1900.0, 1000.0), "red": (2400.0, 500.0)}
+    small = cv2.resize(render_table(positions), (960, 540))
+    calibration = calibrate(small)
+    found = BallDetector(calibration).detect(small)
+    assert set(found) == {"red", "yellow", "white"}
+    for colour, (x, y) in positions.items():
+        assert np.allclose(found[colour]["mm"], (x, y), atol=25.0)

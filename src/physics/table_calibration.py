@@ -174,7 +174,7 @@ def detect_cloth_quad(frame, min_area_ratio=0.15):
     quad = _order_corners(quad)
     # Reject anything too degenerate for the rail bands to make sense.
     sides = [np.hypot(*(quad[i] - quad[(i + 1) % 4])) for i in range(4)]
-    if min(sides) < 50:
+    if min(sides) < 50 * frame.shape[1] / 1920:
         return None
     return quad
 
@@ -189,8 +189,8 @@ def rail_edges(quad):
     }
 
 
-def detect_diamonds(frame, quad, band_outer=61, band_inner=11, area_range=(15, 400),
-                    offset_tolerance_px=10.0):
+def detect_diamonds(frame, quad, band_outer=None, band_inner=None, area_range=None,
+                    offset_tolerance_px=None, reference_width=1920):
     """Find diamond markers in the rail band just outside the cloth.
 
     Returns {rail: [(x, y), ...]} ordered along the rail. Markers on one rail
@@ -198,6 +198,18 @@ def detect_diamonds(frame, quad, band_outer=61, band_inner=11, area_range=(15, 4
     disagrees with its neighbours - a chalk cube, a shirt, a reflection - is
     dropped before it can corrupt the index assignment.
     """
+    # Every size here was measured on a 1920-wide broadcast, and they are areas
+    # and distances in pixels, so they do not survive a change of resolution:
+    # at 960 wide a diamond covers a quarter of the area and falls straight
+    # through the lower bound. Scaling them against the frame is what lets the
+    # same code judge a 540p preview and a full-size scan.
+    scale = frame.shape[1] / reference_width
+    band_outer = band_outer or max(9, int(61 * scale) | 1)
+    band_inner = band_inner or max(3, int(11 * scale) | 1)
+    offset_tolerance_px = offset_tolerance_px or 10.0 * scale
+    if area_range is None:
+        area_range = (max(4.0, 15 * scale * scale), 400 * scale * scale)
+
     hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
     quad_i = quad.astype(np.int32)
 
@@ -209,7 +221,13 @@ def detect_diamonds(frame, quad, band_outer=61, band_inner=11, area_range=(15, 4
     )
 
     bright = cv2.inRange(hsv, np.array([0, 0, 150]), np.array([180, 90, 255]))
-    candidates = cv2.morphologyEx(cv2.bitwise_and(bright, band), cv2.MORPH_OPEN, np.ones((3, 3), np.uint8))
+    candidates = cv2.bitwise_and(bright, band)
+    if scale > 0.75:
+        # Opening clears speckle at full size, where a diamond covers some forty
+        # pixels. On a half-size frame it covers eight, and a 3x3 open erases
+        # half of them - which is how a 540p preview came to show no diamonds at
+        # all and ten perfectly good matches were screened out.
+        candidates = cv2.morphologyEx(candidates, cv2.MORPH_OPEN, np.ones((3, 3), np.uint8))
 
     contours, _ = cv2.findContours(candidates, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
     edges = rail_edges(quad)
