@@ -196,6 +196,19 @@ class Shot:
                 f"{len(self.cushions)} cushions, {len(next(iter(self.paths.values())))} frames>")
 
 
+def _clearance(position, colours):
+    """How far the closest ball is from touching a rail or another ball."""
+    room = 10 ** 6
+    for index, colour in enumerate(colours):
+        x, y = position[colour]
+        room = min(room, x - BALL_RADIUS_MM, y - BALL_RADIUS_MM,
+                   TABLE_LENGTH_MM - BALL_RADIUS_MM - x, TABLE_WIDTH_MM - BALL_RADIUS_MM - y)
+        for other in colours[index + 1:]:
+            gap = position[other] - position[colour]
+            room = min(room, float(np.hypot(*gap)) - BALL_DIAMETER_MM)
+    return max(0.0, room)
+
+
 def simulate(layout, cue, velocity, table=None, fps=60.0, max_seconds=20.0,
              substep_mm=4.0, side_degrees=0.0):
     """Play one stroke and record where every ball went.
@@ -225,7 +238,13 @@ def simulate(layout, cue, velocity, table=None, fps=60.0, max_seconds=20.0,
         fastest = max(float(np.hypot(*speed[c])) for c in colours)
         if fastest < REST_SPEED_MM_S:
             break
-        step = min(substep_mm / fastest, frame_gap)
+        # Step by how much room there is, not by a fixed distance. A ball in
+        # open table can cross hundreds of millimetres before anything can
+        # happen to it, and checking every four is most of the cost of a shot.
+        # The limit is the nearest thing it could reach: a rail, or the surface
+        # of another ball.
+        clearance = _clearance(position, colours)
+        step = min(max(clearance * 0.5, substep_mm) / fastest, frame_gap)
 
         for colour in colours:
             velocity_now = speed[colour]

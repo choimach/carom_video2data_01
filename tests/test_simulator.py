@@ -115,3 +115,43 @@ def test_three_cushions_before_the_second_ball_is_a_point():
     long_way = Fake([(1, "ball", "red")] + [(i, "cushion", "top") for i in range(2, 8)]
                     + [(9, "ball", "yellow")])
     assert long_way.scored("white") is True
+
+
+def test_aiming_finds_the_line_that_scores():
+    """A layout arranged so one direction makes a carom and most do not."""
+    from src.physics.aiming import probability, sweep
+
+    layout = {"white": (700.0, 400.0), "yellow": (1900.0, 1000.0), "red": (2400.0, 500.0)}
+    angles, scored = sweep(layout, "white", speeds=(2600.0,), angle_step_deg=2.0)
+    outcomes = scored[2600.0]
+    assert len(angles) == 180
+    # Most directions do not score - which is the point of looking for the ones
+    # that do. A map where everything scores is measuring nothing.
+    assert 0 < outcomes.sum() < len(outcomes) * 0.2
+
+
+def test_scoring_room_is_worth_more_than_a_scoring_line():
+    """A line with scoring room either side beats an isolated one, because a
+    stroke lands on a spread and not on a number."""
+    from src.physics.aiming import probability
+
+    isolated = np.zeros(360, dtype=bool)
+    isolated[100] = True
+    broad = np.zeros(360, dtype=bool)
+    broad[200:208] = True
+
+    chances = probability(np.logical_or(isolated, broad), angle_step_deg=1.0, spread_deg=1.5)
+    assert chances[204] > chances[100]
+    assert chances[100] > 0            # an isolated line is still worth something
+
+
+def test_the_map_wraps_all_the_way_round():
+    """359.9 degrees is next to 0.1, and a scoring line at the seam has room on
+    both sides of it like any other."""
+    from src.physics.aiming import probability
+
+    outcomes = np.zeros(360, dtype=bool)
+    outcomes[0] = outcomes[359] = True
+    chances = probability(outcomes, angle_step_deg=1.0, spread_deg=1.0)
+    assert chances[0] == pytest.approx(chances[359], rel=0.05)
+    assert chances[358] > 0 and chances[1] > 0
