@@ -26,27 +26,39 @@ from src.physics.stroke import _travel  # noqa: E402
 from src.pipeline import analyse, load_scan  # noqa: E402
 
 BALLS = ("white", "yellow", "red")
-# Frames to leave alone after the ball first moves, and how many to measure
-# over. The cue is still on the ball in the first couple and its centroid is
-# smeared; going wider is worse again, because some plays reach a rail inside
-# fifteen frames and the window then measures a corner. Sweeping both against
-# the first cushion the simulator predicts: 114 mm at (0, 5), 82 at (2, 6),
-# 378 at (3, 10).
-OPENING_SKIP = 2
-OPENING_SPAN = 6
+# Frames to leave alone after the ball first moves, and the longest baseline to
+# measure the direction over. The cue is still on the ball for the first few and
+# its centroid is smeared; after that, the longer the baseline the better, which
+# is what a straight line through noisy points would predict. Measured against
+# the rail the cue ball actually reached, on plays where a window could not
+# overrun the first event: 41 mm at a 5-frame baseline, 35 at 12, 24 at 24.
+OPENING_SKIP = 4
+OPENING_SPAN = 24
 
 
 def opening(shot, positions, fps):
-    """Where the balls stood and how fast the cue ball left, at the first motion."""
+    """Where the balls stood and how fast the cue ball left, at the first motion.
+
+    The baseline is stretched to whatever the play allows and no further. A
+    window that runs past the first cushion or the first contact measures a
+    corner rather than a line, which is worse than measuring a short one: the
+    same sweep that prefers 24 frames prefers 6 once the window is free to
+    overrun, because then it usually has.
+    """
     cue = positions[shot.cue_ball]
+    events = (shot.verdict or {}).get("events") or []
+    first_event = min((int(e.frame) for e in events), default=10 ** 6)
+
     for frame in range(shot.start_frame, min(shot.end_frame, shot.start_frame + 120)):
-        here, ahead = cue[frame], cue[frame + OPENING_SKIP + OPENING_SPAN]
+        here, ahead = cue[frame], cue[frame + OPENING_SKIP + 4]
         if not (np.isfinite(here).all() and np.isfinite(ahead).all()):
             continue
-        if float(np.hypot(*(ahead - here))) / (OPENING_SKIP + OPENING_SPAN) * fps < 300.0:
+        if float(np.hypot(*(ahead - here))) / (OPENING_SKIP + 4) * fps < 300.0:
             continue
-        direction, speed = _travel(cue, frame + OPENING_SKIP,
-                                   frame + OPENING_SKIP + OPENING_SPAN)
+
+        room = shot.start_frame + first_event - 2 - (frame + OPENING_SKIP)
+        span = int(np.clip(room, 4, OPENING_SPAN))
+        direction, speed = _travel(cue, frame + OPENING_SKIP, frame + OPENING_SKIP + span)
         if direction is None:
             continue
         layout = {}
@@ -96,6 +108,13 @@ def main(argv=None):
                 gap = gap[np.isfinite(gap)]
                 real_cushions = sum(1 for e in (shot.verdict or {}).get("events") or []
                                     if e.kind == "cushion")
+                # Count the simulated cushions over the same stretch of time the
+                # camera watched. The simulator runs until the balls stop; the
+                # play's own event list ends when the play does, so comparing
+                # the two totals counts cushions the camera was never going to
+                # see and makes the simulator look like it overshoots.
+                sim_cushions = sum(1 for frame, _kind, _rail in played.cushions
+                                   if frame <= overlap)
                 # Where the cue ball first met a rail, and where it went next.
                 # A three-cushion path is chaotic - an error at the first rail
                 # is multiplied by every rail after it - so this is the part
@@ -120,7 +139,7 @@ def main(argv=None):
                 rows.append({
                     "speed": float(np.hypot(*velocity)) / 1000.0,
                     "cushions_real": real_cushions,
-                    "cushions_sim": len(played.cushions),
+                    "cushions_sim": sim_cushions,
                     "travel_real": travelled(seen),
                     "travel_sim": travelled(mine[:overlap]),
                     "drift_1s": float(gap[min(len(gap) - 1, int(fps))]) if len(gap) else np.nan,
