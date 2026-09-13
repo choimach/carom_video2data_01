@@ -518,8 +518,8 @@ def report(result, stream=print):
         entry[0] += 1
         entry[1] += points
 
-    stream(f"turns {len(turns)}   expected plays {expected}   detected {len(plays)} "
-           f"({len(plays) / expected * 100:.0f}%)")
+    share = f"({len(plays) / expected * 100:.0f}%)" if expected else "(no turns read)"
+    stream(f"turns {len(turns)}   expected plays {expected}   detected {len(plays)} {share}")
     for colour, (count, points) in sorted(by_colour.items()):
         stream(f"   {colour:7s} {count:3d} turns, {points:3d} points")
 

@@ -20,7 +20,11 @@ import cv2
 import numpy as np
 
 # Boxes for the layout used by the 2026 World Cup broadcast, in pixels of a
-# 1920x1080 frame: (x, y, w, h).
+# 1920x1080 frame: (x, y, w, h). They are scaled to whatever frame arrives - a
+# screening preview is half this size, and fixed pixel boxes read the wrong part
+# of it, which made a match with a perfectly good scoreboard look like it had
+# none at all.
+REFERENCE_WIDTH = 1920
 DEFAULT_ROIS = {
     "inning": (133, 103, 28, 32),
     "score_top": (400, 101, 34, 34),
@@ -126,8 +130,9 @@ class ScoreboardReader:
         return value
 
     def _crop(self, frame, name):
-        x, y, w, h = self.rois[name]
-        if y + h > frame.shape[0] or x + w > frame.shape[1]:
+        scale = frame.shape[1] / REFERENCE_WIDTH
+        x, y, w, h = (int(round(v * scale)) for v in self.rois[name])
+        if h < 3 or w < 3 or y + h > frame.shape[0] or x + w > frame.shape[1]:
             return None
         return frame[y:y + h, x:x + w]
 

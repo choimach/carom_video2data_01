@@ -50,13 +50,23 @@ def main(argv):
             calibration, _fps = find_calibration(video)
             start = find_play_start(video, calibration)
             scan(video, track, start=start, calibration=calibration)
-            report(analyse(load_scan(track)))
         except Exception:
             traceback.print_exc()
-            # A match that cannot be scanned should not stop the rest.
+            # A match that cannot be scanned should not stop the rest. Only a
+            # failure in the scan itself justifies throwing the file away.
             if os.path.exists(track):
                 os.remove(track)
             continue
+
+        # Analysis is seconds of work against the scan's half hour, and it runs
+        # again on the cache any time. Losing the scan because the report after
+        # it raised is how three matches came to be scanned for seventy-six
+        # minutes and then deleted, over a division by zero in a progress line.
+        try:
+            report(analyse(load_scan(track)))
+        except Exception:
+            traceback.print_exc()
+            print(f"   scan kept at {track}; the analysis is what failed", flush=True)
         print(f"   done in {(time.time() - began) / 60:.0f} min", flush=True)
     return 0
 

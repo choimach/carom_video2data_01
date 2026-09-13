@@ -30,8 +30,13 @@ import sys
 # Scotch doubles is two players alternating on one cue ball, so an inning
 # does not belong to one player and the play-per-point invariant does not
 # hold. It is three-cushion, and it is still no use here.
+# WCA is the World Championship Artistic, and nothing in that title says so.
+# It was collected, downloaded and scanned before its own scoreboard gave it
+# away - "World Championship Artistic, Figure 50, 9 Pts" - which is a different
+# game with a different scoring system and no innings to speak of. Abbreviations
+# hide the discipline, so the abbreviations have to be listed too.
 NOT_THREE_CUSHION = re.compile(
-    r"artistic|5\s*pin|\bpool\b|snooker|team|mt\b|w3gp|scotch", re.I)
+    r"artistic|\bwca\b|5\s*pin|\bpool\b|snooker|team|mt\b|w3gp|scotch", re.I)
 NOT_A_FULL_MATCH = re.compile(
     r"클립|highlight|\bH\s*/\s*L\b|\bHL\b|sketch|ceremony|interview|shorts|"
     r"\bbest\b|top\s*\d|run\b|편집|요약|replay", re.I)

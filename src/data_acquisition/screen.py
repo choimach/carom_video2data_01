@@ -34,6 +34,7 @@ import cv2
 from src.physics.table_calibration import (CalibrationError, calibrate,
                                            detect_cloth_quad, looks_like_a_table,
                                            table_scale)
+from src.segmentation.scoreboard_ocr import ScoreboardReader
 
 STREAM_FORMAT = "hls-original"  # the broadcast's own resolution
 SCREEN_FORMAT = "hls-hd"  # 960x540; only for the whole-preview fallback
@@ -158,9 +159,23 @@ def sample_frames(url, samples=DEFAULT_SAMPLES, skip_fraction=0.25, fmt=STREAM_F
 
 
 def judge(frames):
-    """Turn sampled frames into a verdict."""
-    calibrated, errors, scales, table_scales, with_table = 0, [], [], [], 0
+    """Turn sampled frames into a verdict.
+
+    An overhead camera is necessary and it is not sufficient. Every label this
+    pipeline produces rests on the scoreboard - which player is at the table,
+    how many points the turn scored, when it ended - so a broadcast that never
+    shows one cannot be used however good its camera is. Three matches were
+    collected, downloaded and scanned before that was noticed, because the
+    screen only ever asked about the table.
+    """
+    reader = ScoreboardReader()
+    calibrated, errors, scales, table_scales, with_table, with_board = 0, [], [], [], 0, 0
     for _, frame in frames:
+        try:
+            if reader.read(frame) is not None:
+                with_board += 1
+        except Exception:
+            pass
         quad = detect_cloth_quad(frame)
         if quad is not None and looks_like_a_table(quad):
             with_table += 1
@@ -180,11 +195,16 @@ def judge(frames):
         "calibrated": calibrated,
         "calibrated_share": calibrated / seen if seen else 0.0,
         "table_share": with_table / seen if seen else 0.0,
+        "board_share": with_board / seen if seen else 0.0,
         "table_scale": sorted(table_scales)[len(table_scales) // 2] if table_scales else None,
         "median_error_mm": sorted(errors)[len(errors) // 2] if errors else None,
         "mm_per_px": sorted(scales)[len(scales) // 2] if scales else None,
     }
-    if not verdict["usable"]:
+    if verdict["usable"] and verdict["board_share"] < 0.1:
+        # The camera is right and the broadcast still cannot be labelled.
+        verdict["usable"] = False
+        verdict["reason"] = "no scoreboard"
+    if not verdict["usable"] and "reason" not in verdict:
         # Three outcomes, not two. A camera that never shows the whole table
         # cannot be fixed and the match is out; a match that simply has little
         # table time is only poor value; but a sample that shows the table over
