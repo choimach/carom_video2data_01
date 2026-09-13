@@ -1,0 +1,17 @@
+cd /mnt/d/Data/Billiard/carom_video2data_01
+
+D:\Data\Billiard\carom_01
+
+내 핸드폰과 server pc의 claude cli 사이에 telegram을 통한  chatting이 가능해야해.
+
+그리고 결과 image를 다시 서버로 보내서 계산치와 비교하도록 하는게 좋을듯.
+
+telegram chatting을 통한 다양한 feedback system으로 program/skills 가 self-evolving 하도록 만듭니다.
+
+이 project와 연계된 skills 를 생성하면 도움이 되지 않을까? 해당 skill이 auto-evolution되게 만들면 좋을것 같은데...
+
+
+
+git init 해줘.
+
+오늘은 여기까지 합시다. 변경된 부분은 각각 필요한 위치에 저장하고 커밋해 주세요. skills도 커밋하고 push 합시다.
