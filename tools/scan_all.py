@@ -12,6 +12,7 @@ scanning can start before the analysis has settled.
 """
 
 import glob
+import json
 import os
 import sys
 import time
@@ -25,6 +26,26 @@ from src.pipeline import (analyse, find_calibration, find_play_start,  # noqa: E
 
 VIDEOS = os.path.join(ROOT, "data", "videos")
 SCANS = os.path.join(ROOT, "data", "scans")
+FAILED = os.path.join(ROOT, "data", "_unscannable.json")
+
+
+def failures():
+    if not os.path.exists(FAILED):
+        return {}
+    return json.load(open(FAILED, encoding="utf-8"))
+
+
+def note_failure(name, reason):
+    """Remember what could not be scanned, and why.
+
+    Finding no calibratable frame costs a pass over the whole video, and a
+    match that has none has none - repeating that every round is how four
+    failures came to be re-tried on every collection run. Named runs
+    (`scan_all.py AKR2026`) ignore this list, so a fix can be tested.
+    """
+    seen = failures()
+    seen[name] = reason
+    json.dump(seen, open(FAILED, "w", encoding="utf-8"), indent=1)
 
 
 def matches(only=()):
@@ -38,11 +59,15 @@ def main(argv):
     os.makedirs(SCANS, exist_ok=True)
     paths = matches(set(argv))
     print(f"{len(paths)} matches on disk", flush=True)
+    skip = {} if argv else failures()
     for video in paths:
         name = os.path.splitext(os.path.basename(video))[0]
         track = os.path.join(SCANS, f"{name}.npz")
         if os.path.exists(track):
             print(f"== {name}: already scanned", flush=True)
+            continue
+        if name in skip:
+            print(f"== {name}: skipped, {skip[name]}", flush=True)
             continue
         print(f"== {name}", flush=True)
         began = time.time()
@@ -50,12 +75,13 @@ def main(argv):
             calibration, _fps = find_calibration(video)
             start = find_play_start(video, calibration)
             scan(video, track, start=start, calibration=calibration)
-        except Exception:
+        except Exception as failure:
             traceback.print_exc()
             # A match that cannot be scanned should not stop the rest. Only a
             # failure in the scan itself justifies throwing the file away.
             if os.path.exists(track):
                 os.remove(track)
+            note_failure(name, f"{type(failure).__name__}: {failure}"[:200])
             continue
 
         # Analysis is seconds of work against the scan's half hour, and it runs
