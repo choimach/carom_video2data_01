@@ -22,6 +22,7 @@ import numpy as np
 
 from src.physics.ball_detector import BallDetector
 from src.physics.carom import judge_shot
+from src.physics.route import classify
 from src.physics.kinematics import KinematicsEngine
 from src.physics.stroke import stroke_of
 from src.physics.table_calibration import calibrate, CalibrationError
@@ -569,6 +570,19 @@ def _plain(value):
     return value
 
 
+def route_of(verdict, shot):
+    """The play's route type, or None when there is nothing to name it from.
+
+    Kept beside the verdict rather than inside it because naming a route is a
+    labelling question, not a scoring one: `classify` can change its mind about
+    what to call a shot without any of the scoring having moved.
+    """
+    events = verdict.get("events")
+    if not events:
+        return None
+    return classify(events, shot.start_positions, shot.cue_ball)
+
+
 def export_json(result, path):
     """Everything a play is, in one file: layout, stroke, verdict, provenance."""
     start, fps = result["start"], result["fps"]
@@ -588,6 +602,9 @@ def export_json(result, path):
                 "cushions_before_second": verdict.get("cushions"),
                 "first_object_ball": verdict.get("first_ball"),
                 "second_object_ball": verdict.get("second_ball"),
+                "route": route_of(verdict, shot),
+                "events": [[e.frame - shot.start_frame, e.kind, e.detail]
+                           for e in verdict.get("events") or []],
                 "layout_mm": shot.start_positions,
                 "final_mm": shot.end_positions,
                 "cue_speed_ms": getattr(shot, "cue_speed", None),
