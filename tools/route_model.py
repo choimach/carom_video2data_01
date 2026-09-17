@@ -37,6 +37,8 @@ import numpy as np
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
 
+from src.physics.table_calibration import TABLE_LENGTH_MM, TABLE_WIDTH_MM  # noqa: E402
+
 # Named by counting cushions before the second ball: the label carries the
 # outcome, so they cannot be scored against.
 OUTCOME_IN_NAME = ("대회전", "되돌아오기", "횡단")
@@ -50,6 +52,48 @@ def features(row):
     return np.array(cue + others[0] + others[1], dtype=float)
 
 
+def player_features(row):
+    """The layout as a player would describe it, not as coordinates.
+
+    Six numbers are what a table hands you; none of them is what anyone looks
+    at. A player sees how far the first ball is, how open the angle between the
+    two object balls is, and how much room each ball has to its rails - and
+    those are the same numbers under a mirror, which raw coordinates are not
+    until they are canonicalised.
+
+    The two object balls are interchangeable, so they are ordered by distance
+    from the cue ball: near one first.
+    """
+    cue = np.array(row["layout_mm"][row["cue"]], dtype=float)
+    others = [np.array(xy, dtype=float)
+              for colour, xy in row["layout_mm"].items() if colour != row["cue"]]
+    near, far = sorted(others, key=lambda xy: float(np.linalg.norm(xy - cue)))
+
+    def room(point):
+        """Distance to the nearest short rail and the nearest long rail."""
+        return [min(point[0], TABLE_LENGTH_MM - point[0]),
+                min(point[1], TABLE_WIDTH_MM - point[1])]
+
+    to_near, to_far = near - cue, far - cue
+    opening = np.degrees(np.arctan2(
+        to_near[0] * to_far[1] - to_near[1] * to_far[0],
+        float(np.dot(to_near, to_far))))
+    return np.array([
+        np.linalg.norm(to_near), np.linalg.norm(to_far),
+        np.linalg.norm(far - near),
+        opening,
+        np.degrees(np.arctan2(to_near[1], to_near[0])),
+        np.degrees(np.arctan2(to_far[1], to_far[0])),
+        *room(cue), *room(near), *room(far),
+    ], dtype=float)
+
+
+def scaled(rows, builder):
+    """Features, each standardised on the training set's own spread."""
+    table = np.array([builder(r) for r in rows])
+    return table
+
+
 def distance(one, many):
     """Layout distance, with the two object balls interchangeable."""
     cue = np.linalg.norm(many[:, 0:2] - one[0:2], axis=1)
@@ -60,8 +104,9 @@ def distance(one, many):
     return cue + np.minimum(straight, swapped)
 
 
-def neighbours(one, many, k):
-    gaps = distance(one, many)
+def neighbours(one, many, k, kind="player"):
+    gaps = (np.linalg.norm(many - one, axis=1) if kind == "player"
+            else distance(one, many))
     order = np.argsort(gaps)[:k]
     return order, gaps[order]
 
@@ -74,8 +119,13 @@ def load(path):
     return train, test
 
 
-def report(train, test, k=NEIGHBOURS):
-    x_train = np.array([features(r) for r in train])
+def report(train, test, k=NEIGHBOURS, kind="player"):
+    builder = player_features if kind == "player" else features
+    x_train = np.array([builder(r) for r in train])
+    if kind == "player":
+        middle, spread = x_train.mean(axis=0), x_train.std(axis=0)
+        spread[spread == 0] = 1.0
+        x_train = (x_train - middle) / spread
     routes = [r["route"] for r in train]
     scored = np.array([r["scored"] for r in train], dtype=float)
 
@@ -85,10 +135,14 @@ def report(train, test, k=NEIGHBOURS):
     right = 0
     brier_model, brier_base = [], []
     for row in test:
-        order, gaps = neighbours(features(row), x_train, k)
+        point = builder(row)
+        if kind == "player":
+            point = (point - middle) / spread
+        order, gaps = neighbours(point, x_train, k, kind)
         votes = {}
         for index, gap in zip(order, gaps):
-            votes[routes[index]] = votes.get(routes[index], 0.0) + 1.0 / (1.0 + gap / 100.0)
+            weight = 1.0 / (1.0 + gap / (1.0 if kind == "player" else 100.0))
+            votes[routes[index]] = votes.get(routes[index], 0.0) + weight
         guess = max(votes, key=votes.get)
         right += guess == row["route"]
 
@@ -97,7 +151,7 @@ def report(train, test, k=NEIGHBOURS):
         brier_model.append((chance - row["scored"]) ** 2)
         brier_base.append((base_rate - row["scored"]) ** 2)
 
-    print(f"train {len(train)} · test {len(test)} · k={k}")
+    print(f"train {len(train)} · test {len(test)} · k={k} · 특징 {kind}")
     print()
     print("어떤 경로를 고를 것인가")
     print(f"  이웃 투표        {right / len(test) * 100:5.1f}%")
@@ -113,9 +167,10 @@ def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--data", default=os.path.join(ROOT, "data", "model.json"))
     parser.add_argument("-k", type=int, default=NEIGHBOURS)
+    parser.add_argument("--features", choices=("player", "raw"), default="player")
     args = parser.parse_args(argv)
     train, test = load(args.data)
-    report(train, test, args.k)
+    report(train, test, args.k, args.features)
     return 0
 
 
