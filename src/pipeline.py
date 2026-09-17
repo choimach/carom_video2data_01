@@ -461,6 +461,7 @@ def analyse(scan_data, recover=True):
             setattr(shot, field, value)
         path = positions[shot.cue_ball][shot.start_frame:shot.end_frame + 1]
         shot.cue_speed = kinematics.calculate_speed([p for p in path if np.isfinite(p).all()])
+        shot.turn_deg = turn_at_first_ball(shot, positions, details.get("events") or [])
     for shot in ordered:
         if shot.inferred:
             shot.success = None       # unknowable: the stroke was never shown
@@ -570,6 +571,40 @@ def _plain(value):
     return value
 
 
+TURN_SPAN_FRAMES = 6
+
+
+def turn_at_first_ball(shot, positions, events, span=TURN_SPAN_FRAMES):
+    """How far the cue ball was turned by the first object ball, in degrees.
+
+    Signed, left positive. This is what separates 뒤돌리기 from 옆돌리기 - the
+    player's own labels put both behind a long rail, and what differs is that
+    one barely bends off the object ball while the other is thrown sideways.
+
+    Measured over a few frames either side of the contact, because one frame of
+    centroid noise on a 60 fps track is several degrees.
+    """
+    first = next((e for e in events if e.kind == "ball"), None)
+    if first is None:
+        return None
+    path = positions[shot.cue_ball]
+    at = shot.start_frame + first.frame
+    before = path[max(at - span, 0):at + 1]
+    after = path[at:at + span + 1]
+    before = before[np.isfinite(before).all(axis=1)]
+    after = after[np.isfinite(after).all(axis=1)]
+    if len(before) < 2 or len(after) < 2:
+        return None
+    incoming = before[-1] - before[0]
+    outgoing = after[-1] - after[0]
+    if not (np.any(incoming) and np.any(outgoing)):
+        return None
+    turn = np.degrees(np.arctan2(
+        incoming[0] * outgoing[1] - incoming[1] * outgoing[0],
+        float(np.dot(incoming, outgoing))))
+    return float(turn)
+
+
 def route_of(verdict, shot):
     """The play's route type, or None when there is nothing to name it from.
 
@@ -580,7 +615,9 @@ def route_of(verdict, shot):
     events = verdict.get("events")
     if not events:
         return None
-    return classify(events, shot.start_positions, shot.cue_ball)
+    return classify(events, shot.start_positions, shot.cue_ball,
+                    thickness=getattr(shot, "thickness", None),
+                    turn_deg=getattr(shot, "turn_deg", None))
 
 
 def export_json(result, path):
@@ -603,6 +640,7 @@ def export_json(result, path):
                 "first_object_ball": verdict.get("first_ball"),
                 "second_object_ball": verdict.get("second_ball"),
                 "route": route_of(verdict, shot),
+                "turn_deg": getattr(shot, "turn_deg", None),
                 # Frames count from the start of the play: judge_shot reads the
                 # window, not the match, so subtracting the start again put
                 # every event tens of thousands of frames before the shot.

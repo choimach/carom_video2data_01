@@ -11,16 +11,14 @@ more than the code does:
   many cushions the cue ball took before the first object ball (none, one,
   more) separates a direct shot from 걸어치기 and 뱅크샷. How many it took
   before the second object ball separates 대회전 from the rest.
-* A guess, because it rests on geometry no one has checked: which of 뒤돌리기,
-  옆돌리기 and 앞돌리기 a direct shot is. The rule below reads the first rail
-  the cue ball reaches after the object ball - short rail means 뒤돌리기 - and
-  then, for the long rails, which side of the table it stayed on. That matches
-  how the notes describe these shots and nothing more. It has not been checked
-  against a single play a person looked at.
+* A hypothesis, because it is fitted to ten plays the player named himself:
+  which of 뒤돌리기, 옆돌리기, 앞돌리기 and 빗겨치기 a direct shot is. See
+  `_turn` for what those ten said - and for why the rule that preceded it, over
+  rail sequences, could never have worked.
 
 So every verdict carries `basis`: "counted" where it rests on the first kind of
-split, "geometry" where it rests on the second. Treat the second as unlabelled
-data until someone has gone through a few dozen of them.
+split, "geometry" where it rests on the second. The second is worth no more
+than the ten labels under it until a wider batch has been checked.
 """
 
 # Rails are named for where they sit: the table is 2844 x 1422, x along the
@@ -37,9 +35,15 @@ CROSSING = "횡단"
 BEHIND = "뒤돌리기"
 SIDE = "옆돌리기"
 FRONT = "앞돌리기"
+GLANCING = "빗겨치기"
 UNKNOWN = "미분류"
 
 LONG_AROUND_CUSHIONS = 5
+# Both measured off the player's own labels, on two examples each: the one
+# 빗겨치기 he named was struck at 0.06 and nothing else came under 0.21, and the
+# two 옆돌리기 turned 78 and 96 degrees where the two 뒤돌리기 turned none at all.
+THIN_HIT = 0.15
+SIDE_TURN_DEGREES = 60.0
 
 
 def _rails(events, after=None, before=None):
@@ -49,13 +53,14 @@ def _rails(events, after=None, before=None):
             and (before is None or e.frame < before)]
 
 
-def classify(events, layout_mm=None, cue_ball=None):
+def classify(events, layout_mm=None, cue_ball=None, thickness=None, turn_deg=None):
     """Name the route this shot took.
 
     `events` is what `judge_shot` leaves in its verdict: the cue ball's
     contacts, in order, each a cushion by rail name or a ball by colour.
-    `layout_mm` and `cue_ball` are only needed to tell 옆돌리기 from 앞돌리기;
-    without them that pair comes back as 미분류.
+    `thickness` and `turn_deg` are what separate the turns from one another;
+    without the turn angle, 뒤돌리기 and 옆돌리기 cannot be told apart and come
+    back as 미분류. `layout_mm` and `cue_ball` are no longer read here.
 
     Returns {route, basis, opening, cushions, rails} - `opening` being the
     cushions taken before the first object ball, which is what makes a shot
@@ -107,38 +112,39 @@ def classify(events, layout_mm=None, cue_ball=None):
                 and between[0] != between[1] and between[1] != between[2]:
             return {**result, "route": CROSSING, "why": "long rail to long rail"}
 
-    if between[0] in SHORT_RAILS:
-        return {**result, "route": BEHIND, "basis": "geometry",
-                "why": "first rail is a short one"}
-
-    return {**result, **_long_rail_first(between, layout_mm, cue_ball)}
+    return {**result, **_turn(between, thickness, turn_deg)}
 
 
-def _long_rail_first(between, layout_mm, cue_ball):
-    """옆돌리기 or 앞돌리기 - the split that has not been checked.
+def _turn(between, thickness, turn_deg):
+    """뒤돌리기, 옆돌리기, 앞돌리기 or 빗겨치기, from the player's ten.
 
-    Both send the cue ball to a long rail off the object ball. What the notes
-    distinguish is where it goes from there: 앞돌리기 curls in front of the
-    object ball and stays on the cue ball's own side of the table, while
-    옆돌리기 carries across it. So the test is whether the rail it reached is
-    the one the cue ball was already nearer to.
+    The first rule here read the rail sequence and was wrong seven times in
+    ten. It was wrong in kind, not in degree: six of those plays took the same
+    장-단-장 and the player called them by five different names, so no rule
+    over rail sequences can name a route at all.
+
+    What did line up with his names:
+
+      두께 0.06        빗겨치기      - thin, and nothing else was near it
+      단쿠션 먼저       앞돌리기      - the old rule called exactly this 뒤돌리기
+      장쿠션, 꺾임 0°   뒤돌리기
+      장쿠션, 꺾임 80°+ 옆돌리기
+
+    Two examples each. That is a hypothesis with a sample of ten behind it, not
+    a rule that has been checked, and 되돌아오기 - which he named twice - has no
+    test here at all. The next batch of labels is what decides it.
     """
-    if not layout_mm or not cue_ball:
-        return {"route": UNKNOWN, "basis": "geometry",
-                "why": "no layout to tell 옆돌리기 from 앞돌리기"}
-
-    cue = layout_mm.get(cue_ball)
-    others = [xy for colour, xy in layout_mm.items() if colour != cue_ball]
-    if cue is None or len(others) < 2:
-        return {"route": UNKNOWN, "basis": "geometry",
-                "why": "the layout is incomplete"}
-
-    # Which long rail the cue ball started nearer to. `top` is y = 0.
-    from src.physics.table_calibration import TABLE_WIDTH_MM
-
-    near_rail = "top" if cue[1] < TABLE_WIDTH_MM / 2 else "bottom"
-    if between[0] == near_rail:
+    if thickness is not None and thickness <= THIN_HIT:
+        return {"route": GLANCING, "basis": "geometry",
+                "why": f"struck thin, {thickness:.2f}"}
+    if between[0] in SHORT_RAILS:
         return {"route": FRONT, "basis": "geometry",
-                "why": "long rail on the cue ball's own side"}
-    return {"route": SIDE, "basis": "geometry",
-            "why": "long rail across the table"}
+                "why": "first rail is a short one"}
+    if turn_deg is None:
+        return {"route": UNKNOWN, "basis": "geometry",
+                "why": "no turn angle to tell 뒤돌리기 from 옆돌리기"}
+    if abs(turn_deg) >= SIDE_TURN_DEGREES:
+        return {"route": SIDE, "basis": "geometry",
+                "why": f"turned {abs(turn_deg):.0f}° off the object ball"}
+    return {"route": BEHIND, "basis": "geometry",
+            "why": f"long rail, barely turned ({abs(turn_deg):.0f}°)"}
