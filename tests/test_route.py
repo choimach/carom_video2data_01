@@ -80,3 +80,22 @@ def test_counted_and_guessed_verdicts_are_marked_apart():
                            (30, "ball", "yellow")))
     assert hook["basis"] == "counted"
     assert turn["basis"] == "geometry"
+
+
+def test_a_shot_that_never_reached_a_second_ball_is_not_a_grand_tour():
+    # Five cushions, but the cue ball is still running: the count is of what it
+    # did after missing, not of cushions taken on the way to anything.
+    shot = events((10, "ball", "red"), (20, "cushion", "left"),
+                  (30, "cushion", "top"), (40, "cushion", "right"),
+                  (50, "cushion", "bottom"), (60, "cushion", "left"))
+    verdict = classify(shot)
+    assert verdict["route"] != LONG_AROUND
+    assert verdict["reached_second"] is False
+
+
+def test_the_count_still_names_a_grand_tour_when_the_second_ball_was_reached():
+    shot = events((10, "ball", "red"), (20, "cushion", "left"),
+                  (30, "cushion", "top"), (40, "cushion", "right"),
+                  (50, "cushion", "bottom"), (60, "cushion", "left"),
+                  (70, "ball", "yellow"))
+    assert classify(shot)["route"] == LONG_AROUND

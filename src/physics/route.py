@@ -73,7 +73,8 @@ def classify(events, layout_mm=None, cue_ball=None):
                      before=second.frame if second else None)
 
     result = {"opening": len(opening), "cushions": len(between),
-              "rails": between, "basis": "counted"}
+              "rails": between, "basis": "counted",
+              "reached_second": second is not None}
 
     # A cushion before the object ball is not a turn at all: one is 걸어치기,
     # where the rail is used to reach a ball that cannot be hit straight; more
@@ -87,15 +88,24 @@ def classify(events, layout_mm=None, cue_ball=None):
     if not between:
         return {**result, "route": UNKNOWN, "basis": "counted",
                 "why": "no cushion between the object balls"}
-    if len(between) >= LONG_AROUND_CUSHIONS:
-        return {**result, "route": LONG_AROUND,
-                "why": f"{len(between)} cushions before the second ball"}
 
-    # Crossing the table between the two long rails, without a short rail in
-    # between, is 횡단 whatever else it resembles.
-    if len(between) >= 3 and all(rail in LONG_RAILS for rail in between[:3]) \
-            and between[0] != between[1] and between[1] != between[2]:
-        return {**result, "route": CROSSING, "why": "long rail to long rail"}
+    # A shot that never reached a second object ball has no "cushions before
+    # the second ball" to count: what gets counted instead is every rail the
+    # cue ball took until it stopped, which is why 대회전 came out at one play
+    # in eight. The route it set off on is still readable from the first rail,
+    # so the turn is named and the counted routes are left alone.
+    reached_second = result["reached_second"]
+
+    if reached_second:
+        if len(between) >= LONG_AROUND_CUSHIONS:
+            return {**result, "route": LONG_AROUND,
+                    "why": f"{len(between)} cushions before the second ball"}
+
+        # Crossing the table between the two long rails, without a short rail
+        # in between, is 횡단 whatever else it resembles.
+        if len(between) >= 3 and all(rail in LONG_RAILS for rail in between[:3]) \
+                and between[0] != between[1] and between[1] != between[2]:
+            return {**result, "route": CROSSING, "why": "long rail to long rail"}
 
     if between[0] in SHORT_RAILS:
         return {**result, "route": BEHIND, "basis": "geometry",

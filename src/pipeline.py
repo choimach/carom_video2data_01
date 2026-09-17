@@ -603,7 +603,10 @@ def export_json(result, path):
                 "first_object_ball": verdict.get("first_ball"),
                 "second_object_ball": verdict.get("second_ball"),
                 "route": route_of(verdict, shot),
-                "events": [[e.frame - shot.start_frame, e.kind, e.detail]
+                # Frames count from the start of the play: judge_shot reads the
+                # window, not the match, so subtracting the start again put
+                # every event tens of thousands of frames before the shot.
+                "events": [[e.frame, e.kind, e.detail]
                            for e in verdict.get("events") or []],
                 "layout_mm": shot.start_positions,
                 "final_mm": shot.end_positions,

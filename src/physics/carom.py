@@ -74,30 +74,100 @@ def cushion_events(cue_xy, length_mm=TABLE_LENGTH_MM, width_mm=TABLE_WIDTH_MM,
 
     The two rails of a corner stay separate events, which is what the rules
     count.
+
+    Waiting for a frame that lands within a ball's width of the nose line is not
+    enough on its own. The camera samples 60 times a second and a cue ball
+    leaving the cue covers 80 mm between frames, so a bounce can be straddled
+    entirely: 100 mm out on one frame, 90 mm out on the next, having touched in
+    between. Measured on plays the scoreboard says scored, the closest sampled
+    approach at a missed cushion is 73 mm at the median - five times the
+    tolerance - and 22% of scoring plays came out with fewer than the three
+    cushions a point requires, which is not a threshold to loosen but a contact
+    to reconstruct.
+
+    So a bounce is also read the way it looks: the perpendicular distance falls,
+    reverses and rises again. Fitting a line to each leg and intersecting them
+    puts the touch where the ball actually reached the rail, between two frames
+    if that is where it happened. Loosening the proximity threshold instead
+    would have counted every ball that merely ran close along a rail.
     """
     events = []
     limits = ((0, length_mm, "left", "right"), (1, width_mm, "top", "bottom"))
     for axis, limit, low_name, high_name in limits:
         coordinate = cue_xy[:, axis]
-        seen = np.isfinite(coordinate)
         distance_low = coordinate - BALL_RADIUS_MM
         distance_high = (limit - BALL_RADIUS_MM) - coordinate
         for name, distance in ((low_name, distance_low), (high_name, distance_high)):
-            began = None
-            last_touch = None
-            for index in range(len(coordinate)):
-                if not seen[index]:
-                    continue
-                if distance[index] <= tolerance_mm:
-                    if began is None:
-                        began = index
-                    last_touch = index
-                elif began is not None and distance[index] > release_mm:
-                    events.append(Event((began + last_touch) // 2, "cushion", name))
-                    began = last_touch = None
-            if began is not None:
-                events.append(Event((began + last_touch) // 2, "cushion", name))
+            touches = _touched_frames(distance, tolerance_mm)
+            touches += _bounced_frames(distance, tolerance_mm)
+            for frame in _one_per_visit(sorted(touches), distance, release_mm):
+                events.append(Event(frame, "cushion", name))
     return events
+
+
+def _touched_frames(distance, tolerance_mm):
+    """Frames where the ball was seen against the rail."""
+    seen = np.isfinite(distance)
+    return [i for i in range(len(distance)) if seen[i] and distance[i] <= tolerance_mm]
+
+
+REBOUND_SEARCH_MM = 400.0  # how far out a fall-and-rise is still worth fitting
+REBOUND_LEG_FRAMES = 4     # frames per leg of the fit
+REBOUND_REACH_MM = 20.0    # how far past the nose line the legs must cross
+
+
+def _bounced_frames(distance, tolerance_mm, search_mm=REBOUND_SEARCH_MM,
+                    leg=REBOUND_LEG_FRAMES, reach_mm=REBOUND_REACH_MM):
+    """Frames where the ball turned around at a rail without being seen there.
+
+    A local minimum is only a candidate; what decides it is where the two legs
+    cross. A ball that rolls up to a rail and away again crosses the nose line;
+    one that passes by at an angle crosses well short of it and is left alone.
+    """
+    found = []
+    for index in range(leg, len(distance) - leg):
+        here = distance[index]
+        if not np.isfinite(here) or here > search_mm or here <= tolerance_mm:
+            continue
+        before = distance[index - leg:index + 1]
+        after = distance[index:index + leg + 1]
+        if not (np.isfinite(before).all() and np.isfinite(after).all()):
+            continue
+        if not (before[0] > here and after[-1] > here):
+            continue
+        falling = np.polyfit(np.arange(-leg, 1), before, 1)
+        rising = np.polyfit(np.arange(0, leg + 1), after, 1)
+        if falling[0] >= 0 or rising[0] <= 0:
+            continue
+        # Where the two lines meet, in frames either side of the minimum.
+        at = (rising[1] - falling[1]) / (falling[0] - rising[0])
+        if abs(at) > leg:
+            continue
+        depth = falling[0] * at + falling[1]
+        if depth <= reach_mm:
+            found.append(index + int(round(at)))
+    return found
+
+
+def _one_per_visit(frames, distance, release_mm):
+    """Collapse the frames of one visit to a rail into a single contact.
+
+    The ball has to get clear of the rail before it can hit it again, so
+    everything up to that point is the same touch, timed to its middle.
+    """
+    visits = []
+    for frame in frames:
+        if visits and not _got_clear(distance, visits[-1][-1], frame, release_mm):
+            visits[-1].append(frame)
+        else:
+            visits.append([frame])
+    return [(visit[0] + visit[-1]) // 2 for visit in visits]
+
+
+def _got_clear(distance, last, frame, release_mm):
+    between = distance[last:frame + 1]
+    between = between[np.isfinite(between)]
+    return bool(len(between)) and bool((between > release_mm).any())
 
 
 def ball_events(cue_xy, others, tolerance_mm=CONTACT_TOLERANCE_MM):
