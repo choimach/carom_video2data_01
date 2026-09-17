@@ -308,6 +308,30 @@ def _departures(xy, rest_window=12, threshold_mm=None, confirmations=3, settle_f
     return out
 
 
+# A ball still carrying this much speed between two supposed contacts never
+# stopped, so the second one is the same roll seen again.
+ROLLING_MM_PER_FRAME = 1.5
+
+
+def _kept_rolling(xy, first, last, threshold=ROLLING_MM_PER_FRAME):
+    """Was the ball moving throughout, between these two frames?"""
+    window = xy[max(first, 0):last + 1]
+    window = window[np.isfinite(window).all(axis=1)]
+    if len(window) < 3:
+        return False
+    steps = np.linalg.norm(np.diff(window, axis=0), axis=1)
+    # Not every step: a rolling ball's centroid wobbles, and one frame under
+    # the threshold does not mean it stopped. What "it stopped" looks like is a
+    # run of them.
+    still = steps <= threshold
+    longest = 0
+    run = 0
+    for flag in still:
+        run = run + 1 if flag else 0
+        longest = max(longest, run)
+    return longest < 3
+
+
 def _nearest_approach(xy, point, frame, before=6, after=12):
     """Closest a ball came to `point` in the frames around `frame`, ignoring gaps.
 
@@ -373,6 +397,17 @@ def contact_events(cue_xy, others, attribution_mm=None, departure_mm=None,
             # One touch, one event: motion and distance often both witness the
             # same contact, and a nudged ball can read as leaving twice.
             if events and events[-1].detail == colour and frame - events[-1].frame <= merge_frames:
+                continue
+            # A ball that is still rolling from the last contact has not been
+            # hit again. Departure is measured against a resting place that is
+            # retaken five frames after a departure, so a ball crossing the
+            # table reads as leaving over and over - eight times on one play,
+            # every eighteenth frame - and each repeat pushes the second object
+            # ball later, or hides it. A fresh contact has to find the ball at
+            # rest first, unless the cue ball is right up against it.
+            if events and events[-1].detail == colour \
+                    and _kept_rolling(xy, events[-1].frame, frame) \
+                    and _nearest_approach(cue_xy, xy[frame], frame, before=2, after=2) > touch_mm:
                 continue
             events.append(Event(frame, "ball", colour))
     return sorted(events, key=lambda e: e.frame)
