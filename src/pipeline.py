@@ -722,6 +722,24 @@ def turn_at_first_ball(shot, positions, events, span=TURN_SPAN_FRAMES):
     return float(turn)
 
 
+def trajectory_agrees(shot):
+    """Does the path show what the label says happened?
+
+    A play labelled from the inning's points says a point was scored; the path
+    either reconstructs a carom or it does not. Where it does not, something in
+    the tracking is wrong for that play - not always recoverable, and not worth
+    training on. Of 975 scoring plays, every one that fails this test was
+    labelled from the inning rather than judged from the path, and the innings
+    they sit in come up one carom short, so it is a play whose path was lost,
+    not a point attributed to the wrong stroke.
+
+    None where there is nothing to compare: a play never shown has no path.
+    """
+    if shot.success is None or getattr(shot, "trajectory_success", None) is None:
+        return None
+    return bool(shot.success) == bool(shot.trajectory_success)
+
+
 def route_of(verdict, shot):
     """The play's route type, or None when there is nothing to name it from.
 
@@ -783,6 +801,7 @@ def export_json(result, path):
                 "end_second": start + shot.end_frame / fps,
                 "complete": shot.complete,
                 "inferred": shot.inferred,
+                "trajectory_agrees": trajectory_agrees(shot),
                 "label_confirmed": getattr(shot, "label_confirmed", False),
                 "rejected_for": getattr(shot, "rejections", []),
             })
