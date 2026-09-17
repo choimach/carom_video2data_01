@@ -36,14 +36,13 @@ BEHIND = "뒤돌리기"
 SIDE = "옆돌리기"
 FRONT = "앞돌리기"
 GLANCING = "빗겨치기"
+RETURNING = "되돌아오기"
 UNKNOWN = "미분류"
 
 LONG_AROUND_CUSHIONS = 5
-# Both measured off the player's own labels, on two examples each: the one
-# 빗겨치기 he named was struck at 0.06 and nothing else came under 0.21, and the
-# two 옆돌리기 turned 78 and 96 degrees where the two 뒤돌리기 turned none at all.
+# The one 빗겨치기 the player named was struck at 0.06 and nothing else he
+# named came under 0.21.
 THIN_HIT = 0.15
-SIDE_TURN_DEGREES = 60.0
 
 
 def _rails(events, after=None, before=None):
@@ -53,7 +52,8 @@ def _rails(events, after=None, before=None):
             and (before is None or e.frame < before)]
 
 
-def classify(events, layout_mm=None, cue_ball=None, thickness=None, turn_deg=None):
+def classify(events, layout_mm=None, cue_ball=None, thickness=None, turn_deg=None,
+             away_mm=None):
     """Name the route this shot took.
 
     `events` is what `judge_shot` leaves in its verdict: the cue ball's
@@ -106,16 +106,24 @@ def classify(events, layout_mm=None, cue_ball=None, thickness=None, turn_deg=Non
             return {**result, "route": LONG_AROUND,
                     "why": f"{len(between)} cushions before the second ball"}
 
+        # Back to the rail it came off: 장-단-장 on one and the same long rail,
+        # or 단-장-단 on one and the same short rail, is 되돌아오기 - the
+        # player's definition, word for word.
+        if len(between) >= 3 and between[0] == between[2] \
+                and (between[1] in SHORT_RAILS) != (between[0] in SHORT_RAILS):
+            return {**result, "route": RETURNING,
+                    "why": f"back to the same {between[0]} rail"}
+
         # Crossing the table between the two long rails, without a short rail
         # in between, is 횡단 whatever else it resembles.
         if len(between) >= 3 and all(rail in LONG_RAILS for rail in between[:3]) \
                 and between[0] != between[1] and between[1] != between[2]:
             return {**result, "route": CROSSING, "why": "long rail to long rail"}
 
-    return {**result, **_turn(between, thickness, turn_deg)}
+    return {**result, **_turn(between, thickness, away_mm)}
 
 
-def _turn(between, thickness, turn_deg):
+def _turn(between, thickness, away_mm):
     """뒤돌리기, 옆돌리기, 앞돌리기 or 빗겨치기, from the player's ten.
 
     The first rule here read the rail sequence and was wrong seven times in
@@ -140,11 +148,11 @@ def _turn(between, thickness, turn_deg):
     if between[0] in SHORT_RAILS:
         return {"route": FRONT, "basis": "geometry",
                 "why": "first rail is a short one"}
-    if turn_deg is None:
+    if away_mm is None:
         return {"route": UNKNOWN, "basis": "geometry",
-                "why": "no turn angle to tell 뒤돌리기 from 옆돌리기"}
-    if abs(turn_deg) >= SIDE_TURN_DEGREES:
+                "why": "no second cushion to tell 뒤돌리기 from 옆돌리기"}
+    if away_mm < 0:
         return {"route": SIDE, "basis": "geometry",
-                "why": f"turned {abs(turn_deg):.0f}° off the object ball"}
+                "why": f"second cushion came back {-away_mm:.0f} mm toward the player"}
     return {"route": BEHIND, "basis": "geometry",
-            "why": f"long rail, barely turned ({abs(turn_deg):.0f}°)"}
+            "why": f"second cushion carried on {away_mm:.0f} mm away"}

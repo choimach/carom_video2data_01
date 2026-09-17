@@ -462,6 +462,7 @@ def analyse(scan_data, recover=True):
         path = positions[shot.cue_ball][shot.start_frame:shot.end_frame + 1]
         shot.cue_speed = kinematics.calculate_speed([p for p in path if np.isfinite(p).all()])
         shot.turn_deg = turn_at_first_ball(shot, positions, details.get("events") or [])
+        shot.away_mm = second_cushion_drift(shot, positions, details.get("events") or [])
     for shot in ordered:
         if shot.inferred:
             shot.success = None       # unknowable: the stroke was never shown
@@ -571,6 +572,45 @@ def _plain(value):
     return value
 
 
+def second_cushion_drift(shot, positions, events):
+    """Did the second cushion carry on away from the player, or come back?
+
+    This is the player's own test for 뒤돌리기 against 옆돌리기, and it is the
+    only thing that separates them: two of his plays took the identical
+    장-단-장 off the same rails and he named one of each. What differs is where
+    the second rail sits - going on away from where he stands, or coming back
+    toward him.
+
+    Measured along the line the cue ball was sent, from the first cushion to
+    the second: positive carries on, negative comes back. On the four plays he
+    named it reads +844 and +387 for 뒤돌리기, -1220 and -1063 for 옆돌리기.
+
+    He stands behind the cue ball, so that line is what "away" means; the
+    distance from the cue ball itself is not enough, and left one of the two
+    옆돌리기 at 24 mm from the wrong verdict.
+    """
+    first = next((e for e in events if e.kind == "ball"), None)
+    if first is None:
+        return None
+    rails = [e for e in events if e.kind == "cushion" and e.frame > first.frame]
+    if len(rails) < 2:
+        return None
+    start = shot.start_positions or {}
+    cue, struck = start.get(shot.cue_ball), start.get(first.detail)
+    if cue is None or struck is None:
+        return None
+    cue, struck = np.asarray(cue, float), np.asarray(struck, float)
+    aim = struck - cue
+    if not np.any(aim):
+        return None
+    aim = aim / np.linalg.norm(aim)
+    path = positions[shot.cue_ball]
+    at = [path[shot.start_frame + rail.frame] for rail in rails[:2]]
+    if not all(np.isfinite(point).all() for point in at):
+        return None
+    return float(np.dot(at[1] - at[0], aim))
+
+
 TURN_SPAN_FRAMES = 6
 
 
@@ -617,7 +657,8 @@ def route_of(verdict, shot):
         return None
     return classify(events, shot.start_positions, shot.cue_ball,
                     thickness=getattr(shot, "thickness", None),
-                    turn_deg=getattr(shot, "turn_deg", None))
+                    turn_deg=getattr(shot, "turn_deg", None),
+                    away_mm=getattr(shot, "away_mm", None))
 
 
 def export_json(result, path):
@@ -641,6 +682,7 @@ def export_json(result, path):
                 "second_object_ball": verdict.get("second_ball"),
                 "route": route_of(verdict, shot),
                 "turn_deg": getattr(shot, "turn_deg", None),
+                "away_mm": getattr(shot, "away_mm", None),
                 # Frames count from the start of the play: judge_shot reads the
                 # window, not the match, so subtracting the start again put
                 # every event tens of thousands of frames before the shot.

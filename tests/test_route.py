@@ -4,6 +4,7 @@ from src.physics.carom import Event
 from src.physics.route import (
     BANK,
     GLANCING,
+    RETURNING,
     BEHIND,
     CROSSING,
     FRONT,
@@ -54,20 +55,28 @@ def test_a_short_rail_first_is_the_front_turn():
     # The player named two of these 앞돌리기; the rule before him said 뒤돌리기.
     shot = events((10, "ball", "red"), (20, "cushion", "right"),
                   (30, "cushion", "top"), (40, "ball", "yellow"))
-    assert classify(shot, turn_deg=20.0)["route"] == FRONT
+    assert classify(shot, away_mm=20.0)["route"] == FRONT
 
 
-def test_a_long_rail_first_splits_on_how_far_the_ball_turned():
+def test_a_long_rail_first_splits_on_where_the_second_cushion_went():
+    # The player's own test: away from where he stands, or back toward him.
     shot = events((10, "ball", "red"), (20, "cushion", "top"),
                   (30, "cushion", "left"), (40, "ball", "yellow"))
-    assert classify(shot, turn_deg=4.0)["route"] == BEHIND
-    assert classify(shot, turn_deg=-88.0)["route"] == SIDE
+    assert classify(shot, away_mm=844.0)["route"] == BEHIND
+    assert classify(shot, away_mm=-1063.0)["route"] == SIDE
+
+
+def test_the_same_rail_twice_around_a_short_one_is_a_return():
+    shot = events((10, "ball", "red"), (20, "cushion", "top"),
+                  (30, "cushion", "left"), (40, "cushion", "top"),
+                  (50, "ball", "yellow"))
+    assert classify(shot, away_mm=400.0)["route"] == RETURNING
 
 
 def test_a_thin_hit_is_a_glance_whatever_rail_came_first():
     shot = events((10, "ball", "red"), (20, "cushion", "top"),
                   (30, "cushion", "left"), (40, "ball", "yellow"))
-    assert classify(shot, thickness=0.06, turn_deg=-6.0)["route"] == GLANCING
+    assert classify(shot, thickness=0.06, away_mm=-100.0)["route"] == GLANCING
 
 
 def test_that_split_needs_a_turn_angle_and_says_so():
@@ -82,7 +91,7 @@ def test_counted_and_guessed_verdicts_are_marked_apart():
     hook = classify(events((10, "cushion", "top"), (20, "ball", "red"),
                            (30, "ball", "yellow")))
     turn = classify(events((10, "ball", "red"), (20, "cushion", "right"),
-                           (30, "ball", "yellow")), turn_deg=10.0)
+                           (30, "ball", "yellow")), away_mm=10.0)
     assert hook["basis"] == "counted"
     assert turn["basis"] == "geometry"
 
