@@ -53,7 +53,7 @@ def _rails(events, after=None, before=None):
 
 
 def classify(events, layout_mm=None, cue_ball=None, thickness=None, turn_deg=None,
-             away_mm=None):
+             away_mm=None, struck_side=None, english=None):
     """Name the route this shot took.
 
     `events` is what `judge_shot` leaves in its verdict: the cue ball's
@@ -120,10 +120,10 @@ def classify(events, layout_mm=None, cue_ball=None, thickness=None, turn_deg=Non
                 and between[0] != between[1] and between[1] != between[2]:
             return {**result, "route": CROSSING, "why": "long rail to long rail"}
 
-    return {**result, **_turn(between, thickness, away_mm)}
+    return {**result, **_turn(between, thickness, away_mm, struck_side, english)}
 
 
-def _turn(between, thickness, away_mm):
+def _turn(between, thickness, away_mm, struck_side=None, english=None):
     """뒤돌리기, 옆돌리기, 앞돌리기 or 빗겨치기, from the player's ten.
 
     The first rule here read the rail sequence and was wrong seven times in
@@ -142,12 +142,20 @@ def _turn(between, thickness, away_mm):
     a rule that has been checked, and 되돌아오기 - which he named twice - has no
     test here at all. The next batch of labels is what decides it.
     """
-    if thickness is not None and thickness <= THIN_HIT:
-        return {"route": GLANCING, "basis": "geometry",
-                "why": f"struck thin, {thickness:.2f}"}
+    # Off a short rail the two candidates are 앞돌리기 and 빗겨치기, and no
+    # geometry told them apart - the player's own test does. He gave it as a
+    # family rule: 앞돌리기 and 옆돌리기 put side on the same hand as the face
+    # they struck, 뒤돌리기 and 빗겨치기 on the opposite one.
     if between[0] in SHORT_RAILS:
-        return {"route": FRONT, "basis": "geometry",
-                "why": "first rail is a short one"}
+        if struck_side is None or english is None:
+            return {"route": UNKNOWN, "basis": "geometry",
+                    "why": "no side on the ball to tell 앞돌리기 from 빗겨치기"}
+        same = (struck_side < 0) == (english > 0)
+        if same:
+            return {"route": FRONT, "basis": "geometry",
+                    "why": "side on the hand it was struck"}
+        return {"route": GLANCING, "basis": "geometry",
+                "why": "side against the hand it was struck"}
     if away_mm is None:
         return {"route": UNKNOWN, "basis": "geometry",
                 "why": "no second cushion to tell 뒤돌리기 from 옆돌리기"}

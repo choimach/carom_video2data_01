@@ -463,6 +463,8 @@ def analyse(scan_data, recover=True):
         shot.cue_speed = kinematics.calculate_speed([p for p in path if np.isfinite(p).all()])
         shot.turn_deg = turn_at_first_ball(shot, positions, details.get("events") or [])
         shot.away_mm = second_cushion_drift(shot, positions, details.get("events") or [])
+        shot.struck_side = struck_side(shot, positions, details.get("events") or [])
+        shot.english = english_side(shot, positions, details.get("events") or [])
     for shot in ordered:
         if shot.inferred:
             shot.success = None       # unknowable: the stroke was never shown
@@ -572,6 +574,81 @@ def _plain(value):
     return value
 
 
+RAIL_INWARD = {"left": (1.0, 0.0), "right": (-1.0, 0.0),
+               "top": (0.0, 1.0), "bottom": (0.0, -1.0)}
+# Below this the rebound angle is noise, not side. Five of the player's own
+# annotations read +20, +5.5, +2.6, +2.5 and -0.1 degrees, and the one the sign
+# came out wrong on is the one at -0.1.
+SIDE_CONFIDENT_DEGREES = 2.0
+
+
+def struck_side(shot, positions, events, span=6):
+    """Which side of the first object ball the cue ball struck.
+
+    Negative is its right, positive its left, in millimetres of offset between
+    the object ball's centre and the line the cue ball was running. Checked
+    against five plays the player annotated by hand: five out of five.
+
+    Taken from the direction just before contact rather than from the aiming
+    line, because a cue ball that has already been off a cushion is not still
+    travelling the way it was sent.
+    """
+    first = next((e for e in events if e.kind == "ball"), None)
+    if first is None or first.detail not in positions:
+        return None
+    path = positions[shot.cue_ball]
+    at = shot.start_frame + first.frame
+    before = path[max(at - span, 0):at + 1]
+    before = before[np.isfinite(before).all(axis=1)]
+    struck = (shot.start_positions or {}).get(first.detail)
+    if len(before) < 2 or struck is None or not np.isfinite(path[at]).all():
+        return None
+    heading = before[-1] - before[0]
+    if np.linalg.norm(heading) < 2.0:
+        return None
+    heading = heading / np.linalg.norm(heading)
+    offset = np.asarray(struck, float) - path[at]
+    return float(heading[0] * offset[1] - heading[1] * offset[0])
+
+
+def english_side(shot, positions, events, span=6):
+    """Left or right side on the cue ball, as the table sees it.
+
+    `spin_x` reads running or reverse against the rail it happened to meet,
+    which flips with the rail and the direction of travel; the player names side
+    the way he put it on, left or right. Turning one into the other needs the
+    direction the ball was running when it reached the rail: running side on a
+    ball going one way along a rail is left, and going the other way it is
+    right.
+
+    Positive is right - clockwise seen from above. None where the rebound is too
+    close to the mirror angle to have a sign worth trusting.
+    """
+    spin = getattr(shot, "spin_x", None)
+    rail = getattr(shot, "spin_rail", None)
+    if spin is None or rail not in RAIL_INWARD:
+        return None
+    if abs(spin) < SIDE_CONFIDENT_DEGREES:
+        return None
+    cushion = next((e for e in events if e.kind == "cushion"), None)
+    if cushion is None:
+        return None
+    path = positions[shot.cue_ball]
+    at = shot.start_frame + cushion.frame
+    before = path[max(at - span, 0):at + 1]
+    before = before[np.isfinite(before).all(axis=1)]
+    if len(before) < 2:
+        return None
+    heading = before[-1] - before[0]
+    if np.linalg.norm(heading) < 2.0:
+        return None
+    normal = np.asarray(RAIL_INWARD[rail], float)
+    along = normal[0] * heading[1] - normal[1] * heading[0]
+    if along == 0:
+        return None
+    return float(-np.sign(along) * spin)
+
+
 def second_cushion_drift(shot, positions, events):
     """Did the second cushion carry on away from the player, or come back?
 
@@ -658,7 +735,9 @@ def route_of(verdict, shot):
     return classify(events, shot.start_positions, shot.cue_ball,
                     thickness=getattr(shot, "thickness", None),
                     turn_deg=getattr(shot, "turn_deg", None),
-                    away_mm=getattr(shot, "away_mm", None))
+                    away_mm=getattr(shot, "away_mm", None),
+                    struck_side=getattr(shot, "struck_side", None),
+                    english=getattr(shot, "english", None))
 
 
 def export_json(result, path):
@@ -683,6 +762,8 @@ def export_json(result, path):
                 "route": route_of(verdict, shot),
                 "turn_deg": getattr(shot, "turn_deg", None),
                 "away_mm": getattr(shot, "away_mm", None),
+                "struck_side": getattr(shot, "struck_side", None),
+                "english": getattr(shot, "english", None),
                 # Frames count from the start of the play: judge_shot reads the
                 # window, not the match, so subtracting the start again put
                 # every event tens of thousands of frames before the shot.

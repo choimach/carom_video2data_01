@@ -51,11 +51,20 @@ def test_long_rail_to_long_rail_is_crossing():
     assert classify(shot)["route"] == CROSSING
 
 
-def test_a_short_rail_first_is_the_front_turn():
-    # The player named two of these 앞돌리기; the rule before him said 뒤돌리기.
+def test_off_a_short_rail_the_side_on_the_ball_decides():
+    # The player's family rule: side on the same hand as the face struck is
+    # 앞돌리기, side against it is 빗겨치기.
     shot = events((10, "ball", "red"), (20, "cushion", "right"),
                   (30, "cushion", "top"), (40, "ball", "yellow"))
-    assert classify(shot, away_mm=20.0)["route"] == FRONT
+    struck_right, right_english = -40.0, 12.0
+    assert classify(shot, struck_side=struck_right, english=right_english)["route"] == FRONT
+    assert classify(shot, struck_side=struck_right, english=-12.0)["route"] == GLANCING
+
+
+def test_without_a_side_reading_that_pair_stays_unnamed():
+    shot = events((10, "ball", "red"), (20, "cushion", "right"),
+                  (30, "cushion", "top"), (40, "ball", "yellow"))
+    assert classify(shot, struck_side=-40.0)["route"] == UNKNOWN
 
 
 def test_a_long_rail_first_splits_on_where_the_second_cushion_went():
@@ -73,10 +82,7 @@ def test_the_same_rail_twice_around_a_short_one_is_a_return():
     assert classify(shot, away_mm=400.0)["route"] == RETURNING
 
 
-def test_a_thin_hit_is_a_glance_whatever_rail_came_first():
-    shot = events((10, "ball", "red"), (20, "cushion", "top"),
-                  (30, "cushion", "left"), (40, "ball", "yellow"))
-    assert classify(shot, thickness=0.06, away_mm=-100.0)["route"] == GLANCING
+
 
 
 def test_that_split_needs_a_turn_angle_and_says_so():
@@ -91,7 +97,7 @@ def test_counted_and_guessed_verdicts_are_marked_apart():
     hook = classify(events((10, "cushion", "top"), (20, "ball", "red"),
                            (30, "ball", "yellow")))
     turn = classify(events((10, "ball", "red"), (20, "cushion", "right"),
-                           (30, "ball", "yellow")), away_mm=10.0)
+                           (30, "ball", "yellow")), struck_side=-40.0, english=12.0)
     assert hook["basis"] == "counted"
     assert turn["basis"] == "geometry"
 
