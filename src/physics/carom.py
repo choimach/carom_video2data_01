@@ -125,18 +125,26 @@ def _bounced_frames(distance, tolerance_mm, search_mm=REBOUND_SEARCH_MM,
     one that passes by at an angle crosses well short of it and is left alone.
     """
     found = []
+    seen = np.flatnonzero(np.isfinite(distance))
     for index in range(leg, len(distance) - leg):
         here = distance[index]
         if not np.isfinite(here) or here > search_mm or here <= tolerance_mm:
             continue
-        before = distance[index - leg:index + 1]
-        after = distance[index:index + leg + 1]
-        if not (np.isfinite(before).all() and np.isfinite(after).all()):
+        # Frames where the ball was actually seen, either side of this one. A
+        # ball against a cushion is the hardest thing on the table to see - it
+        # is blurred, and the rail is over part of it - so insisting on an
+        # unbroken run of frames threw away the bounces most worth having.
+        # Taking the samples that exist and fitting on their own frame numbers
+        # keeps them.
+        left = seen[(seen >= index - leg * 3) & (seen <= index)]
+        right = seen[(seen >= index) & (seen <= index + leg * 3)]
+        if len(left) < 3 or len(right) < 3:
             continue
+        before, after = distance[left], distance[right]
         if not (before[0] > here and after[-1] > here):
             continue
-        falling = np.polyfit(np.arange(-leg, 1), before, 1)
-        rising = np.polyfit(np.arange(0, leg + 1), after, 1)
+        falling = np.polyfit(left - index, before, 1)
+        rising = np.polyfit(right - index, after, 1)
         if falling[0] >= 0 or rising[0] <= 0:
             continue
         # Where the two lines meet, in frames either side of the minimum.
