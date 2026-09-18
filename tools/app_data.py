@@ -29,6 +29,31 @@ from route_model import OUTCOME_IN_NAME, player_features  # noqa: E402
 POINTS = 32
 
 
+def opening(path):
+    """The direction and speed the cue ball actually left at, from the path.
+
+    This is the seed the assistant searches around: the professional's own
+    aim on a layout like the one in front of the player. The path is already
+    turned into the canonical quarter, so the angle is in that frame too and
+    has to be turned back with the layout.
+
+    Measured over the first few frames, where the ball is going fastest and
+    straightest, and skipping the very first - a ball just struck is the
+    hardest thing on the table for the detector to place.
+    """
+    seen = [p for p in path if np.isfinite(p).all()]
+    if len(seen) < 6:
+        return None, None
+    start, end = np.asarray(seen[1], float), np.asarray(seen[5], float)
+    step = end - start
+    travelled = float(np.linalg.norm(step))
+    if travelled < 5.0:
+        return None, None
+    degrees = float(np.degrees(np.arctan2(step[1], step[0])) % 360.0)
+    # Four frames at 60 fps, and the packer keeps every frame of the original.
+    return round(degrees, 1), round(travelled * 15.0)
+
+
 def thin(path):
     seen = [p for p in path if np.isfinite(p).all()]
     if len(seen) <= POINTS:
@@ -94,6 +119,8 @@ def main(argv=None):
             "balls": [[int(round(v)) for v in row["layout_mm"][c]]
                       for c in BALLS if c != row["cue"]],
             "path": thin(turned),
+            "aim": opening(turned)[0],
+            "speed": opening(turned)[1],
             "match": row["match"].replace("soop_", ""),
         })
 
