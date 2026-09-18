@@ -122,9 +122,13 @@ def test_aiming_finds_the_line_that_scores():
     from src.physics.aiming import probability, sweep
 
     layout = {"white": (700.0, 400.0), "yellow": (1900.0, 1000.0), "red": (2400.0, 500.0)}
-    angles, scored = sweep(layout, "white", speeds=(2600.0,), angle_step_deg=2.0)
-    outcomes = scored[2600.0]
-    assert len(angles) == 180
+    # A quarter of a degree, because that is the width of the thing being looked
+    # for. At two degrees this swept straight over every scoring line on the
+    # layout and reported that none existed - which is what the sweep did to the
+    # assistant's first candidates once the cloth stopped being slippery.
+    angles, scored = sweep(layout, "white", speeds=(3000.0,), angle_step_deg=0.25)
+    outcomes = scored[3000.0]
+    assert len(angles) == 1440
     # Most directions do not score - which is the point of looking for the ones
     # that do. A map where everything scores is measuring nothing.
     assert 0 < outcomes.sum() < len(outcomes) * 0.2

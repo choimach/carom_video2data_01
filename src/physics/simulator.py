@@ -61,26 +61,25 @@ BALL_RESTITUTION = 0.944        # 322 contacts, run back to the moment of contac
 # after a contact, against 85 mm for a ball that reached the rail untouched.
 CUE_CARRY = 0.089
 
-# Deceleration in mm/s^2 against speed in mm/s. A ball sheds speed four times
-# faster at two metres a second than at a quarter of one, because it is still
-# sliding rather than rolling; the curve is the measurement, not a model of it.
+# Deceleration in mm/s^2 against speed in mm/s, fitted to how far a ball
+# actually runs rather than differenced off the tracks.
 #
-# Twice now this has looked wrong and twice the measurement was at fault. A
-# first object ball running 5,900 mm in the simulator against 3,613 mm on video
-# is not the cloth: the simulated one was struck full and the real ones average
-# about a third of a ball, which is most of that gap. Fitting the curve to how
-# far a ball runs made it two and a half times steeper and cost the table its
-# three-cushion shots - a cue ball at the pace professionals actually use could
-# no longer reach the second ball at all.
+# Differencing consecutive frames measures centroid noise, not deceleration: it
+# read 6,584 mm/s^2 at walking pace, which would stop a ball in a thirtieth of
+# a second. Measuring over longer windows gave a curve four times shallower
+# than the table - a cue ball opening at the 2699 mm/s professionals average
+# ran 14,150 mm against the 5,680 mm the video records.
 #
-# What holds it in place: over 1596 plays the cue ball leaves at 2699 mm/s and
-# travels 5680 mm, and this curve gives 5577 for the same opening. Any future
-# change has to keep that, and has to be checked against a distance the video
-# actually shows - 381 of 426 tracked balls are still rolling when the recording
-# of their play ends, so total travel read off a track is mostly a measure of
-# where the window closed.
-DECAY_SPEED = np.array([0.0, 350.0, 700.0, 1200.0, 1950.0, 3000.0, 12000.0])
-DECAY_RATE = np.array([46.0, 46.0, 51.0, 74.0, 216.0, 439.0, 439.0])
+# So the shape is the measurement and the scale is fitted to distance: 1.8x at
+# walking pace rising to 6x at speed, which lands within 7% across four bands of
+# object-ball launch speed and gives 5,329 mm for that median cue opening.
+#
+# It cost the sweep its coarse step. Scoring windows are a quarter of a degree
+# wide, and on the old slippery cloth a ball that missed still wandered into
+# something, so a 2-degree sweep found lines. Now it has to look properly:
+# 2 degrees finds 3 lines on a layout where a quarter of a degree finds 36.
+DECAY_SPEED = np.array([0.0, 300.0, 600.0, 1000.0, 1600.0, 2400.0, 12000.0])
+DECAY_RATE = np.array([104.0, 113.0, 163.0, 284.0, 594.0, 1968.0, 2634.0])
 
 REST_SPEED_MM_S = 12.0          # below this a ball has stopped
 RAILS = ("left", "right", "top", "bottom")
