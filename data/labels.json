@@ -1,0 +1,185 @@
+{
+ "note": "선수가 영상을 보고 직접 붙인 이름. 규칙이 아니라 채점표다 - 어떤 규칙이든 이것에 대고 점수를 매긴다.",
+ "labels": [
+  {
+   "match": "soop_206343559_jaspers_vs_tran",
+   "inning": 32,
+   "shot": 7,
+   "route": "되돌아오기"
+  },
+  {
+   "match": "soop_201850487_POWC2026",
+   "inning": 37,
+   "shot": 12,
+   "route": "앞돌리기"
+  },
+  {
+   "match": "soop_198695567_AKR2026",
+   "inning": 7,
+   "shot": 1,
+   "route": "앞돌리기"
+  },
+  {
+   "match": "soop_201829811_POWC2026",
+   "inning": 11,
+   "shot": 1,
+   "route": "옆돌리기"
+  },
+  {
+   "match": "soop_198695567_AKR2026",
+   "inning": 4,
+   "shot": 1,
+   "route": "뒤돌리기"
+  },
+  {
+   "match": "soop_198597927_AKR2026",
+   "inning": 36,
+   "shot": 5,
+   "route": "옆돌리기"
+  },
+  {
+   "match": "soop_206415235_LIWC2026",
+   "inning": 27,
+   "shot": 7,
+   "route": "빗겨치기"
+  },
+  {
+   "match": "soop_206393055_LIWC2026",
+   "inning": 13,
+   "shot": 1,
+   "route": "되돌아오기"
+  },
+  {
+   "match": "soop_201867813_POWC2026",
+   "inning": 20,
+   "shot": 1,
+   "route": "뒤돌리기"
+  },
+  {
+   "match": "soop_201769905_POWC2026",
+   "inning": 41,
+   "shot": 1,
+   "route": "대회전"
+  },
+  {
+   "match": "soop_196571405_HCMC2026",
+   "inning": 25,
+   "shot": 4,
+   "route": "뒤돌리기"
+  },
+  {
+   "match": "soop_206333263_zanetti_vs_bao",
+   "inning": 27,
+   "shot": 1,
+   "route": "옆돌리기"
+  },
+  {
+   "match": "soop_201867813_POWC2026",
+   "inning": 27,
+   "shot": 2,
+   "route": "뒤돌리기"
+  },
+  {
+   "match": "soop_198670847_AKR2026",
+   "inning": 27,
+   "shot": 1,
+   "route": "옆돌리기"
+  },
+  {
+   "match": "soop_196625005_HCMC2026",
+   "inning": 39,
+   "shot": 1,
+   "route": "옆돌리기"
+  },
+  {
+   "match": "soop_201850487_POWC2026",
+   "inning": 10,
+   "shot": 6,
+   "route": "옆돌리기"
+  },
+  {
+   "match": "soop_198597927_AKR2026",
+   "inning": 24,
+   "shot": 1,
+   "route": "빗겨치기"
+  },
+  {
+   "match": "soop_206333263_zanetti_vs_bao",
+   "inning": 19,
+   "shot": 10,
+   "route": "빗겨치기"
+  },
+  {
+   "match": "soop_198670847_AKR2026",
+   "inning": 7,
+   "shot": 1,
+   "route": "되돌아오기"
+  },
+  {
+   "match": "soop_198695567_AKR2026",
+   "inning": 4,
+   "shot": 5,
+   "route": "뒤돌리기"
+  },
+  {
+   "match": "soop_206393055_LIWC2026",
+   "inning": 23,
+   "shot": 1,
+   "route": "걸어치기"
+  },
+  {
+   "match": "soop_198610731_AKR2026",
+   "inning": 37,
+   "shot": 3,
+   "route": "앞돌리기"
+  },
+  {
+   "match": "soop_196571405_HCMC2026",
+   "inning": 9,
+   "shot": 8,
+   "route": "옆돌리기"
+  },
+  {
+   "match": "soop_196634791_HCMC2026",
+   "inning": 8,
+   "shot": 1,
+   "route": "앞돌리기"
+  },
+  {
+   "match": "soop_206333263_zanetti_vs_bao",
+   "inning": 24,
+   "shot": 6,
+   "route": "빗겨치기"
+  },
+  {
+   "match": "soop_206415235_LIWC2026",
+   "inning": 1,
+   "shot": 4,
+   "route": "빗겨치기"
+  },
+  {
+   "match": "soop_201850487_POWC2026",
+   "inning": 8,
+   "shot": 2,
+   "route": "앞돌리기"
+  },
+  {
+   "match": "soop_206393055_LIWC2026",
+   "inning": 1,
+   "shot": 1,
+   "route": "빗겨치기"
+  },
+  {
+   "match": "soop_201829811_POWC2026",
+   "inning": 29,
+   "shot": 4,
+   "route": "앞돌리기"
+  },
+  {
+   "match": "soop_196571405_HCMC2026",
+   "inning": 38,
+   "shot": 1,
+   "route": "빗겨치기"
+  }
+ ]
+}
