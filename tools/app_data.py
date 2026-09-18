@@ -71,8 +71,23 @@ def main(argv=None):
         flip_y = bool(abs(original[0][0] - raw[0]) > 1.0) if len(original) else False
         flip_x = bool(abs(original[0][1] - raw[1]) > 1.0) if len(original) else False
         turned = [transform(p, flip_x, flip_y) for p in original if np.isfinite(p).all()]
+        # Which object ball was struck first, as near or far from the cue -
+        # the colours are arbitrary but "the one nearer him" survives every
+        # mirror and every swap of who is playing which ball.
+        struck = row.get("first_object_ball")
+        near_first = None
+        if struck and struck != row["cue"] and struck in row["layout_mm"]:
+            cue_at = np.array(row["layout_mm"][row["cue"]], dtype=float)
+            gaps = {c: float(np.linalg.norm(np.array(xy, dtype=float) - cue_at))
+                    for c, xy in row["layout_mm"].items() if c != row["cue"]}
+            near_first = gaps[struck] == min(gaps.values())
+        # Negative offset is the object ball's right face - the same
+        # convention the page uses when it names a candidate.
+        struck = row.get("struck_side")
         plays.append({
             "f": [round(float(v), 3) for v in point],
+            "near": near_first,
+            "face": None if struck is None else ("left" if struck > 0 else "right"),
             "route": row["route"],
             "scored": row["scored"],
             "cue": [int(round(v)) for v in row["layout_mm"][row["cue"]]],

@@ -64,6 +64,21 @@ CUE_CARRY = 0.089
 # Deceleration in mm/s^2 against speed in mm/s. A ball sheds speed four times
 # faster at two metres a second than at a quarter of one, because it is still
 # sliding rather than rolling; the curve is the measurement, not a model of it.
+#
+# Twice now this has looked wrong and twice the measurement was at fault. A
+# first object ball running 5,900 mm in the simulator against 3,613 mm on video
+# is not the cloth: the simulated one was struck full and the real ones average
+# about a third of a ball, which is most of that gap. Fitting the curve to how
+# far a ball runs made it two and a half times steeper and cost the table its
+# three-cushion shots - a cue ball at the pace professionals actually use could
+# no longer reach the second ball at all.
+#
+# What holds it in place: over 1596 plays the cue ball leaves at 2699 mm/s and
+# travels 5680 mm, and this curve gives 5577 for the same opening. Any future
+# change has to keep that, and has to be checked against a distance the video
+# actually shows - 381 of 426 tracked balls are still rolling when the recording
+# of their play ends, so total travel read off a track is mostly a measure of
+# where the window closed.
 DECAY_SPEED = np.array([0.0, 350.0, 700.0, 1200.0, 1950.0, 3000.0, 12000.0])
 DECAY_RATE = np.array([46.0, 46.0, 51.0, 74.0, 216.0, 439.0, 439.0])
 

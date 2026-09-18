@@ -116,6 +116,9 @@ def build():
             continue
         layout, turned, flips_side = canonical(play["layout_mm"], play["cue_ball"])
         english = play.get("english")
+        # Which face of the first object ball was struck. Like side spin, this
+        # is handedness: one mirror swaps left for right, two put it back.
+        struck = play.get("struck_side")
         rows.append({
             "match": match,
             "split": "test" if match in TEST_MATCHES else "train",
@@ -130,6 +133,7 @@ def build():
             "thickness": play.get("thickness"),
             "speed_ms": play.get("cue_speed_ms"),
             "english": None if english is None or not flips_side else -english,
+            "struck_side": None if struck is None else (-struck if flips_side else struck),
         })
     return rows, dropped
 
