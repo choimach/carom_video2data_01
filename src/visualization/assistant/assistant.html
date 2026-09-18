@@ -87,8 +87,10 @@
   .plates { display: flex; flex-wrap: wrap; gap: 14px; margin: 14px 0 4px; }
   .plate {
     background: var(--sunk); border: 1px solid var(--line); border-radius: 10px;
-    padding: 10px 12px 8px; display: grid; gap: 6px; flex: 1 1 210px; min-width: 0;
+    padding: 10px 14px 9px; display: grid; gap: 7px; flex: 1 1 260px;
+    max-width: 380px; min-width: 0;
   }
+  .plate .said b { color: var(--ink); font-weight: 500; }
   .plate svg { width: 100%; height: auto; display: block; }
   .plate .cap {
     font: 700 11px/1 "Gothic A1", sans-serif; letter-spacing: .06em; color: var(--faint);
@@ -281,7 +283,13 @@
   const STRENGTHS = [3.5, 4.5, 5.5, 7.0];
   const SPEEDS = STRENGTHS.map((s) => Math.round(SIM.speedFor(s)));
   // 당점: 좌우는 팁, 위아래는 거친 탐색에서 0으로 두고 정밀 탐색에서만 본다.
-  const TIPS = [-3, -1.5, 0, 1.5, 3], TIPS_VERTICAL = [0, 2, -2];
+  const TIPS = [-3, -1.5, 0, 1.5, 3];
+  // 상하 당점은 처음부터 함께 훑는다. 선수의 말: "이 플레이 같은 경우 대개
+  // 두께는 1/2~2/3에서 잡고 당점은 대개 2팁 상단으로 하는데 0~3시 방향으로
+  // 상황에 따라 정해." 예전에는 후보가 8개 미만일 때만 상하를 봤는데, 그러면
+  // 줄이 넉넉히 나오는 배치일수록 정작 그가 실제로 치는 당점을 한 번도
+  // 시도하지 않은 채로 답을 냈다.
+  const TIPS_VERTICAL = [0, 2], TIPS_VERTICAL_EXTRA = [-2, 3];
   const COARSE = 2, FINE = 0.25, CHUNK = 120;
   const pause = () => new Promise((go) => setTimeout(go, 0));
 
@@ -337,7 +345,9 @@
   // 대신 "어느 공을, 어느 면을, 얼마나 두껍게" 맞힐지로 훑는다. 그러면 모든
   // 시도가 반드시 1적구에 맞고, 선수가 실제로 고르는 것과 같은 축이 된다.
   // 겨냥선에서 벗어난 각도는 접촉에 필요한 어긋남에서 바로 나온다.
-  const THICKNESS_STEPS = 26, SEEDS = 12, SEED_SPAN = 8;
+  // 두께 칸을 26에서 18로 줄이고, 그 예산으로 상하 당점을 본다. 거친 훑기는
+  // 될 만한 자리를 찾는 일이고 해상도는 뒤의 0.25도 훑기가 되찾아 준다.
+  const THICKNESS_STEPS = 18, SEEDS = 12, SEED_SPAN = 8;
 
   function contactJobs() {
     const jobs = [];
@@ -355,7 +365,9 @@
         for (const hand of (i === 0 ? [0] : [1, -1])) {
           const deg = ((straight + hand * swing) % 360 + 360) % 360;
           for (const speed of SPEEDS) {
-            for (const side of TIPS) jobs.push([deg, speed, side]);
+            for (const side of TIPS) {
+              for (const up of TIPS_VERTICAL) jobs.push([deg, speed, side, up]);
+            }
           }
         }
       }
@@ -397,31 +409,32 @@
     const contact = contactJobs();
     const promising = [];
     for (let i = 0; i < contact.length; i++) {
-      const [deg, speed, side] = contact[i];
-      if (tryAngle(deg, speed, side, hits, counters)) promising.push(contact[i]);
+      const [deg, speed, side, up] = contact[i];
+      if (tryAngle(deg, speed, side, hits, counters, up)) promising.push(contact[i]);
       if (i % CHUNK === CHUNK - 1) { onProgress(0.45 * i / contact.length); await pause(); }
     }
     // 2) 그중 될 뻔한 자리 둘레만 0.25도로 다시 — 득점 창이 그만큼 좁다.
-    const seen = new Set(contact.map(([d, s, x]) => `${d}:${s}:${x}`));
+    const key4 = ([d, s, x, u]) => `${d}:${s}:${x}:${u || 0}`;
+    const seen = new Set(contact.map(key4));
     const around = [];
-    for (const [deg, speed, side] of promising) {
+    for (const [deg, speed, side, up] of promising) {
       for (let d = -1.5; d <= 1.5; d += FINE) {
         const at = Math.round((((deg + d) % 360 + 360) % 360) / FINE) * FINE;
-        const key = `${at}:${speed}:${side}`;
-        if (seen.has(key)) continue;
-        seen.add(key);
-        around.push([at, speed, side]);
+        const job = [at, speed, side, up];
+        if (seen.has(key4(job))) continue;
+        seen.add(key4(job));
+        around.push(job);
       }
     }
     for (let i = 0; i < around.length; i++) {
-      tryAngle(around[i][0], around[i][1], around[i][2], hits, counters);
+      tryAngle(around[i][0], around[i][1], around[i][2], hits, counters, around[i][3]);
       if (i % CHUNK === CHUNK - 1) { onProgress(0.45 + 0.25 * i / around.length); await pause(); }
     }
     // 밀어치기와 끌어치기는 그 다음이다. 중단 당점으로 이미 여러 줄이 나왔으면
     // 굳이 세 배로 돌리지 않는다 — 기다리는 시간이 그만큼 늘어난다.
     if (hits.length < 8) {
       for (let i = 0; i < around.length; i++) {
-        for (const vertical of TIPS_VERTICAL.slice(1)) {
+        for (const vertical of TIPS_VERTICAL_EXTRA) {
           tryAngle(around[i][0], around[i][1], around[i][2], hits, counters, vertical);
         }
         if (i % CHUNK === CHUNK - 1) { onProgress(0.70 + 0.10 * i / around.length); await pause(); }
@@ -430,7 +443,7 @@
     // 3) 후보가 적을 때만, 프로가 실제로 친 방향 둘레를 더 본다. 두께 훑기가
     // 대개 충분하므로 이건 대비책이고, 매번 돌리면 그만큼 느려진다.
     const seeded = hits.length >= 5 ? []
-      : seedJobs(near || []).filter(([d, s, x]) => !seen.has(`${d}:${s}:${x}`));
+      : seedJobs(near || []).filter(([d, s, x]) => !seen.has(`${d}:${s}:${x}:0`));
     for (let i = 0; i < seeded.length; i++) {
       tryAngle(seeded[i][0], seeded[i][1], seeded[i][2], hits, counters);
       if (i % CHUNK === CHUNK - 1) { onProgress(0.8 + 0.2 * i / seeded.length); await pause(); }
@@ -626,61 +639,51 @@
   }
 
 
-  // 선수가 실제로 보는 두 가지: 수구가 1적구를 얼마나 덮는가, 큐가 수구의 어디를
-  // 때리는가. 도(度)나 라디안이 아니라 이 두 그림이 큐를 겨눌 때 머릿속에 있는
-  // 것이므로, 숫자와 나란히 그려 둔다.
+  // 한 장이면 된다. 큐를 잡을 때 보는 것은 "수구를 어디 때려서 1적구의 어디에
+  // 얼마나 두껍게 붙이느냐" 하나이고, 두께와 당점은 그 한 장면의 두 부분이다.
+  // 그래서 수구를 1적구 위에 겹쳐 그린 다음, 그 수구 위에 팁 동심원을 얹는다.
   let plateNumber = 0;
 
-  function thicknessPlate(row) {
+  function aimPlate(row) {
+    const side = row.hit.side || 0, vertical = row.hit.vertical || 0;
+    const R = SIM.RADIUS, T = SIM.TIP_MM, id = `ov${++plateNumber}`;
     // 겨냥선과 적구 중심 사이의 수직 거리. 두께 1이면 0(정면), 0이면 지름.
     const gap = SIM.DIAMETER * (1 - Math.max(0, Math.min(1, row.hit.thickness)));
     // 왼쪽 면을 맞히면 수구가 적구의 왼쪽으로 치우쳐 지나간다.
     const x = row.hit.face === "left" ? -gap : gap;
-    const R = SIM.RADIUS, id = `ov${++plateNumber}`;
     const cueColour = cue === "white" ? "var(--ball-white)" : "var(--ball-yellow)";
     const firstColour = row.first === "red" ? "var(--ball-red)"
       : row.first === "white" ? "var(--ball-white)" : "var(--ball-yellow)";
+    const rings = [1, 2, 3].map((n) =>
+      `<circle cx="${x}" cy="0" r="${n * T}" fill="none" stroke="rgba(0,0,0,.4)"
+               stroke-width=".6" stroke-dasharray="2.5 2"/>`).join("");
     return `<div class="plate">
-      <span class="cap">두께 — 겹치는 만큼</span>
-      <svg viewBox="-100 -46 200 92" role="img"
-           aria-label="수구가 1적구를 ${asThickness(row.hit.thickness)} 덮습니다">
+      <span class="cap">겨냥 — 두께와 당점</span>
+      <svg viewBox="-104 -52 208 104" role="img"
+           aria-label="${NAMES[row.first]}을 ${asThickness(row.hit.thickness)} 두께로,
+                       당점 ${asTip(side, vertical)}">
         <defs><clipPath id="${id}"><circle cx="${x}" cy="0" r="${R}"/></clipPath></defs>
         <circle cx="0" cy="0" r="${R}" fill="${firstColour}"
                 stroke="rgba(0,0,0,.45)" stroke-width="1.2"/>
         <circle cx="0" cy="0" r="${R}" clip-path="url(#${id})"
-                fill="var(--cloth)" opacity=".55"/>
-        <circle cx="${x}" cy="0" r="${R}" fill="${cueColour}" fill-opacity=".35"
-                stroke="rgba(0,0,0,.55)" stroke-width="1.2" stroke-dasharray="4 3"/>
-        <line x1="0" y1="-42" x2="0" y2="42" stroke="var(--faint)" stroke-width=".8"/>
-        <line x1="${x}" y1="-42" x2="${x}" y2="42" stroke="var(--faint)" stroke-width=".8"/>
-        ${Math.abs(x) > 2 ? `<line x1="0" y1="38" x2="${x}" y2="38"
-              stroke="var(--ink)" stroke-width="1.4"/>` : ""}
-      </svg>
-      <span class="said">${asThickness(row.hit.thickness)} ·
-        ${NAMES[row.first]} ${row.hit.face === "left" ? "왼쪽" : "오른쪽"}면 ·
-        빗나감 ${Math.round(gap)} mm</span>
-    </div>`;
-  }
-
-  function tipPlate(row) {
-    const side = row.hit.side || 0, vertical = row.hit.vertical || 0;
-    const R = SIM.RADIUS, T = SIM.TIP_MM;
-    const cueColour = cue === "white" ? "var(--ball-white)" : "var(--ball-yellow)";
-    const rings = [1, 2, 3].map((n) =>
-      `<circle cx="0" cy="0" r="${n * T}" fill="none" stroke="var(--faint)"
-               stroke-width=".7" stroke-dasharray="3 2.5"/>`).join("");
-    return `<div class="plate">
-      <span class="cap">당점 — 큐가 닿는 자리</span>
-      <svg viewBox="-40 -40 80 80" role="img" aria-label="당점 ${asTip(side, vertical)}">
-        <circle cx="0" cy="0" r="${R}" fill="${cueColour}"
-                stroke="rgba(0,0,0,.45)" stroke-width="1.2"/>
+                fill="var(--cloth)" opacity=".5"/>
+        <circle cx="${x}" cy="0" r="${R}" fill="${cueColour}" fill-opacity=".55"
+                stroke="rgba(0,0,0,.6)" stroke-width="1.2"/>
         ${rings}
-        <line x1="${-R}" y1="0" x2="${R}" y2="0" stroke="var(--faint)" stroke-width=".7"/>
-        <line x1="0" y1="${-R}" x2="0" y2="${R}" stroke="var(--faint)" stroke-width=".7"/>
-        <circle cx="${side * T}" cy="${-vertical * T}" r="6"
-                fill="var(--cloth)" stroke="var(--surface)" stroke-width="1"/>
+        <line x1="${x - R}" y1="0" x2="${x + R}" y2="0"
+              stroke="rgba(0,0,0,.35)" stroke-width=".6"/>
+        <line x1="${x}" y1="${-R}" x2="${x}" y2="${R}"
+              stroke="rgba(0,0,0,.35)" stroke-width=".6"/>
+        <circle cx="${x + side * T}" cy="${-vertical * T}" r="5.5"
+                fill="var(--cloth)" stroke="#fff" stroke-width="1.1"/>
+        ${Math.abs(x) > 2 ? `<line x1="0" y1="44" x2="${x}" y2="44"
+              stroke="var(--ink)" stroke-width="1.4"/>
+          <line x1="0" y1="40" x2="0" y2="48" stroke="var(--ink)" stroke-width="1"/>
+          <line x1="${x}" y1="40" x2="${x}" y2="48" stroke="var(--ink)" stroke-width="1"/>` : ""}
       </svg>
-      <span class="said">${asTip(side, vertical)} · 1팁 ${T} mm · 큐 끝 12 mm</span>
+      <span class="said">두께 <b>${asThickness(row.hit.thickness)}</b>
+        (${NAMES[row.first]} ${row.hit.face === "left" ? "왼쪽" : "오른쪽"}면,
+        빗나감 ${Math.round(gap)} mm) · 당점 <b>${asTip(side, vertical)}</b></span>
     </div>`;
   }
 
@@ -775,7 +778,7 @@
       const strength = SIM.strengthOf(row.hit.speed).toFixed(1);
       const side = asTip(row.hit.side, row.hit.vertical || 0);
       detail.innerHTML = `<b>${label(row)}</b> — ${NOTES[row.route] || ""}
-        <div class="plates">${thicknessPlate(row)}${tipPlate(row)}</div>
+        <div class="plates">${aimPlate(row)}</div>
         그려진 선은 <b>이 배치에서</b> 시뮬레이터가 찾은 득점 궤적입니다.
         <b>두께 ${asThickness(row.hit.thickness)}</b>로 ${NAMES[row.first]}의
         ${row.hit.face === "left" ? "왼쪽" : "오른쪽"} 면을, <b>강도 ${strength}</b>
