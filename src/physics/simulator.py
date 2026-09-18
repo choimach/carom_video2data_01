@@ -17,6 +17,7 @@ is enough to reproduce a shot's path and not enough to reproduce a masse.
 
 import numpy as np
 
+from src.physics import spin
 from src.physics.table_calibration import TABLE_LENGTH_MM, TABLE_WIDTH_MM
 
 BALL_DIAMETER_MM = 61.5
@@ -221,6 +222,92 @@ def _clearance(position, colours):
             gap = position[other] - position[colour]
             room = min(room, float(np.hypot(*gap)) - BALL_DIAMETER_MM)
     return max(0.0, room)
+
+
+def simulate_with_spin(layout, cue, velocity, tips_side=0.0, tips_vertical=0.0,
+                       fps=60.0, max_seconds=20.0, substep_mm=4.0):
+    """The same stroke, played by balls that carry spin.
+
+    `tips_side` and `tips_vertical` are 당점 in the units a player is given -
+    tips from centre, three being the edge before a miscue. Everything else
+    matches `simulate`, so the two can be compared shot for shot.
+    """
+    colours = list(layout)
+    heading = np.asarray(velocity, dtype=float)
+    speed = float(np.hypot(*heading))
+    balls = {c: spin.Ball(layout[c]) for c in colours}
+    balls[cue] = spin.struck(layout[cue], heading, speed,
+                             tips_side=tips_side, tips_vertical=tips_vertical)
+
+    frame_gap = 1.0 / fps
+    paths = {c: [balls[c].position.copy()] for c in colours}
+    events = []
+    clock, next_frame = 0.0, frame_gap
+
+    while clock < max_seconds:
+        fastest = max(ball.speed for ball in balls.values())
+        if fastest < REST_SPEED_MM_S:
+            break
+        positions = {c: balls[c].position for c in colours}
+        clearance = _clearance(positions, colours)
+        step = min(max(clearance * 0.5, substep_mm) / fastest, frame_gap)
+
+        for ball in balls.values():
+            spin.roll_on(ball, step)
+
+        frame_index = int(round(clock / frame_gap))
+        for colour, ball in balls.items():
+            rail = _rail_reached(ball.position)
+            if rail is None:
+                continue
+            ball.position = _inside(ball.position)
+            spin.bounce(ball, rail)
+            if colour == cue:
+                events.append((frame_index, "cushion", rail))
+
+        for i, first in enumerate(colours):
+            for second in colours[i + 1:]:
+                gap = balls[second].position - balls[first].position
+                distance = float(np.hypot(*gap))
+                if distance >= BALL_DIAMETER_MM or distance == 0:
+                    continue
+                push = gap / distance * ((BALL_DIAMETER_MM - distance) / 2.0)
+                balls[first].position = balls[first].position - push
+                balls[second].position = balls[second].position + push
+                if float(np.dot(balls[first].velocity - balls[second].velocity, gap)) > 0:
+                    spin.collide(balls[first], balls[second])
+                else:
+                    spin.collide(balls[second], balls[first])
+                if cue in (first, second):
+                    events.append((frame_index, "ball", second if first == cue else first))
+
+        clock += step
+        if clock >= next_frame:
+            for colour in colours:
+                paths[colour].append(balls[colour].position.copy())
+            next_frame += frame_gap
+
+    settled = max(ball.speed for ball in balls.values()) < REST_SPEED_MM_S
+    return Shot({c: np.array(p) for c, p in paths.items()}, events, fps, settled)
+
+
+def _rail_reached(position, length=TABLE_LENGTH_MM, width=TABLE_WIDTH_MM):
+    if position[0] < BALL_RADIUS_MM:
+        return "left"
+    if position[0] > length - BALL_RADIUS_MM:
+        return "right"
+    if position[1] < BALL_RADIUS_MM:
+        return "top"
+    if position[1] > width - BALL_RADIUS_MM:
+        return "bottom"
+    return None
+
+
+def _inside(position, length=TABLE_LENGTH_MM, width=TABLE_WIDTH_MM):
+    return np.array([
+        min(max(position[0], BALL_RADIUS_MM), length - BALL_RADIUS_MM),
+        min(max(position[1], BALL_RADIUS_MM), width - BALL_RADIUS_MM),
+    ])
 
 
 def simulate(layout, cue, velocity, table=None, fps=60.0, max_seconds=20.0,

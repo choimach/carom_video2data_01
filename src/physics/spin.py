@@ -33,8 +33,11 @@ GRAVITY_MM_S2 = 9810.0
 SLIDING_FRICTION = 0.20
 ROLLING_FRICTION = 0.0106
 # Spin about the vertical axis dies on its own, slowly: it has only the contact
-# patch to work against.
-SPIN_FRICTION = 0.022
+# patch to work against. Slowly enough that over the first second - as far as
+# the paths here are compared - the value makes no difference at all: 0.01,
+# 0.022 and 0.04 give the same answer to the millimetre. It is left at the low
+# end, and whatever settles it will have to be a shot measured further out.
+SPIN_FRICTION = 0.01
 
 # A cue tip is 12 mm across and the ball 61.5, so the furthest a player can
 # strike from centre before miscuing is about half the radius. Three tips is
@@ -141,7 +144,10 @@ def tips_of(ball):
 # what spin adds is put on top, because the measured curve already contains the
 # widening a rolling ball gets and no model of side will produce that.
 RAIL_FRICTION = 0.18
-RAIL_KEEPS_SIDE = 0.75      # how much side survives the compression
+# How much side survives the compression. Swept against 20 tracked plays, with
+# the tip position fitted per play: 0.55 lands the cue ball 93 mm from where the
+# camera saw it a second in, against 105 mm at 0.75.
+RAIL_KEEPS_SIDE = 0.55
 # A cushion meets the ball above its equator, so it leaves mostly rolling
 # rather than sliding. How much slide is left decides how far the ball then
 # goes, and it is the one number here fitted rather than measured: at 0.3 a cue
