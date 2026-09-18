@@ -233,13 +233,51 @@
       for (let i = 0; i < point.length; i++) { const d = play.f[i] - point[i]; sum += d * d; }
       return { play, gap: Math.sqrt(sum) };
     }).sort((a, b) => a.gap - b.gap).slice(0, K);
-    const weight = new Map(), rate = new Map();
+    const weight = new Map(), rate = new Map(), thick = new Map();
     for (const item of near) {
       const key = `${item.play.route}|${item.play.near}|${item.play.face}`;
       weight.set(key, (weight.get(key) || 0) + 1);
       rate.set(key, (rate.get(key) || 0) + (item.play.scored ? 1 : 0));
+      // 이웃이 실제로 쓴 두께. 절반쯤의 플레이에만 두께가 있으므로, 유형·면·
+      // 원근까지 나눈 키로만 모으면 키당 두세 개밖에 안 남아 대부분 버려진다.
+      // 그래서 좁은 키와 유형만의 키에 함께 넣어 두고, 쓸 때 좁은 쪽부터 본다.
+      if (item.play.thick != null) {
+        for (const at of [key, item.play.route]) {
+          if (!thick.has(at)) thick.set(at, []);
+          thick.get(at).push(item.play.thick);
+        }
+      }
     }
-    return { weight, rate, total: near.length, near };
+    return { weight, rate, thick, total: near.length, near };
+  }
+
+  // 마지막 기댈 곳: 전체 플레이에서 유형별로 모은 두께. 이웃이 두께를 가진
+  // 플레이를 거의 안 물어 왔을 때만 쓴다.
+  const ROUTE_THICKNESS = (() => {
+    const by = new Map();
+    for (const play of DATA.plays) {
+      if (play.thick == null) continue;
+      if (!by.has(play.route)) by.set(play.route, []);
+      by.get(play.route).push(play.thick);
+    }
+    const out = new Map();
+    for (const [route, list] of by) {
+      const band = thicknessBand(list);
+      if (band) out.set(route, Object.assign({}, band, { wide: true }));
+    }
+    return out;
+  })();
+
+  // 이웃들이 쓴 두께의 가운데와 퍼짐. 사분위로 재는 것은 한두 개가 멀리
+  // 있다고 해서 범위가 통째로 벌어지지 않게 하기 위함이다.
+  function thicknessBand(list) {
+    if (!list || list.length < 3) return null;
+    const sorted = [...list].sort((a, b) => a - b);
+    const at = (q) => sorted[Math.min(sorted.length - 1, Math.floor(q * sorted.length))];
+    const mid = at(0.5);
+    // 퍼짐이 0에 가까우면 한 점만 정답이 되어 버린다. 공 지름의 8%를 바닥으로.
+    const spread = Math.max((at(0.75) - at(0.25)) / 2, 0.08);
+    return { mid, spread, n: sorted.length, low: at(0.25), high: at(0.75) };
   }
 
   // 이 배치에서 실제로 득점하는 선을 찾는다. 경로 이름은 선생님 기준 그대로:
@@ -516,11 +554,25 @@
       // 이겼다. 성공률은 표본이 작아 0%와 100%가 흔하므로, 한 번의 성공과 한 번의
       // 실패를 미리 얹어 눌러 준다.
       const rate = (scored + 1) / (chosen + 2);
+      // 이 배치와 가장 가까운 프로들이 같은 유형을 칠 때 실제로 쓴 두께.
+      // 여기에 가까운 공략을 위로 올린다 - 내가 정한 밴드가 아니라 이웃이
+      // 정하는 것이라, 배치가 달라지면 기준도 함께 움직인다.
+      // 좁은 키 → 유형만 → 전체 플레이의 그 유형. 앞의 것이 설 만큼 모이면
+      // 그것을 쓴다: 이 배치에 가까운 이웃일수록 할 말이 많기 때문이다.
+      const band = thicknessBand(pros.thick.get(proKey))
+        || thicknessBand(pros.thick.get(hit.route))
+        || ROUTE_THICKNESS.get(hit.route) || null;
+      let agree = 1, off = null;
+      if (band) {
+        off = Math.abs(hit.thickness - band.mid);
+        agree = 0.4 + 0.6 * Math.exp(-Math.pow(off / band.spread, 2));
+      }
       routes.push({
         route: hit.route, key, hit, chosen, first, scored,
         proRate: chosen ? Math.round((scored / chosen) * 100) : null,
         // 프로가 고르고 또 넣은 공략이면서, 조준 여유가 넓고, 1적구를 덜 흔드는 것.
-        score: (chosen + 0.5) * rate * hit.room / (1 + hit.pushed / 4000),
+        band, thickOff: off,
+        score: (chosen + 0.5) * rate * agree * hit.room / (1 + hit.pushed / 4000),
       });
     }
     routes.sort((a, b) => b.score - a.score);
@@ -684,6 +736,10 @@
       <span class="said">두께 <b>${asThickness(row.hit.thickness)}</b>
         (${NAMES[row.first]} ${row.hit.face === "left" ? "왼쪽" : "오른쪽"}면,
         빗나감 ${Math.round(gap)} mm) · 당점 <b>${asTip(side, vertical)}</b></span>
+      ${row.band ? `<span class="said" style="color:var(--soft)">${row.band.wide
+        ? `전체 프로 ${row.band.n}명` : `가까운 프로 ${row.band.n}명`}은 ${row.route}를
+        <b>${asThickness(row.band.mid)}</b>로 쳤습니다
+        (${asThickness(row.band.low)}~${asThickness(row.band.high)})</span>` : ""}
     </div>`;
   }
 
@@ -742,7 +798,9 @@
       <span class="count">조준 여유 ${best.hit.room}° ·
         ${best.chosen ? `프로 ${best.chosen}／${result.total}명 · 그중 득점 ${best.proRate}%`
                       : '<span class="thin">프로가 고른 적 없음</span>'} ·
-        두께 ${asThickness(best.hit.thickness)} · 강도 ${SIM.strengthOf(best.hit.speed).toFixed(1)} ·
+        두께 ${asThickness(best.hit.thickness)}${best.band
+          ? `(프로 ${asThickness(best.band.mid)})` : ""} ·
+        강도 ${SIM.strengthOf(best.hit.speed).toFixed(1)} ·
         1적구 ${Math.round(best.hit.pushed)} mm 이동</span>`;
     card.querySelector(".name").textContent = label(best);
     card.onclick = () => { stopPlaying(); picked = best.key; render(); };
@@ -800,8 +858,9 @@
     }
     document.getElementById("footer").innerHTML =
       `${result.how ? `<b>${result.how}</b>에서 찾았습니다. ` : ""}${result.kisses ? `키스가 나는 선 <b>${result.kisses}개</b>는 빼고 보여드립니다. ` : ""}
-       순위는 프로 27경기 ${DATA.plays.length}개 플레이 중 <b>이 배치와 가장 가까운 ${K}개</b>가 정하고,
-       궤적은 <b>이 배치에서 직접 계산</b>합니다.`;
+       순위는 프로 ${DATA.plays.length}개 플레이 중 <b>이 배치와 가장 가까운 ${K}개</b>가 정합니다 —
+       몇 명이 그 유형을 골랐는지, 그중 몇 %가 득점했는지, 그리고 <b>그들이 실제로 쓴 두께</b>에
+       얼마나 가까운지. 궤적은 <b>이 배치에서 직접 계산</b>합니다.`;
   }
 
   function point(event, svg) {
@@ -961,7 +1020,9 @@
           + `프로 ${row.chosen}/${result.total}명${row.chosen ? ` (득점 ${row.proRate}%)` : ""} · `
           + `1적구 ${Math.round(row.hit.pushed)} mm · 출발 ${Math.round(row.hit.deg)}° · `
           + `강도 ${SIM.strengthOf(row.hit.speed).toFixed(1)} · `
-          + `두께 ${asThickness(row.hit.thickness)} · 당점 ${asTip(row.hit.side, row.hit.vertical || 0)} · `
+          + `두께 ${asThickness(row.hit.thickness)}`
+          + (row.band ? `(프로 ${row.band.n}명 ${asThickness(row.band.mid)})` : "")
+          + ` · 당점 ${asTip(row.hit.side, row.hit.vertical || 0)} · `
           + `쿠션 ${row.hit.judged.rails.length}개${row.key === picked ? "   ← 선택됨" : ""}`);
       });
     } else if (result) {

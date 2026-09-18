@@ -121,6 +121,12 @@ def main(argv=None):
             "path": thin(turned),
             "aim": opening(turned)[0],
             "speed": opening(turned)[1],
+            # 두께는 절반쯤의 플레이에만 있다 (적구가 떠나는 각을 읽을 만큼
+            # 깨끗하게 찍힌 경우). 없는 것은 없는 대로 두고, 순위에서는 있는
+            # 이웃만 세어 평균을 낸다 - 없는 것을 0으로 채우면 프로가 전부
+            # 얇게 친 것처럼 보인다.
+            "thick": (None if row.get("thickness") is None
+                      else round(float(row["thickness"]), 3)),
             "match": row["match"].replace("soop_", ""),
         })
 
