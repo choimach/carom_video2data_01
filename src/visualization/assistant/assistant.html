@@ -274,11 +274,12 @@
 
   // 탐색은 수천 번의 시뮬레이션이라 한 번에 돌리면 화면이 몇 초씩 멈춘다.
   // 조금씩 끊어 돌리고 사이사이 브라우저에 차례를 넘긴다.
-  // 세기는 프로가 실제로 친 분포에서 고른다: 1335개 플레이의 사분위가
-  // 1862 / 2554 / 3406이고 90%가 4622 mm/s다. 3400에서 끊으면 위쪽 4분의 1을
-  // 통째로 버리는 것이어서, 긴 배치에서는 득점하는 줄이 아예 나오지 않았다.
-  // 이 넷이 네 배치를 훑어본 중 가장 많이 찾았다 (9~72줄, 1.4초).
-  const SPEEDS = [2400, 3200, 4000, 4800];
+  // 세기는 강도로 말한다: 강도 1이 수구가 장축만큼 굴러가는 세기, n이면 그 n 배.
+  // 밀리미터 매 초는 큐를 잡고 쓸 수 있는 말이 아니다. 프로 1335개 플레이를
+  // 이 자로 읽으면 사분위가 2.0 / 2.9 / 3.7이고 90%가 4.8이라, 넷 다 실전
+  // 범위 안이다. 네 배치를 훑어 18~80줄을 찾는다 (1.4~1.8초).
+  const STRENGTHS = [2.5, 3.5, 4.5, 5.5];
+  const SPEEDS = STRENGTHS.map((s) => Math.round(SIM.speedFor(s)));
   // 당점: 좌우는 팁, 위아래는 거친 탐색에서 0으로 두고 정밀 탐색에서만 본다.
   const TIPS = [-3, -1.5, 0, 1.5, 3], TIPS_VERTICAL = [0, 2, -2];
   const COARSE = 2, FINE = 0.25, CHUNK = 120;
@@ -352,8 +353,11 @@
       const play = item.play;
       if (play.aim === null || play.speed === null) continue;
       const aim = turnAngle(play.aim);
-      const speeds = [play.speed * 0.85, play.speed, play.speed * 1.15]
-        .map((v) => Math.round(Math.min(5600, Math.max(1600, v)) / 200) * 200);
+      // 프로가 친 초속을 강도로 읽고, 반 칸 눈금에 맞춰 위아래로 한 칸씩.
+      const at = SIM.strengthOf(play.speed);
+      const speeds = [at - 0.5, at, at + 0.5]
+        .map((s) => Math.round(Math.min(7, Math.max(1, s)) * 2) / 2)
+        .map((s) => Math.round(SIM.speedFor(s)));
       for (const speed of new Set(speeds)) {
         for (const side of TIPS) {
           for (let d = -4; d <= 4; d += FINE) {
@@ -717,7 +721,8 @@
       <span class="count">조준 여유 ${best.hit.room}° ·
         ${best.chosen ? `프로 ${best.chosen}／${result.total}명 · 그중 득점 ${best.proRate}%`
                       : '<span class="thin">프로가 고른 적 없음</span>'} ·
-        두께 ${asThickness(best.hit.thickness)} · 1적구 ${Math.round(best.hit.pushed)} mm 이동</span>`;
+        두께 ${asThickness(best.hit.thickness)} · 강도 ${SIM.strengthOf(best.hit.speed).toFixed(1)} ·
+        1적구 ${Math.round(best.hit.pushed)} mm 이동</span>`;
     card.querySelector(".name").textContent = label(best);
     card.onclick = () => { stopPlaying(); picked = best.key; render(); };
     box.appendChild(card);
@@ -731,6 +736,7 @@
       const option = document.createElement("option");
       option.value = row.key;
       option.textContent = `${label(row)} — 두께 ${asThickness(row.hit.thickness)}`
+        + ` · 강도 ${SIM.strengthOf(row.hit.speed).toFixed(1)}`
         + ` · 여유 ${row.hit.room}°`
         + (row.chosen ? ` · 프로 ${row.chosen}명` : " · 프로 0명")
         + ` · 1적구 ${Math.round(row.hit.pushed)} mm`;
@@ -748,13 +754,14 @@
     const row = chosenRow();
     if (row) {
       detail.classList.add("on");
-      const speed = (row.hit.speed / 1000).toFixed(1);
+      const strength = SIM.strengthOf(row.hit.speed).toFixed(1);
       const side = asTip(row.hit.side, row.hit.vertical || 0);
       detail.innerHTML = `<b>${label(row)}</b> — ${NOTES[row.route] || ""}
         <div class="plates">${thicknessPlate(row)}${tipPlate(row)}</div>
         그려진 선은 <b>이 배치에서</b> 시뮬레이터가 찾은 득점 궤적입니다.
         <b>두께 ${asThickness(row.hit.thickness)}</b>로 ${NAMES[row.first]}의
-        ${row.hit.face === "left" ? "왼쪽" : "오른쪽"} 면을, 세기 <b>${speed} m/s</b>,
+        ${row.hit.face === "left" ? "왼쪽" : "오른쪽"} 면을, <b>강도 ${strength}</b>
+        (수구가 장축 ${strength}개만큼 굴러가는 세기),
         당점 <b>${side}</b>. 쿠션 <b>${row.hit.judged.rails.length}개</b>,
         1적구 <b>${Math.round(row.hit.pushed)} mm</b> 이동.
         시뮬레이터가 회전을 공의 상태로 들고 있으므로 당점을 팁으로 말합니다.
@@ -931,7 +938,7 @@
         lines.push(`  ${index + 1}. ${label(row)} — 여유 ${row.hit.room}° · `
           + `프로 ${row.chosen}/${result.total}명${row.chosen ? ` (득점 ${row.proRate}%)` : ""} · `
           + `1적구 ${Math.round(row.hit.pushed)} mm · 출발 ${Math.round(row.hit.deg)}° · `
-          + `${(row.hit.speed / 1000).toFixed(1)} m/s · `
+          + `강도 ${SIM.strengthOf(row.hit.speed).toFixed(1)} · `
           + `두께 ${asThickness(row.hit.thickness)} · 당점 ${asTip(row.hit.side, row.hit.vertical || 0)} · `
           + `쿠션 ${row.hit.judged.rails.length}개${row.key === picked ? "   ← 선택됨" : ""}`);
       });

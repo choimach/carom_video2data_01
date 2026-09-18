@@ -235,5 +235,30 @@ const SIM = (() => {
     return { scored: rails.length >= 3, first: first.detail, second: second.detail, rails };
   }
 
-  return { play, judge, struck, L, W, RADIUS, DIAMETER, MAX_TIPS, TIP_MM };
+  // 스트로크 강도 — 초속 대신 선수가 쓸 수 있는 자.
+  //   강도 1 = 수구가 장축(2844 mm)만큼 굴러가는 세기, 강도 n = 그 n 배.
+  // 기준 샷은 짧은 쿠션 한가운데에서 긴 쿠션과 나란히 무회전으로 곧게 친 수구.
+  // 표는 src/physics/strength.py와 같은 값이고 tests/test_strength.py가 둘을
+  // 붙들어 둔다 — 물리가 바뀌면 같은 이름이 다른 세기를 가리키게 되므로.
+  const STRENGTH = [0.31, 0.72, 1.13, 1.70, 2.22, 2.73, 3.13, 3.51, 3.93,
+                    4.20, 4.89, 5.66, 6.25, 7.14, 8.03, 9.37, 10.91];
+  const STRENGTH_SPEED = [600, 900, 1200, 1600, 2000, 2400, 2800, 3200, 3600,
+                          4000, 4800, 5600, 6400, 8000, 10000, 14000, 20000];
+
+  function between(x, from, to) {
+    if (x <= from[0]) return to[0] * x / from[0];
+    for (let i = 1; i < from.length; i++) {
+      if (x <= from[i]) {
+        const t = (x - from[i - 1]) / (from[i] - from[i - 1]);
+        return to[i - 1] + t * (to[i] - to[i - 1]);
+      }
+    }
+    return to[to.length - 1];
+  }
+
+  const speedFor = (strength) => between(strength, STRENGTH, STRENGTH_SPEED);
+  const strengthOf = (speed) => between(speed, STRENGTH_SPEED, STRENGTH);
+
+  return { play, judge, struck, speedFor, strengthOf,
+           L, W, RADIUS, DIAMETER, MAX_TIPS, TIP_MM, LONG_RAIL: L };
 })();
