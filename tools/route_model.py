@@ -133,6 +133,7 @@ def report(train, test, k=NEIGHBOURS, kind="player"):
     base_rate = scored.mean()
 
     right = 0
+    within = {2: 0, 3: 0}
     brier_model, brier_base = [], []
     for row in test:
         point = builder(row)
@@ -143,8 +144,10 @@ def report(train, test, k=NEIGHBOURS, kind="player"):
         for index, gap in zip(order, gaps):
             weight = 1.0 / (1.0 + gap / (1.0 if kind == "player" else 100.0))
             votes[routes[index]] = votes.get(routes[index], 0.0) + weight
-        guess = max(votes, key=votes.get)
-        right += guess == row["route"]
+        ranked = [name for name, _ in sorted(votes.items(), key=lambda kv: -kv[1])]
+        right += ranked[0] == row["route"]
+        for place in (2, 3):
+            within[place] += row["route"] in ranked[:place]
 
         same = [i for i in order if routes[i] == row["route"]]
         chance = scored[same].mean() if same else base_rate
@@ -157,6 +160,12 @@ def report(train, test, k=NEIGHBOURS, kind="player"):
     print(f"  이웃 투표        {right / len(test) * 100:5.1f}%")
     majority = sum(1 for r in test if r["route"] == common) / len(test) * 100
     print(f"  가장 흔한 유형만 {majority:5.1f}%   ({common})")
+    # What an assistant would actually show: a short list, not one answer. The
+    # notes are full of how to choose between two candidates - 걸어치기 against
+    # 빗겨치기, 안으로 돌리기 against 뒤돌리기 - so the list is the useful
+    # output and the choosing is where a player's own knowledge goes.
+    print(f"  상위 2개 안        {within[2] / len(test) * 100:5.1f}%")
+    print(f"  상위 3개 안        {within[3] / len(test) * 100:5.1f}%")
     print()
     print("그 경로가 득점할 것인가 (낮을수록 좋음, Brier)")
     print(f"  이웃 평균        {np.mean(brier_model):.4f}")
