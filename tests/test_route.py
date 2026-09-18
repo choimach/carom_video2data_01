@@ -51,41 +51,43 @@ def test_long_rail_to_long_rail_is_crossing():
     assert classify(shot)["route"] == CROSSING
 
 
-def test_off_a_short_rail_the_side_on_the_ball_decides():
-    # The player's family rule: side on the same hand as the face struck is
-    # 앞돌리기, side against it is 빗겨치기.
+def test_off_a_short_rail_the_same_test_names_the_near_pair():
     shot = events((10, "ball", "red"), (20, "cushion", "right"),
                   (30, "cushion", "top"), (40, "ball", "yellow"))
-    struck_right, right_english = -40.0, 12.0
-    assert classify(shot, struck_side=struck_right, english=right_english)["route"] == FRONT
-    assert classify(shot, struck_side=struck_right, english=-12.0)["route"] == GLANCING
+    right_face = -40.0
+    assert classify(shot, struck_side=right_face, circuit=1.0)["route"] == FRONT
+    assert classify(shot, struck_side=right_face, circuit=-1.0)["route"] == GLANCING
 
 
-def test_without_a_side_reading_that_pair_stays_unnamed():
+def test_without_a_circuit_the_turn_stays_unnamed():
     shot = events((10, "ball", "red"), (20, "cushion", "right"),
                   (30, "cushion", "top"), (40, "ball", "yellow"))
     assert classify(shot, struck_side=-40.0)["route"] == UNKNOWN
 
 
-def test_a_long_rail_first_splits_on_where_the_second_cushion_went():
-    # The player's own test: away from where he stands, or back toward him.
+def test_a_long_rail_first_splits_on_face_against_circuit():
+    # The player's own test: right face and round to the right is 옆돌리기;
+    # right face going round left is 뒤돌리기.
     shot = events((10, "ball", "red"), (20, "cushion", "top"),
                   (30, "cushion", "left"), (40, "ball", "yellow"))
-    assert classify(shot, away_mm=844.0)["route"] == BEHIND
-    assert classify(shot, away_mm=-1063.0)["route"] == SIDE
+    right_face, left_face = -40.0, 40.0
+    assert classify(shot, struck_side=right_face, circuit=1.0)["route"] == SIDE
+    assert classify(shot, struck_side=right_face, circuit=-1.0)["route"] == BEHIND
+    assert classify(shot, struck_side=left_face, circuit=-1.0)["route"] == SIDE
+    assert classify(shot, struck_side=left_face, circuit=1.0)["route"] == BEHIND
 
 
 def test_the_same_rail_twice_around_a_short_one_is_a_return():
     shot = events((10, "ball", "red"), (20, "cushion", "top"),
                   (30, "cushion", "left"), (40, "cushion", "top"),
                   (50, "ball", "yellow"))
-    assert classify(shot, away_mm=400.0)["route"] == RETURNING
+    assert classify(shot, struck_side=-40.0, circuit=1.0)["route"] == RETURNING
 
 
 
 
 
-def test_that_split_needs_a_turn_angle_and_says_so():
+def test_that_split_needs_a_circuit_and_says_so():
     shot = events((10, "ball", "red"), (20, "cushion", "top"),
                   (30, "cushion", "left"), (40, "ball", "yellow"))
     verdict = classify(shot)
@@ -97,7 +99,7 @@ def test_counted_and_guessed_verdicts_are_marked_apart():
     hook = classify(events((10, "cushion", "top"), (20, "ball", "red"),
                            (30, "ball", "yellow")))
     turn = classify(events((10, "ball", "red"), (20, "cushion", "right"),
-                           (30, "ball", "yellow")), struck_side=-40.0, english=12.0)
+                           (30, "ball", "yellow")), struck_side=-40.0, circuit=1.0)
     assert hook["basis"] == "counted"
     assert turn["basis"] == "geometry"
 

@@ -43,6 +43,11 @@ LONG_AROUND_CUSHIONS = 5
 # The one 빗겨치기 the player named was struck at 0.06 and nothing else he
 # named came under 0.21.
 THIN_HIT = 0.15
+# Where 옆돌리기 ends and 뒤돌리기 begins, in millimetres of second cushion
+# carried on along the line the cue ball was sent. Zero looked right until he
+# named two shots at +208 and +214 as 옆돌리기; against 뒤돌리기 at +387, +460,
+# +505 and +844, the line sits between them and not at nothing.
+SIDE_DRIFT_MM = 300.0
 
 
 def _rails(events, after=None, before=None):
@@ -53,7 +58,7 @@ def _rails(events, after=None, before=None):
 
 
 def classify(events, layout_mm=None, cue_ball=None, thickness=None, turn_deg=None,
-             away_mm=None, struck_side=None, english=None):
+             away_mm=None, struck_side=None, english=None, circuit=None):
     """Name the route this shot took.
 
     `events` is what `judge_shot` leaves in its verdict: the cue ball's
@@ -120,47 +125,37 @@ def classify(events, layout_mm=None, cue_ball=None, thickness=None, turn_deg=Non
                 and between[0] != between[1] and between[1] != between[2]:
             return {**result, "route": CROSSING, "why": "long rail to long rail"}
 
-    return {**result, **_turn(between, thickness, away_mm, struck_side, english)}
+    return {**result, **_turn(between, struck_side, circuit)}
 
 
-def _turn(between, thickness, away_mm, struck_side=None, english=None):
-    """뒤돌리기, 옆돌리기, 앞돌리기 or 빗겨치기, from the player's ten.
+def _turn(between, struck_side, circuit):
+    """뒤돌리기, 옆돌리기, 앞돌리기 or 빗겨치기 - the player's own family rule.
 
-    The first rule here read the rail sequence and was wrong seven times in
-    ten. It was wrong in kind, not in degree: six of those plays took the same
-    장-단-장 and the player called them by five different names, so no rule
-    over rail sequences can name a route at all.
+    Two rules came before this one and both were mine, read off his labels
+    rather than given by him: the rail sequence, which named the same 장-단-장
+    five different things, and the second cushion's drift, which he then
+    contradicted by naming shots at +214 and +537 옆돌리기 against 뒤돌리기 at
+    +387 and +460.
 
-    What did line up with his names:
+    What he actually said, asked a third time: the cue ball strikes the right
+    face of the object ball, carries right side, and goes round to the right -
+    and that is 옆돌리기; opposite hands and it is 뒤돌리기. So the test is
+    whether the face struck and the way the ball travels round the table agree.
+    It is the 제각돌리기 / 빗겨치기 split the lesson sites describe, and against
+    the 24 plays he has named by hand it gets 23.
 
-      두께 0.06        빗겨치기      - thin, and nothing else was near it
-      단쿠션 먼저       앞돌리기      - the old rule called exactly this 뒤돌리기
-      장쿠션, 꺾임 0°   뒤돌리기
-      장쿠션, 꺾임 80°+ 옆돌리기
-
-    Two examples each. That is a hypothesis with a sample of ten behind it, not
-    a rule that has been checked, and 되돌아오기 - which he named twice - has no
-    test here at all. The next batch of labels is what decides it.
+    The rail that comes first then says which member of the family it is: a
+    short rail means the near pair, 앞돌리기 and 빗겨치기.
     """
-    # Off a short rail the two candidates are 앞돌리기 and 빗겨치기, and no
-    # geometry told them apart - the player's own test does. He gave it as a
-    # family rule: 앞돌리기 and 옆돌리기 put side on the same hand as the face
-    # they struck, 뒤돌리기 and 빗겨치기 on the opposite one.
-    if between[0] in SHORT_RAILS:
-        if struck_side is None or english is None:
-            return {"route": UNKNOWN, "basis": "geometry",
-                    "why": "no side on the ball to tell 앞돌리기 from 빗겨치기"}
-        same = (struck_side < 0) == (english > 0)
-        if same:
-            return {"route": FRONT, "basis": "geometry",
-                    "why": "side on the hand it was struck"}
-        return {"route": GLANCING, "basis": "geometry",
-                "why": "side against the hand it was struck"}
-    if away_mm is None:
+    if struck_side is None or circuit is None:
         return {"route": UNKNOWN, "basis": "geometry",
-                "why": "no second cushion to tell 뒤돌리기 from 옆돌리기"}
-    if away_mm < 0:
-        return {"route": SIDE, "basis": "geometry",
-                "why": f"second cushion came back {-away_mm:.0f} mm toward the player"}
-    return {"route": BEHIND, "basis": "geometry",
-            "why": f"second cushion carried on {away_mm:.0f} mm away"}
+                "why": "no face or circuit to name the turn from"}
+    # struck_side is positive for the object ball's left face; circuit is +1
+    # going round to the right.
+    same_hand = (struck_side < 0) == (circuit > 0)
+    short_first = between[0] in SHORT_RAILS
+    if same_hand:
+        return {"route": FRONT if short_first else SIDE, "basis": "geometry",
+                "why": "face struck and circuit on the same hand"}
+    return {"route": GLANCING if short_first else BEHIND, "basis": "geometry",
+            "why": "face struck and circuit on opposite hands"}

@@ -25,7 +25,8 @@ from src.physics.carom import judge_shot
 from src.physics.route import classify
 from src.physics.kinematics import KinematicsEngine
 from src.physics.stroke import stroke_of
-from src.physics.table_calibration import calibrate, CalibrationError
+from src.physics.table_calibration import (calibrate, CalibrationError,
+                                           TABLE_LENGTH_MM, TABLE_WIDTH_MM)
 from src.segmentation.scoreboard_ocr import ScoreboardReader
 from src.segmentation.shot_segmenter import (
     audit_turns,
@@ -464,6 +465,7 @@ def analyse(scan_data, recover=True):
         shot.turn_deg = turn_at_first_ball(shot, positions, details.get("events") or [])
         shot.away_mm = second_cushion_drift(shot, positions, details.get("events") or [])
         shot.struck_side = struck_side(shot, positions, details.get("events") or [])
+        shot.circuit = circuit_sign(shot, positions)
         shot.english = english_side(shot, positions, details.get("events") or [])
     for shot in ordered:
         if shot.inferred:
@@ -649,6 +651,28 @@ def english_side(shot, positions, events, span=6):
     return float(-np.sign(along) * spin)
 
 
+def circuit_sign(shot, positions):
+    """Which way round the table the cue ball went: +1 right, -1 left.
+
+    The player's test for 옆돌리기 against 뒤돌리기 turned out to be this and
+    not the second cushion's drift, which overlaps hopelessly between the two -
+    he named shots at +214 and +537 옆돌리기 where others at +387 and +460 are
+    뒤돌리기. What he means by "turning right" is the circuit, not the deflection
+    off the object ball, which goes the other way.
+
+    Signed area swept about the middle of the table, which is the whole path's
+    sense of rotation rather than any one moment of it.
+    """
+    path = positions[shot.cue_ball][shot.start_frame:shot.end_frame + 1]
+    path = path[np.isfinite(path).all(axis=1)]
+    if len(path) < 5:
+        return None
+    middle = np.array([TABLE_LENGTH_MM / 2.0, TABLE_WIDTH_MM / 2.0])
+    about = path - middle
+    area = float(np.sum(about[:-1, 0] * about[1:, 1] - about[:-1, 1] * about[1:, 0]))
+    return 1.0 if area > 0 else -1.0
+
+
 def second_cushion_drift(shot, positions, events):
     """Did the second cushion carry on away from the player, or come back?
 
@@ -755,6 +779,7 @@ def route_of(verdict, shot):
                     turn_deg=getattr(shot, "turn_deg", None),
                     away_mm=getattr(shot, "away_mm", None),
                     struck_side=getattr(shot, "struck_side", None),
+                    circuit=getattr(shot, "circuit", None),
                     english=getattr(shot, "english", None))
 
 
@@ -781,6 +806,7 @@ def export_json(result, path):
                 "turn_deg": getattr(shot, "turn_deg", None),
                 "away_mm": getattr(shot, "away_mm", None),
                 "struck_side": getattr(shot, "struck_side", None),
+                "circuit": getattr(shot, "circuit", None),
                 "english": getattr(shot, "english", None),
                 # Frames count from the start of the play: judge_shot reads the
                 # window, not the match, so subtracting the start again put
