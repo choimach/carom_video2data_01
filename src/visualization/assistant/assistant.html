@@ -274,7 +274,11 @@
 
   // 탐색은 수천 번의 시뮬레이션이라 한 번에 돌리면 화면이 몇 초씩 멈춘다.
   // 조금씩 끊어 돌리고 사이사이 브라우저에 차례를 넘긴다.
-  const SPEEDS = [2200, 2800, 3400];
+  // 세기는 프로가 실제로 친 분포에서 고른다: 1335개 플레이의 사분위가
+  // 1862 / 2554 / 3406이고 90%가 4622 mm/s다. 3400에서 끊으면 위쪽 4분의 1을
+  // 통째로 버리는 것이어서, 긴 배치에서는 득점하는 줄이 아예 나오지 않았다.
+  // 이 넷이 네 배치를 훑어본 중 가장 많이 찾았다 (9~72줄, 1.4초).
+  const SPEEDS = [2400, 3200, 4000, 4800];
   // 당점: 좌우는 팁, 위아래는 거친 탐색에서 0으로 두고 정밀 탐색에서만 본다.
   const TIPS = [-3, -1.5, 0, 1.5, 3], TIPS_VERTICAL = [0, 2, -2];
   const COARSE = 2, FINE = 0.25, CHUNK = 120;
@@ -349,7 +353,7 @@
       if (play.aim === null || play.speed === null) continue;
       const aim = turnAngle(play.aim);
       const speeds = [play.speed * 0.85, play.speed, play.speed * 1.15]
-        .map((v) => Math.round(Math.min(4200, Math.max(1600, v)) / 200) * 200);
+        .map((v) => Math.round(Math.min(5600, Math.max(1600, v)) / 200) * 200);
       for (const speed of new Set(speeds)) {
         for (const side of TIPS) {
           for (let d = -4; d <= 4; d += FINE) {
