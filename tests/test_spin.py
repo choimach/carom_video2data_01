@@ -11,10 +11,21 @@ def roll_for(ball, seconds, step=1 / 240):
 
 
 def test_a_struck_ball_slides_before_it_rolls():
-    ball = spin.struck((700.0, 700.0), (1.0, 0.0), 2700.0)
+    """미끄럼이 구름으로 바뀌는 때는 천이 정한다: t = 2v / (7 μ g).
+
+    상수를 고치면 이 시간도 함께 바뀌므로, 숫자를 박아 두지 않고 공식에서
+    받아 온다. 천을 0.20에서 0.12로 느리게 잡았을 때 0.39초가 0.65초가 되었고,
+    "0.6초면 구른다"고 박아 둔 예전 시험이 여기서 걸렸다 — 버그가 아니라
+    느린 천의 당연한 결과다.
+    """
+    speed = 2700.0
+    ball = spin.struck((700.0, 700.0), (1.0, 0.0), speed)
     assert not ball.rolling
-    roll_for(ball, 0.6)
-    assert ball.rolling
+    settles = 2.0 * speed / (7.0 * spin.SLIDING_FRICTION * spin.GRAVITY_MM_S2)
+    roll_for(ball, settles * 0.8)
+    assert not ball.rolling, "구르기 전에 벌써 굴렀습니다"
+    roll_for(ball, settles * 0.5)
+    assert ball.rolling, f"{settles:.2f}초가 지나도 미끄러집니다"
 
 
 def test_follow_leaves_it_already_rolling_and_draw_spinning_backwards():

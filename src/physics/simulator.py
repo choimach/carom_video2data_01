@@ -261,8 +261,7 @@ def simulate_with_spin(layout, cue, velocity, tips_side=0.0, tips_vertical=0.0,
             if rail is None:
                 continue
             ball.position = _inside(ball.position)
-            spin.bounce(ball, rail)
-            if colour == cue:
+            if spin.bounce(ball, rail) and colour == cue:
                 events.append((frame_index, "cushion", rail))
 
         for i, first in enumerate(colours):

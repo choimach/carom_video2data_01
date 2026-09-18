@@ -30,13 +30,24 @@ GRAVITY_MM_S2 = 9810.0
 
 # Cloth. Sliding is where a struck ball sheds speed; rolling barely slows at
 # all, which is why a cue ball crosses the table three or four times.
-SLIDING_FRICTION = 0.20
-ROLLING_FRICTION = 0.0106
+# 이 셋은 영상에 맞춰 잡았다. tools/fit_spin.py로 150개 플레이를 다시 쳐서
+# 1초·2초 뒤 위치, 쿠션 개수, 이동거리 넷을 한꺼번에 본다. 교과서 값
+# (미끄럼 0.20, 구름 0.0106)은 풀 당구천 기준이고, 캐롬 대대는 열선이 들어간
+# 시모니스라 더 빠르다 — 교과서 값으로는 시뮬레이터 공이 실제의 72%밖에 못
+# 가고 쿠션을 하나 덜 먹었다. 아래 값으로 95%, 쿠션 개수 차이는 중앙값 0,
+# 1초 뒤 위치는 340 mm에서 253 mm로 줄었다.
+SLIDING_FRICTION = 0.12
+ROLLING_FRICTION = 0.006
 # Spin about the vertical axis dies on its own, slowly: it has only the contact
 # patch to work against. Slowly enough that over the first second - as far as
 # the paths here are compared - the value makes no difference at all: 0.01,
 # 0.022 and 0.04 give the same answer to the millimetre. It is left at the low
 # end, and whatever settles it will have to be a shot measured further out.
+# 0.01 / 0.03 / 0.08을 같은 150개 플레이로 재봤다: 1초 뒤 위치는 셋이 거의
+# 같지만(283 / 281 / 291 mm) 쿠션 개수와 이동거리는 값을 올릴수록 나빠진다
+# (차이 0 → -0.5 → -1.0, 비율 0.91 → 0.88 → 0.86). 데이터는 회전이 천 위에서
+# 천천히 죽는 쪽을 고른다. 쿠션이 회전의 60% 이상을 먹으므로(RAIL_KEEPS_SIDE),
+# 3쿠션 뒤 남는 회전은 어차피 쿠션이 정한다.
 SPIN_FRICTION = 0.01
 
 # A cue tip is 12 mm across and the ball 61.5, so the furthest a player can
@@ -148,13 +159,17 @@ RAIL_FRICTION = 0.18
 # the tip position fitted per play: 0.55 lands the cue ball 93 mm from where the
 # camera saw it a second in, against 105 mm at 0.75.
 RAIL_KEEPS_SIDE = 0.55
-# A cushion meets the ball above its equator, so it leaves mostly rolling
-# rather than sliding. How much slide is left decides how far the ball then
-# goes, and it is the one number here fitted rather than measured: at 0.3 a cue
-# ball opening at the professionals' median 2699 mm/s runs 5821 mm against the
-# 5680 mm the video records. Leaving it sliding gives 4093 - a table that eats
-# shots - and leaving it purely rolling gives 7016.
-RAIL_KEEPS_SLIDE = 0.3
+# 쿠션 아래로는 공이 기대고 있는 것이지 튕긴 것이 아니다. 이 선이 없으면 구석에
+# 갇힌 공이 한 샷에 쿠션을 370개 먹고, judge()가 쿠션을 세므로 3쿠션을 넘긴 적
+# 없는 샷이 득점으로 둔갑한다.
+CUSHION_SPEED_MM_S = 60.0
+# A cushion meets the ball above its equator, so it leaves rolling. The 0.3 that
+# stood here was fitted against a travel figure the camera had truncated - 381
+# of 426 tracked balls were still moving when the recording window closed - and
+# it made the table eat shots. Refitted against position, cushion count and
+# travel together, every one of them prefers zero: the ball leaves the rail
+# rolling, which is also what the geometry says.
+RAIL_KEEPS_SLIDE = 0.0
 REBOUND_IN = np.array([0.0, 6.7, 17.8, 27.2, 38.0, 46.4, 56.0, 66.1, 79.3, 90.0])
 REBOUND_OUT = np.array([0.0, 16.7, 33.7, 41.8, 50.1, 55.4, 63.0, 70.6, 80.1, 90.0])
 REBOUND_SPEED = np.array([0.817, 0.817, 0.844, 0.829, 0.824, 0.818, 0.808, 0.835, 0.912, 0.912])
@@ -174,6 +189,12 @@ def bounce(ball, rail):
     ball can be made to come off a cushion almost square.
 
     The ball keeps part of its side and loses the rest to the compression.
+
+    Returns True when it actually reflected. A ball creeping along a rail comes
+    back here every step, and answering "already leaving" without saying so let
+    the caller record a cushion each time - one shot came back with 370 of them,
+    and `judge` counts cushions, so shots that never made three were being
+    called points.
     """
     normal = np.asarray(RAILS[rail], dtype=float)
     tangent = np.array([-normal[1], normal[0]])
@@ -181,7 +202,8 @@ def bounce(ball, rail):
     into = float(np.dot(ball.velocity, normal))
     along = float(np.dot(ball.velocity, tangent))
     if into >= 0:
-        return  # already leaving
+        return False  # already leaving
+    counts = ball.speed >= CUSHION_SPEED_MM_S
 
     # The measured rebound, with no side on the ball.
     speed = float(np.hypot(into, along))
@@ -204,6 +226,7 @@ def bounce(ball, rail):
     ball.velocity = normal * out_normal + tangent * out_along
     ball.side = (ball.side - (5.0 / (2.0 * BALL_RADIUS_MM)) * change) * RAIL_KEEPS_SIDE
     ball.slip = ball.velocity * RAIL_KEEPS_SLIDE
+    return counts
 
 
 # Two balls do not part exactly along the line joining their centres. The one

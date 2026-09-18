@@ -276,14 +276,32 @@
   // 조금씩 끊어 돌리고 사이사이 브라우저에 차례를 넘긴다.
   // 세기는 강도로 말한다: 강도 1이 수구가 장축만큼 굴러가는 세기, n이면 그 n 배.
   // 밀리미터 매 초는 큐를 잡고 쓸 수 있는 말이 아니다. 프로 1335개 플레이를
-  // 이 자로 읽으면 사분위가 2.0 / 2.9 / 3.7이고 90%가 4.8이라, 넷 다 실전
-  // 범위 안이다. 네 배치를 훑어 18~80줄을 찾는다 (1.4~1.8초).
-  const STRENGTHS = [2.5, 3.5, 4.5, 5.5];
+  // 이 자로 읽으면 사분위가 3.2 / 4.4 / 5.6이고 90%가 7.3이라, 넷 다 실전
+  // 범위 안이다.
+  const STRENGTHS = [3.5, 4.5, 5.5, 7.0];
   const SPEEDS = STRENGTHS.map((s) => Math.round(SIM.speedFor(s)));
   // 당점: 좌우는 팁, 위아래는 거친 탐색에서 0으로 두고 정밀 탐색에서만 본다.
   const TIPS = [-3, -1.5, 0, 1.5, 3], TIPS_VERTICAL = [0, 2, -2];
   const COARSE = 2, FINE = 0.25, CHUNK = 120;
   const pause = () => new Promise((go) => setTimeout(go, 0));
+
+  // 키스 — 계산한 줄이 실제로는 성립하지 않는 두 가지.
+  //
+  // 이 함수가 없는 채로 호출만 남아 있었다. 득점하는 줄을 처음 찾는 순간
+  // ReferenceError가 나고 탐색 전체가 무너져서, 화면에는 언제나 "이 배치에서
+  // 득점하는 선을 찾지 못했습니다"가 나왔다. 배치 탓이 아니었다.
+  function kissed(shot, judged) {
+    const balls = shot.events.filter((e) => e.kind === "ball");
+    if (!balls.length) return false;
+    const first = balls[0];
+    const second = balls.find((e) => e.detail !== first.detail);
+    if (!second) return false;
+    // 적구끼리 부딪히면 2적구가 그린 자리에 없다 — 계산한 줄이 아니게 된다.
+    if (shot.events.some((e) => e.kind === "kiss" && e.at <= second.at)) return true;
+    // 수구가 1적구를 한 번 더 건드리고 가는 것도 키스다. 실제로는 여기서
+    // 진로가 막히거나 세기가 죽어 남은 길을 가지 못한다.
+    return balls.some((e) => e !== first && e.detail === first.detail && e.at < second.at);
+  }
 
   function tryAngle(deg, speed, side, hits, counters, vertical = 0) {
     const rad = deg * Math.PI / 180;
@@ -765,9 +783,10 @@
         당점 <b>${side}</b>. 쿠션 <b>${row.hit.judged.rails.length}개</b>,
         1적구 <b>${Math.round(row.hit.pushed)} mm</b> 이동.
         시뮬레이터가 회전을 공의 상태로 들고 있으므로 당점을 팁으로 말합니다.
-        실제 플레이 30개와 대조해 1초 뒤 위치 오차 93 mm입니다 — 방향을 보는
-        그림으로는 쓸 만하지만, 득점 창이 0.25도라 그대로 치면 되는 처방은
-        아직 아닙니다.
+        영상 플레이 150개와 대조하면 1초 뒤 위치가 <b>253 mm</b> 어긋나고,
+        이동거리는 실제의 <b>95%</b>, 쿠션 개수는 중앙값이 맞습니다. 공 하나가
+        62 mm이니 253 mm는 네 개입니다 — <b>어느 쪽으로 도는 공략인지 보는
+        그림이지, 그대로 겨눠서 맞는 처방이 아닙니다.</b>
         점선은 조준 방향, 흰 점은 쿠션에 닿는 자리,
         <b>색 점선은 적구가 굴러간 길</b>, <b>테두리만 있는 공이 멈추는 자리</b>입니다.
         <b>재생</b>을 누르면 실제 속도로 움직입니다.<br><br>

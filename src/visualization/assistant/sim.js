@@ -15,15 +15,21 @@
 //
 // The constants are the cloth's own except where this project measured or
 // fitted its own: a cue ball opening at 2699 mm/s - the median over 1596
-// tracked plays - runs 5675 mm against the video's 5680, and with the tip
-// position fitted the model lands 93 mm from where the camera saw the ball a
-// second after the stroke.
+// tracked plays. Checked against 150 tracked plays with the tip position fitted
+// per play: the ball lands 253 mm from where the camera saw it a second in and
+// covers 95% of the real distance, with the cushion count right in the median.
+// It is a drawing of which way a shot goes, not a prescription to aim by.
 
 const SIM = (() => {
   const L = 2844, W = 1422, RADIUS = 30.75, DIAMETER = 61.5, G = 9810;
-  const SLIDING = 0.20, ROLLING = 0.0106, SPIN_DECAY = 0.01;
+  // 이 셋은 영상에 맞춰 잡았다 (tools/fit_spin.py, 150개 플레이). 교과서 값은
+  // 풀 당구천 기준이고 캐롬 대대는 더 빠르다 — 교과서 값으로는 공이 실제의
+  // 72%밖에 못 가고 쿠션을 하나 덜 먹었다. src/physics/spin.py와 같은 값이어야
+  // 하고 tests/test_sim_js.py가 그것을 지킨다.
+  const SLIDING = 0.12, ROLLING = 0.006, SPIN_DECAY = 0.01;
+  const CUSHION_SPEED = 60.0;
   const TIP_MM = 5, MAX_TIPS = 3;
-  const RAIL_FRICTION = 0.18, RAIL_KEEPS_SIDE = 0.55, RAIL_KEEPS_SLIDE = 0.3;
+  const RAIL_FRICTION = 0.18, RAIL_KEEPS_SIDE = 0.55, RAIL_KEEPS_SLIDE = 0.0;
   const REBOUND_IN = [0, 6.7, 17.8, 27.2, 38.0, 46.4, 56.0, 66.1, 79.3, 90.0];
   const REBOUND_OUT = [0, 16.7, 33.7, 41.8, 50.1, 55.4, 63.0, 70.6, 80.1, 90.0];
   const REBOUND_SPEED = [0.817, 0.817, 0.844, 0.829, 0.824, 0.818, 0.808, 0.835, 0.912, 0.912];
@@ -90,7 +96,10 @@ const SIM = (() => {
     const n = RAILS[rail], t = [-n[1], n[0]];
     const into = ball.v[0] * n[0] + ball.v[1] * n[1];
     let along = ball.v[0] * t[0] + ball.v[1] * t[1];
-    if (into >= 0) return;
+    if (into >= 0) return false;   // 이미 떠나는 중 — 쿠션을 먹은 것이 아니다
+    // 이 아래로는 공이 쿠션에 기대고 있는 것이다. 튕기기는 하되 쿠션으로 세지
+    // 않는다 — 세면 구석에 갇힌 공이 3쿠션을 "채워" 득점으로 둔갑한다.
+    const counts = Math.hypot(ball.v[0], ball.v[1]) >= CUSHION_SPEED;
     const speed = Math.hypot(into, along);
     const incoming = Math.atan2(Math.abs(along), Math.abs(into)) * 180 / Math.PI;
     const outgoing = interp(incoming, REBOUND_IN, REBOUND_OUT);
@@ -107,6 +116,7 @@ const SIM = (() => {
     ball.side = (ball.side - (5 / (2 * RADIUS)) * change) * RAIL_KEEPS_SIDE;
     // A rail meets the ball above its equator, so it leaves mostly rolling.
     ball.slip = [ball.v[0] * RAIL_KEEPS_SLIDE, ball.v[1] * RAIL_KEEPS_SLIDE];
+    return counts;
   }
 
   // Two balls do not part exactly along the line joining their centres: the
@@ -146,7 +156,9 @@ const SIM = (() => {
   }
 
   // One stroke, in the 당점 a player can be given.
-  function play(layout, cue, velocity, tipsSide = 0, tipsVertical = 0, maxSeconds = 15) {
+  // 20초는 파이썬 쪽 simulate_with_spin의 기본값과 같아야 한다. 천을 빠르게
+  // 잡고 나니 공이 15초를 넘겨 굴러서, 두 벌이 서로 다른 자리에 공을 세웠다.
+  function play(layout, cue, velocity, tipsSide = 0, tipsVertical = 0, maxSeconds = 20) {
     const colours = Object.keys(layout);
     const balls = {};
     for (const c of colours) balls[c] = still(layout[c]);
@@ -185,8 +197,13 @@ const SIM = (() => {
         if (!rail) continue;
         balls[c].p = [clamp(balls[c].p[0], RADIUS, L - RADIUS),
                       clamp(balls[c].p[1], RADIUS, W - RADIUS)];
-        bounce(balls[c], rail);
-        if (c === cue) events.push({ kind: "cushion", detail: rail, at: clock, p: balls[c].p.slice() });
+        // 되튕긴 경우에만 쿠션으로 친다. 쿠션을 따라 기어가는 공은 매 걸음
+        // 여기로 돌아오는데, 그때마다 한 개씩 세면 한 샷에 쿠션이 370개가
+        // 나오고 — judge()가 쿠션을 세므로 — 세 개를 못 넘긴 샷이 득점으로
+        // 둔갑한다.
+        if (bounce(balls[c], rail) && c === cue) {
+          events.push({ kind: "cushion", detail: rail, at: clock, p: balls[c].p.slice() });
+        }
       }
 
       for (let i = 0; i < colours.length; i++) {
@@ -240,10 +257,8 @@ const SIM = (() => {
   // 기준 샷은 짧은 쿠션 한가운데에서 긴 쿠션과 나란히 무회전으로 곧게 친 수구.
   // 표는 src/physics/strength.py와 같은 값이고 tests/test_strength.py가 둘을
   // 붙들어 둔다 — 물리가 바뀌면 같은 이름이 다른 세기를 가리키게 되므로.
-  const STRENGTH = [0.31, 0.72, 1.13, 1.70, 2.22, 2.73, 3.13, 3.51, 3.93,
-                    4.20, 4.89, 5.66, 6.25, 7.14, 8.03, 9.37, 10.91];
-  const STRENGTH_SPEED = [600, 900, 1200, 1600, 2000, 2400, 2800, 3200, 3600,
-                          4000, 4800, 5600, 6400, 8000, 10000, 14000, 20000];
+  const STRENGTH = [0.14, 0.32, 0.57, 1.00, 1.37, 1.84, 2.45, 3.08, 3.84, 4.46, 5.07, 5.75, 6.65, 7.89, 8.79, 9.89, 10.73, 11.91, 13.57, 15.15];
+  const STRENGTH_SPEED = [300, 450, 600, 800, 1000, 1200, 1500, 1800, 2200, 2600, 3000, 3500, 4000, 4800, 5600, 6800, 8000, 10000, 14000, 20000];
 
   function between(x, from, to) {
     if (x <= from[0]) return to[0] * x / from[0];
