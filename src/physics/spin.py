@@ -101,7 +101,13 @@ def struck(position, direction, speed, tips_side=0.0, tips_vertical=0.0):
 
     sideways = np.clip(tips_side, -MAX_TIPS, MAX_TIPS) * TIP_MM
     vertical = np.clip(tips_vertical, -MAX_TIPS, MAX_TIPS) * TIP_MM
-    side = 5.0 * speed * sideways / (2.0 * BALL_RADIUS_MM ** 2)
+    # 부호: 이 좌표계는 화면과 같아서 y가 아래로 간다. 그래서 "위에서 보아
+    # 시계 방향"인 오른쪽 회전이 ω로는 음수다. 종이에 그려 따지면 손잡이를
+    # 틀리기 쉬워서, tools/check_side_sign.py로 영상에 대고 판정했다: 회전
+    # 방향이 측정된 플레이 120개에서 이 부호가 1초 뒤 301 mm, 반대 부호는
+    # 364 mm였다 — 회전을 아예 안 넣은 348 mm보다도 나빴다. 선수가 먼저
+    # 알아챘다: "당점결정을 좌우가 바뀌는 것 같아."
+    side = -5.0 * speed * sideways / (2.0 * BALL_RADIUS_MM ** 2)
 
     # Follow and draw show up in how fast the contact point is moving: a ball
     # struck high is already part-way to rolling, one struck low is spinning
@@ -146,7 +152,7 @@ def tips_of(ball):
     """The side on a ball, back in the units a player was told: tips."""
     if ball.speed < 1e-9:
         return 0.0
-    tips = ball.side * 2.0 * BALL_RADIUS_MM ** 2 / (5.0 * ball.speed * TIP_MM)
+    tips = -ball.side * 2.0 * BALL_RADIUS_MM ** 2 / (5.0 * ball.speed * TIP_MM)
     return float(np.clip(tips, -MAX_TIPS, MAX_TIPS))
 
 

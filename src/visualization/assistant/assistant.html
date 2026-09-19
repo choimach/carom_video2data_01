@@ -649,6 +649,13 @@
   }
 
   function render() {
+    drawOnly();
+    paint();
+  }
+
+  // 테이블만 다시 그린다. 당점을 끄는 동안에는 이것만 부른다 — render()는
+  // 옆 판을 통째로 새로 만들어서, 끌고 있던 점을 손에서 없애 버린다.
+  function drawOnly() {
     const svg = document.getElementById("table");
     svg.textContent = "";
     el(svg, "rect", { x: -150, y: -150, width: L + 300, height: W + 300, rx: 46, fill: "var(--wood)" });
@@ -734,7 +741,6 @@
                                        opacity: playing ? .25 : 1, style: "cursor:grab" });
       drag(ball, colour, svg, ring);
     }
-    paint();
   }
 
   const chosenRow = () =>
@@ -762,6 +768,70 @@
     return `${name} ${amount % 1 ? amount.toFixed(1) : amount}팁`;
   }
 
+
+  // 당점을 손으로 옮긴다. 옮기면 그 자리로 다시 쳐서 궤적을 새로 그린다 —
+  // 조언판이 고른 당점이 아니라 **선수가 주는 당점**으로 공이 어디로 가는지
+  // 보는 것이, 이 화면이 실제로 쓰이는 방식이다.
+  function armTipDrag() {
+    const plate = document.querySelector(".plate svg");
+    const row = chosenRow();
+    if (!plate || !row) return;
+    const dot = plate.querySelector(".tip-dot");
+    const grab = plate.querySelector(".tip-grab");
+    if (!dot || !grab) return;
+    const centre = parseFloat(dot.dataset.centre);
+    const scale = parseFloat(dot.dataset.scale);
+
+    const place = (event) => {
+      const ctm = plate.getScreenCTM();
+      if (!ctm) return;
+      const at = plate.createSVGPoint();
+      at.x = event.clientX;
+      at.y = event.clientY;
+      const here = at.matrixTransform(ctm.inverse());
+      let side = (here.x - centre) / scale;
+      let up = -here.y / scale;
+      // 미스큐 한계 밖으로는 나갈 수 없다. 방향은 두고 길이만 줄인다.
+      const out = Math.hypot(side, up);
+      if (out > SIM.MAX_TIPS) { side *= SIM.MAX_TIPS / out; up *= SIM.MAX_TIPS / out; }
+      // 반 팁 눈금에 붙인다 — 선수가 말하는 단위가 그것이다.
+      row.hit.side = Math.round(side * 2) / 2;
+      row.hit.vertical = Math.round(up * 2) / 2;
+      row.hit.byHand = true;
+      replay(row);
+    };
+
+    grab.onpointerdown = (event) => {
+      event.preventDefault();
+      grab.setPointerCapture(event.pointerId);
+      stopPlaying();
+      const move = (e) => place(e);
+      const done = () => {
+        grab.removeEventListener("pointermove", move);
+        grab.removeEventListener("pointerup", done);
+        render();
+      };
+      grab.addEventListener("pointermove", move);
+      grab.addEventListener("pointerup", done);
+      place(event);
+    };
+  }
+
+  // 바뀐 당점으로 같은 겨냥·같은 세기로 다시 친다.
+  function replay(row) {
+    const rad = row.hit.deg * Math.PI / 180;
+    const speed = row.hit.speed;
+    row.hit.shot = SIM.play(layout, cue, [Math.cos(rad) * speed, Math.sin(rad) * speed],
+                            row.hit.side, row.hit.vertical);
+    row.hit.judged = SIM.judge(row.hit.shot);
+    const way = row.hit.shot.paths[row.hit.judged.first] || [];
+    let pushed = 0;
+    for (let i = 1; i < way.length; i++) {
+      pushed += Math.hypot(way[i][0] - way[i - 1][0], way[i][1] - way[i - 1][1]);
+    }
+    row.hit.pushed = pushed;
+    drawOnly();
+  }
 
   // 후보 목록을 판단표로 그린다. 순위 그대로 세로로 놓아, 몇 번째에 있는 것이
   // 맞다고 하셨는지가 그대로 채점 점수가 된다.
@@ -868,8 +938,11 @@
               stroke="rgba(0,0,0,.28)" stroke-width=".6"/>
         <line x1="${x}" y1="${-R * 0.9}" x2="${x}" y2="${R * 0.9}"
               stroke="rgba(0,0,0,.28)" stroke-width=".6"/>
-        <circle cx="${x + side * T * scale}" cy="${-vertical * T * scale}" r="5"
-                fill="var(--cloth)" stroke="#fff" stroke-width="1.2"/>
+        <circle class="tip-dot" cx="${x + side * T * scale}" cy="${-vertical * T * scale}" r="5"
+                fill="var(--cloth)" stroke="#fff" stroke-width="1.2"
+                style="cursor:grab" data-centre="${x}" data-scale="${T * scale}"/>
+        <circle class="tip-grab" cx="${x + side * T * scale}" cy="${-vertical * T * scale}" r="11"
+                fill="transparent" style="cursor:grab"/>
         ${Math.abs(x) > 2 ? `<line x1="0" y1="44" x2="${x}" y2="44"
               stroke="var(--ink)" stroke-width="1.4"/>
           <line x1="0" y1="40" x2="0" y2="48" stroke="var(--ink)" stroke-width="1"/>
@@ -1000,6 +1073,7 @@
       detail.classList.remove("on");
     }
     paintVerdicts();
+    armTipDrag();
     document.getElementById("footer").innerHTML =
       `${result.how ? `<b>${result.how}</b>에서 찾았습니다. ` : ""}${result.kisses ? `키스가 나는 선 <b>${result.kisses}개</b>는 빼고 보여드립니다. ` : ""}
        순위는 프로 ${DATA.plays.length}개 플레이 중 <b>이 배치와 가장 가까운 ${K}개</b>가 정합니다 —
@@ -1223,6 +1297,10 @@
     try {
       await navigator.clipboard.writeText(lines.join("\n"));
       said.textContent = "복사됨 — 채팅창에 붙여넣어 주세요";
+      // 복사한 의견은 비운다. 남겨 두면 다음 배치의 의견에 지난 말이 섞여
+      // 들어가고, 장부에는 어느 배치에 대한 말인지 알 수 없는 기록이 쌓인다.
+      comment.value = "";
+      try { localStorage.removeItem(COMMENT_KEY); } catch (e) {}
     } catch (e) {
       said.textContent = "복사 실패";
     }

@@ -56,7 +56,9 @@ const SIM = (() => {
     const v = [heading[0] / length * speed, heading[1] / length * speed];
     const sideways = clamp(tipsSide, -MAX_TIPS, MAX_TIPS) * TIP_MM;
     const vertical = clamp(tipsVertical, -MAX_TIPS, MAX_TIPS) * TIP_MM;
-    const side = 5 * speed * sideways / (2 * RADIUS * RADIUS);
+    // 오른쪽 회전은 위에서 보아 시계 방향이고, y가 아래로 가는 이 좌표계에서
+    // 그것은 ω로 음수다. src/physics/spin.py와 같은 부호여야 한다.
+    const side = -5 * speed * sideways / (2 * RADIUS * RADIUS);
     const rolled = clamp(vertical / (0.4 * RADIUS), -1.5, 1);
     return { p: position.slice(), v, side, slip: [v[0] * (1 - rolled), v[1] * (1 - rolled)] };
   }

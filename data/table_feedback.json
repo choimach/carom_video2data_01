@@ -94,6 +94,250 @@
     }
    ],
    "comment": "선택과 궤적은 아주좋아. 이 플레이 같은 경우 대개 두께는 1/2~2/3에서 잡고 당점은 대개 2팁 상단으로 하는데, 상단 9시에서 12시 사이의 당점을 상황에 따라 정해. 내 경우는 대개 상단 2팁 11시 당점을 줘. 당점 이미지의 동심원이 균등하지 않아."
+  },
+  {
+   "at": "2026-09-19T14:41:44",
+   "table": [
+    2844,
+    1422
+   ],
+   "cue": "white",
+   "layout": {
+    "white": [
+     1700,
+     591
+    ],
+    "yellow": [
+     719,
+     486
+    ],
+    "red": [
+     2497,
+     259
+    ]
+   },
+   "want": {
+    "first": "any",
+    "face": "any"
+   },
+   "picked": "앞돌리기|red|right",
+   "kisses": 24,
+   "candidates": [
+    {
+     "key": "뒤돌리기|yellow|right",
+     "route": "뒤돌리기",
+     "first": "yellow",
+     "face": "right",
+     "thickness": 0.263,
+     "tips": [
+      1,
+      1.73
+     ],
+     "strength": 5.5,
+     "deg": 188.75,
+     "room": 0.5,
+     "rails": 3,
+     "chosen": 2,
+     "scored": 2,
+     "total": 40,
+     "band": [
+      9,
+      0.33
+     ]
+    },
+    {
+     "key": "뒤돌리기|red|left",
+     "route": "뒤돌리기",
+     "first": "red",
+     "face": "left",
+     "thickness": 0.367,
+     "tips": [
+      -2,
+      0
+     ],
+     "strength": 7,
+     "deg": 334.75,
+     "room": 1,
+     "rails": 3,
+     "chosen": 1,
+     "scored": 0,
+     "total": 40,
+     "band": [
+      9,
+      0.33
+     ]
+    },
+    {
+     "key": "빗겨치기|red|right",
+     "route": "빗겨치기",
+     "first": "red",
+     "face": "right",
+     "thickness": 0.164,
+     "tips": [
+      2,
+      0
+     ],
+     "strength": 7,
+     "deg": 340.75,
+     "room": 0.5,
+     "rails": 5,
+     "chosen": 1,
+     "scored": 1,
+     "total": 40,
+     "band": [
+      3,
+      0.368
+     ]
+    },
+    {
+     "key": "빗겨치기|yellow|right",
+     "route": "빗겨치기",
+     "first": "yellow",
+     "face": "right",
+     "thickness": 0.053,
+     "tips": [
+      -1.73,
+      -1
+     ],
+     "strength": 5.5,
+     "deg": 189.5,
+     "room": 0.25,
+     "rails": 4,
+     "chosen": 2,
+     "scored": 1,
+     "total": 40,
+     "band": [
+      3,
+      0.368
+     ]
+    },
+    {
+     "key": "앞돌리기|yellow|left",
+     "route": "앞돌리기",
+     "first": "yellow",
+     "face": "left",
+     "thickness": 0.111,
+     "tips": [
+      0,
+      0
+     ],
+     "strength": 7,
+     "deg": 182.9387532119171,
+     "room": 0.25,
+     "rails": 3,
+     "chosen": 2,
+     "scored": 2,
+     "total": 40,
+     "band": [
+      7,
+      0.434
+     ]
+    },
+    {
+     "key": "빗겨치기|yellow|left",
+     "route": "빗겨치기",
+     "first": "yellow",
+     "face": "left",
+     "thickness": 0.268,
+     "tips": [
+      1,
+      1.73
+     ],
+     "strength": 7,
+     "deg": 183.5,
+     "room": 0.25,
+     "rails": 3,
+     "chosen": 1,
+     "scored": 1,
+     "total": 40,
+     "band": [
+      3,
+      0.368
+     ]
+    },
+    {
+     "key": "걸어치기|yellow|left",
+     "route": "걸어치기",
+     "first": "yellow",
+     "face": "left",
+     "thickness": 0,
+     "tips": [
+      0,
+      2
+     ],
+     "strength": 7,
+     "deg": 181.5,
+     "room": 0.25,
+     "rails": 4,
+     "chosen": 1,
+     "scored": 1,
+     "total": 40,
+     "band": [
+      48,
+      0.232
+     ]
+    },
+    {
+     "key": "뱅크샷|red|left",
+     "route": "뱅크샷",
+     "first": "red",
+     "face": "left",
+     "thickness": 0,
+     "tips": [
+      0,
+      2
+     ],
+     "strength": 5.5,
+     "deg": 333.25,
+     "room": 0.5,
+     "rails": 4,
+     "chosen": 0,
+     "scored": 0,
+     "total": 40,
+     "band": [
+      4,
+      0.772
+     ]
+    },
+    {
+     "key": "앞돌리기|red|right",
+     "route": "앞돌리기",
+     "first": "red",
+     "face": "right",
+     "thickness": 0.347,
+     "tips": [
+      0,
+      0
+     ],
+     "strength": 5.5,
+     "deg": 340,
+     "room": 0.25,
+     "rails": 3,
+     "chosen": 0,
+     "scored": 0,
+     "total": 40,
+     "band": [
+      7,
+      0.434
+     ]
+    }
+   ],
+   "verdicts": {
+    "뒤돌리기|yellow|right": "good",
+    "뒤돌리기|red|left": "good",
+    "빗겨치기|red|right": "bad",
+    "빗겨치기|yellow|right": "bad",
+    "앞돌리기|yellow|left": "good",
+    "빗겨치기|yellow|left": "good",
+    "걸어치기|yellow|left": "good",
+    "뱅크샷|red|left": "good",
+    "앞돌리기|red|right": "good"
+   },
+   "played": {
+    "key": "뒤돌리기|yellow|right",
+    "scored": true
+   },
+   "comment": "두께 1/4 (노란공 오른쪽면, 빗나감 45 mm) · 당점 1시 2팁  -> 두께 1/2 (노란공 오른쪽면,) · 당점10시 2팁 \n6.빗겨치기 · 노란공 왼쪽면 는 빗겨치기가 아니고 앞돌리기 짧게야\n7.걸어치기 · 노란공 왼쪽면 불가능하지는 않은데 이렇게는 잘 안침\n8.뱅크샷 · 빨간공 왼쪽면 불가능하지는 않은데 이렇게는 잘 안침\n\n당점결정을 좌우가 바뀌는것 같아\n당점 위치를 내가 drag해서 바꿀 수 있게 헤줘\n결과복사 후에는 comment란을 지워줘"
   }
  ]
 }

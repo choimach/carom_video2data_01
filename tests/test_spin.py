@@ -46,17 +46,37 @@ def rebound(tips, heading):
     return np.degrees(np.arctan2(abs(ball.velocity[0]), abs(ball.velocity[1])))
 
 
+def test_right_hand_side_turns_the_ball_clockwise_seen_from_above():
+    """어느 쪽이 오른쪽 회전인지를 못 박는다.
+
+    이 좌표계는 화면과 같아서 y가 아래로 간다. 그래서 "위에서 보아 시계
+    방향"인 오른쪽 회전이 ω로는 **음수**다. 종이에 그려서는 손잡이를 틀리기
+    쉬워 실제로 한동안 반대로 들어가 있었고, 선수가 화면을 보고 먼저
+    알아챘다 — "당점결정을 좌우가 바뀌는 것 같아."
+
+    판정은 눈이 아니라 영상이 했다 (tools/check_side_sign.py): 회전 방향이
+    측정된 플레이 120개에서 이 부호가 1초 뒤 301 mm, 반대 부호는 364 mm,
+    회전을 아예 넣지 않으면 348 mm였다. 반대 부호는 회전을 안 넣느니만
+    못했다는 뜻이다.
+    """
+    right = spin.struck((700.0, 700.0), (1.0, 0.0), 2500.0, tips_side=3.0)
+    left = spin.struck((700.0, 700.0), (1.0, 0.0), 2500.0, tips_side=-3.0)
+    assert right.side < 0 < left.side, "좌우 회전 부호가 뒤집혔습니다"
+    # 되읽는 쪽도 함께 뒤집혀 있어야 짝이 맞는다.
+    assert spin.tips_of(right) == 3.0 and spin.tips_of(left) == -3.0
+
+
 def test_one_side_opens_a_rebound_and_the_other_closes_it():
     # Which of the two is "running" depends on the rail and on which way along
     # it the ball is going - so what is fixed is that they pull opposite ways.
-    assert rebound(-3.0, (1.0, -1.0)) > rebound(0.0, (1.0, -1.0)) >= rebound(3.0, (1.0, -1.0))
+    assert rebound(3.0, (1.0, -1.0)) > rebound(0.0, (1.0, -1.0)) >= rebound(-3.0, (1.0, -1.0))
 
 
 def test_and_they_swap_when_the_ball_runs_the_other_way():
     # Same side on the ball, same rail, opposite direction along it: the side
     # that opened the angle now closes it. A model that gets this wrong sends
     # every reverse-side shot the wrong way round the table.
-    assert rebound(3.0, (-1.0, -1.0)) > rebound(0.0, (-1.0, -1.0)) >= rebound(-3.0, (-1.0, -1.0))
+    assert rebound(-3.0, (-1.0, -1.0)) > rebound(0.0, (-1.0, -1.0)) >= rebound(3.0, (-1.0, -1.0))
 
 
 def test_a_cushion_keeps_some_of_the_side_and_not_all():
@@ -64,7 +84,10 @@ def test_a_cushion_keeps_some_of_the_side_and_not_all():
     before = ball.side
     ball.position = np.array([1400.0, spin.BALL_RADIUS_MM])
     spin.bounce(ball, "top")
-    assert 0 < ball.side < before
+    # 방향은 지키고 크기는 줄어든다. 부호로 쓰면 규약이 바뀔 때마다 같이
+    # 걸려서, 정작 확인하려던 것을 가린다.
+    assert np.sign(ball.side) == np.sign(before)
+    assert 0 < abs(ball.side) < abs(before)
 
 
 def test_a_cut_throws_the_object_ball_off_the_line_of_centres():
