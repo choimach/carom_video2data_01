@@ -33,3 +33,4 @@ outputs/
 # screening previews and catalogues are working files
 data/_screen/
 build/
+alternatives.jsonl
