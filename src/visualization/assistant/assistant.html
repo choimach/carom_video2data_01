@@ -321,13 +321,20 @@
   const STRENGTHS = [3.5, 4.5, 5.5, 7.0];
   const SPEEDS = STRENGTHS.map((s) => Math.round(SIM.speedFor(s)));
   // 당점: 좌우는 팁, 위아래는 거친 탐색에서 0으로 두고 정밀 탐색에서만 본다.
-  const TIPS = [-3, -1.5, 0, 1.5, 3];
-  // 상하 당점은 처음부터 함께 훑는다. 선수의 말: "이 플레이 같은 경우 대개
-  // 두께는 1/2~2/3에서 잡고 당점은 대개 2팁 상단으로 하는데 0~3시 방향으로
-  // 상황에 따라 정해." 예전에는 후보가 8개 미만일 때만 상하를 봤는데, 그러면
-  // 줄이 넉넉히 나오는 배치일수록 정작 그가 실제로 치는 당점을 한 번도
-  // 시도하지 않은 채로 답을 냈다.
-  const TIPS_VERTICAL = [0, 2], TIPS_VERTICAL_EXTRA = [-2, 3];
+  // 당점은 극좌표다. 선수는 "상단 2팁 11시"라고 말하는데, 그것은 중심에서
+  // 11시 방향으로 2팁 떨어진 **한 점**이다. 좌우 2팁과 상하 2팁을 따로 주면
+  // 중심에서 2.83팁이 되어 미스큐 한계를 넘는 다른 점이 된다.
+  //
+  // 거친 훑기는 시계 여덟 방향을 2팁에서 본다 — 그가 실제로 주는 양이다.
+  // ("대개 상단 2팁 11시 당점을 줘.") 양은 득점하는 줄을 찾은 뒤에 1팁과
+  // 3팁으로 넓혀 본다.
+  const CLOCK = [12, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11];
+  const atClock = (hour, tips) => {
+    const turn = (hour % 12) / 12 * 2 * Math.PI;   // 12시에서 시계 방향
+    return [tips * Math.sin(turn), tips * Math.cos(turn)];
+  };
+  const TIP_POINTS = [[0, 0], ...CLOCK.map((h) => atClock(h, 2))];
+  const TIP_AMOUNTS = [1, 3];
   const COARSE = 2, FINE = 0.25, CHUNK = 120;
   const pause = () => new Promise((go) => setTimeout(go, 0));
 
@@ -383,9 +390,17 @@
   // 대신 "어느 공을, 어느 면을, 얼마나 두껍게" 맞힐지로 훑는다. 그러면 모든
   // 시도가 반드시 1적구에 맞고, 선수가 실제로 고르는 것과 같은 축이 된다.
   // 겨냥선에서 벗어난 각도는 접촉에 필요한 어긋남에서 바로 나온다.
-  // 두께 칸을 26에서 18로 줄이고, 그 예산으로 상하 당점을 본다. 거친 훑기는
-  // 될 만한 자리를 찾는 일이고 해상도는 뒤의 0.25도 훑기가 되찾아 준다.
-  const THICKNESS_STEPS = 18, SEEDS = 12, SEED_SPAN = 8;
+  // 두께 칸 수는 거리가 정한다. 같은 두께 범위라도 공이 가까우면 각도로 넓게
+  // 퍼지고 멀면 좁게 모이므로, 칸 수를 고정하면 가까운 공에서는 칸 사이가
+  // 뒤의 정밀 훑기(±1도)보다 벌어져 새고, 먼 공에서는 같은 각도를 몇 번씩
+  // 다시 친다. 한 칸이 0.8도를 넘지 않게 잡되 8~30칸 사이로 묶는다.
+  const STEP_DEG = 0.8, MIN_STEPS = 8, MAX_STEPS = 30;
+  const SEEDS = 12, SEED_SPAN = 8;
+  const thicknessSteps = (reach) => {
+    const span = 2 * Math.asin(Math.min(1, SIM.DIAMETER / Math.max(reach, SIM.DIAMETER)))
+      * 180 / Math.PI;
+    return Math.max(MIN_STEPS, Math.min(MAX_STEPS, Math.round(span / STEP_DEG)));
+  };
 
   function contactJobs() {
     const jobs = [];
@@ -396,17 +411,17 @@
       const straight = Math.atan2(to[1] - from[1], to[0] - from[0]) * 180 / Math.PI;
       const reach = Math.hypot(to[0] - from[0], to[1] - from[1]);
       if (reach < 70) continue;
-      for (let i = 0; i <= THICKNESS_STEPS; i++) {
+      const steps = thicknessSteps(reach);
+      for (let i = 0; i <= steps; i++) {
         // 어긋남 0이면 정면, 공 지름만큼이면 스치는 끝이다.
-        const offset = (i / THICKNESS_STEPS) * SIM.RADIUS * 2;
+        const offset = (i / steps) * SIM.RADIUS * 2;
         const swing = Math.asin(Math.min(1, offset / reach)) * 180 / Math.PI;
         for (const hand of (i === 0 ? [0] : [1, -1])) {
           const deg = ((straight + hand * swing) % 360 + 360) % 360;
-          for (const speed of SPEEDS) {
-            for (const side of TIPS) {
-              for (const up of TIPS_VERTICAL) jobs.push([deg, speed, side, up]);
-            }
-          }
+          // 거친 훑기는 무회전으로만 친다. 공이 1적구를 맞고 쿠션 두 개를
+          // 먹느냐는 대체로 기하가 정하고, 당점은 그 다음을 정한다. 시계 열두
+          // 방향을 여기서 다 펼치면 같은 답을 3.1초가 아니라 5.4초에 낸다.
+          for (const speed of SPEEDS) jobs.push([deg, speed, 0, 0]);
         }
       }
     }
@@ -427,13 +442,13 @@
         .map((s) => Math.round(Math.min(7, Math.max(1, s)) * 2) / 2)
         .map((s) => Math.round(SIM.speedFor(s)));
       for (const speed of new Set(speeds)) {
-        for (const side of TIPS) {
+        for (const [side, up] of TIP_POINTS) {
           for (let d = -4; d <= 4; d += FINE) {
             const deg = Math.round((((aim + d) % 360) + 360) % 360 / FINE) * FINE;
-            const key = `${deg}:${speed}:${side}`;
+            const key = `${deg}:${speed}:${side}:${up}`;
             if (seen.has(key)) continue;
             seen.add(key);
-            jobs.push([deg, speed, side]);
+            jobs.push([deg, speed, side, up]);
           }
         }
       }
@@ -452,16 +467,19 @@
       if (i % CHUNK === CHUNK - 1) { onProgress(0.45 * i / contact.length); await pause(); }
     }
     // 2) 그중 될 뻔한 자리 둘레만 0.25도로 다시 — 득점 창이 그만큼 좁다.
+    // 될 만한 자리에서만 시계 열두 방향을 펼친다. 방향은 여기서부터 중요해진다.
     const key4 = ([d, s, x, u]) => `${d}:${s}:${x}:${u || 0}`;
     const seen = new Set(contact.map(key4));
     const around = [];
-    for (const [deg, speed, side, up] of promising) {
-      for (let d = -1.5; d <= 1.5; d += FINE) {
-        const at = Math.round((((deg + d) % 360 + 360) % 360) / FINE) * FINE;
-        const job = [at, speed, side, up];
-        if (seen.has(key4(job))) continue;
-        seen.add(key4(job));
-        around.push(job);
+    for (const [deg, speed] of promising) {
+      for (const [side, up] of TIP_POINTS) {
+        for (let d = -1.0; d <= 1.0; d += FINE) {
+          const at = Math.round((((deg + d) % 360 + 360) % 360) / FINE) * FINE;
+          const job = [at, speed, side, up];
+          if (seen.has(key4(job))) continue;
+          seen.add(key4(job));
+          around.push(job);
+        }
       }
     }
     for (let i = 0; i < around.length; i++) {
@@ -470,20 +488,26 @@
     }
     // 밀어치기와 끌어치기는 그 다음이다. 중단 당점으로 이미 여러 줄이 나왔으면
     // 굳이 세 배로 돌리지 않는다 — 기다리는 시간이 그만큼 늘어난다.
-    if (hits.length < 8) {
-      for (let i = 0; i < around.length; i++) {
-        for (const vertical of TIPS_VERTICAL_EXTRA) {
-          tryAngle(around[i][0], around[i][1], around[i][2], hits, counters, vertical);
+    // 득점한 줄마다 같은 방향에서 팁 양만 1팁·3팁으로 바꿔 본다. 방향은
+    // 이미 맞았으니 값이 싸고, "2팁 말고 1팁이면?"은 선수가 실제로 묻는 것이다.
+    const found = hits.slice();
+    for (let i = 0; i < found.length; i++) {
+      const h = found[i];
+      const was = Math.hypot(h.side, h.vertical || 0);
+      if (was > 0.01) {
+        for (const amount of TIP_AMOUNTS) {
+          const scale = amount / was;
+          tryAngle(h.deg, h.speed, h.side * scale, hits, counters, (h.vertical || 0) * scale);
         }
-        if (i % CHUNK === CHUNK - 1) { onProgress(0.70 + 0.10 * i / around.length); await pause(); }
       }
+      if (i % CHUNK === CHUNK - 1) { onProgress(0.70 + 0.10 * i / found.length); await pause(); }
     }
     // 3) 후보가 적을 때만, 프로가 실제로 친 방향 둘레를 더 본다. 두께 훑기가
     // 대개 충분하므로 이건 대비책이고, 매번 돌리면 그만큼 느려진다.
     const seeded = hits.length >= 5 ? []
-      : seedJobs(near || []).filter(([d, s, x]) => !seen.has(`${d}:${s}:${x}:0`));
+      : seedJobs(near || []).filter((j) => !seen.has(key4(j)));
     for (let i = 0; i < seeded.length; i++) {
-      tryAngle(seeded[i][0], seeded[i][1], seeded[i][2], hits, counters);
+      tryAngle(seeded[i][0], seeded[i][1], seeded[i][2], hits, counters, seeded[i][3]);
       if (i % CHUNK === CHUNK - 1) { onProgress(0.8 + 0.2 * i / seeded.length); await pause(); }
     }
     if (hits.length) return finish(hits, counters, "두께로 훑어");
@@ -491,8 +515,8 @@
     // 아무것도 없으면 전방위로 한 번 더.
     const jobs = [];
     for (const speed of SPEEDS) {
-      for (const side of TIPS) {
-        for (let deg = 0; deg < 360; deg += COARSE) jobs.push([deg, speed, side]);
+      for (const [side, up] of TIP_POINTS) {
+        for (let deg = 0; deg < 360; deg += COARSE) jobs.push([deg, speed, side, up]);
       }
     }
     const fine = [];
@@ -680,14 +704,17 @@
     return halves ? halves[1] : `${eighths}/8`;
   };
 
-  // 당점을 선수가 듣는 말로: 시계 방향과 팁.
+  // 당점을 선수가 말하는 대로 되읽는다: 중심에서 어느 시계 방향으로 몇 팁인가.
+  // 한 점이지 두 값이 아니다 — 팁 수는 중심에서의 거리이고, 시계는 방향이다.
   function asTip(side, vertical) {
-    if (!side && !vertical) return "정중앙";
-    const clock = [[0, 1, "12시"], [1, 1, "1시반"], [1, 0, "3시"], [1, -1, "4시반"],
-                   [0, -1, "6시"], [-1, -1, "7시반"], [-1, 0, "9시"], [-1, 1, "10시반"]]
-      .find(([x, y]) => x === Math.sign(side) && y === Math.sign(vertical));
-    const tips = Math.max(Math.abs(side), Math.abs(vertical));
-    return `${clock ? clock[2] : ""} ${tips % 1 ? tips.toFixed(1) : tips}팁`.trim();
+    const tips = Math.hypot(side, vertical);
+    if (tips < 0.05) return "정중앙";
+    let hour = Math.atan2(side, vertical) / (2 * Math.PI) * 12;   // 12시에서 시계 방향
+    hour = (hour % 12 + 12) % 12;
+    const half = Math.round(hour * 2) / 2;
+    const name = `${half === 0 ? 12 : Math.floor(half) || 12}시${half % 1 ? " 반" : ""}`;
+    const amount = Math.round(tips * 2) / 2;
+    return `${name} ${amount % 1 ? amount.toFixed(1) : amount}팁`;
   }
 
 
@@ -706,9 +733,16 @@
     const cueColour = cue === "white" ? "var(--ball-white)" : "var(--ball-yellow)";
     const firstColour = row.first === "red" ? "var(--ball-red)"
       : row.first === "white" ? "var(--ball-white)" : "var(--ball-yellow)";
+    // 팁 자리를 실제 밀리미터(5·10·15)로 그리면 반지름 30.75 안쪽 절반에만
+    // 몰려서, 바깥에 원 하나 없는 빈 구간이 남고 고르지 않아 보인다. 3팁이
+    // 미스큐 한계이고 그보다 바깥은 칠 수 없는 자리이므로, 그 한계를 공 가장
+    // 자리 가까이로 늘려 세 칸을 고르게 나눈다 — 선수가 쓰는 당점 그림의
+    // 관례이기도 하다. 점도 같은 배율로 옮긴다.
+    const scale = (R * 0.88) / (SIM.MAX_TIPS * T);
     const rings = [1, 2, 3].map((n) =>
-      `<circle cx="${x}" cy="0" r="${n * T}" fill="none" stroke="rgba(0,0,0,.4)"
-               stroke-width=".6" stroke-dasharray="2.5 2"/>`).join("");
+      `<circle cx="${x}" cy="0" r="${(n * T * scale).toFixed(2)}" fill="none"
+               stroke="rgba(0,0,0,${n === 3 ? .55 : .35})" stroke-width="${n === 3 ? .9 : .6}"
+               stroke-dasharray="${n === 3 ? "" : "2.5 2"}"/>`).join("");
     return `<div class="plate">
       <span class="cap">겨냥 — 두께와 당점</span>
       <svg viewBox="-104 -52 208 104" role="img"
@@ -722,12 +756,12 @@
         <circle cx="${x}" cy="0" r="${R}" fill="${cueColour}" fill-opacity=".55"
                 stroke="rgba(0,0,0,.6)" stroke-width="1.2"/>
         ${rings}
-        <line x1="${x - R}" y1="0" x2="${x + R}" y2="0"
-              stroke="rgba(0,0,0,.35)" stroke-width=".6"/>
-        <line x1="${x}" y1="${-R}" x2="${x}" y2="${R}"
-              stroke="rgba(0,0,0,.35)" stroke-width=".6"/>
-        <circle cx="${x + side * T}" cy="${-vertical * T}" r="5.5"
-                fill="var(--cloth)" stroke="#fff" stroke-width="1.1"/>
+        <line x1="${x - R * 0.9}" y1="0" x2="${x + R * 0.9}" y2="0"
+              stroke="rgba(0,0,0,.28)" stroke-width=".6"/>
+        <line x1="${x}" y1="${-R * 0.9}" x2="${x}" y2="${R * 0.9}"
+              stroke="rgba(0,0,0,.28)" stroke-width=".6"/>
+        <circle cx="${x + side * T * scale}" cy="${-vertical * T * scale}" r="5"
+                fill="var(--cloth)" stroke="#fff" stroke-width="1.2"/>
         ${Math.abs(x) > 2 ? `<line x1="0" y1="44" x2="${x}" y2="44"
               stroke="var(--ink)" stroke-width="1.4"/>
           <line x1="0" y1="40" x2="0" y2="48" stroke="var(--ink)" stroke-width="1"/>
@@ -735,7 +769,8 @@
       </svg>
       <span class="said">두께 <b>${asThickness(row.hit.thickness)}</b>
         (${NAMES[row.first]} ${row.hit.face === "left" ? "왼쪽" : "오른쪽"}면,
-        빗나감 ${Math.round(gap)} mm) · 당점 <b>${asTip(side, vertical)}</b></span>
+        빗나감 ${Math.round(gap)} mm) · 당점 <b>${asTip(side, vertical)}</b>
+        <span style="color:var(--faint)">— 바깥 원이 3팁(미스큐 한계)</span></span>
       ${row.band ? `<span class="said" style="color:var(--soft)">${row.band.wide
         ? `전체 프로 ${row.band.n}명` : `가까운 프로 ${row.band.n}명`}은 ${row.route}를
         <b>${asThickness(row.band.mid)}</b>로 쳤습니다
