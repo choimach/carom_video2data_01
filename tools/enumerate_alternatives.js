@@ -51,32 +51,9 @@ function kissed(shot) {
   return balls.some((e) => e !== first && e.detail === first.detail && e.at < second.at);
 }
 
-function nameRoute(shot, judged, aim, face) {
-  const balls = shot.events.filter((e) => e.kind === 'ball');
-  const first = balls[0];
-  const before = shot.events.filter((e) => e.kind === 'cushion' && e.at < first.at);
-  if (before.length >= 2) return '뱅크샷';
-  if (before.length === 1) return '걸어치기';
-  const second = balls.find((e) => e.detail !== first.detail);
-  const rails = shot.events
-    .filter((e) => e.kind === 'cushion' && e.at > first.at && e.at < second.at)
-    .map((e) => e.detail);
-  if (rails.length < 3) return null;
-  if (rails.length >= 5) return '대회전';
-
-  const path = shot.paths[shot.cue] || [];
-  let area = 0;
-  for (let i = 0; i + 1 < path.length; i++) {
-    const ax = path[i][0] - SIM.L / 2, ay = path[i][1] - SIM.W / 2;
-    const bx = path[i + 1][0] - SIM.L / 2, by = path[i + 1][1] - SIM.W / 2;
-    area += ax * by - ay * bx;
-  }
-  const circuitRight = area > 0;
-  const sameHand = (face === 'right') === circuitRight;
-  const shortFirst = SHORT.has(rails[0]);
-  if (sameHand) return shortFirst ? '앞돌리기' : '옆돌리기';
-  return shortFirst ? '빗겨치기' : '뒤돌리기';
-}
+const ROUTE = require(path.join(ROOT, 'src', 'visualization', 'assistant', 'route.js'));
+const nameRoute = (shot, judged, aim, face) =>
+  ROUTE.of(shot, judged, face, shot.cue, SIM.L, SIM.W);
 
 function search(layout, cue) {
   const from = layout[cue];

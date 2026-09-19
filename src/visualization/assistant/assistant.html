@@ -198,6 +198,7 @@
 </div>
 
 <script src="sim.js"></script>
+<script src="route.js"></script>
 <script id="data" type="application/json">__DATA__</script>
 <script>
   const DATA = JSON.parse(document.getElementById("data").textContent);
@@ -328,34 +329,11 @@
   // 이 배치에서 실제로 득점하는 선을 찾는다. 경로 이름은 선생님 기준 그대로:
   // 1적구 전 쿠션이 있으면 걸어치기·뱅크샷, 단쿠션이 먼저면 2쿠션이 가까워지는지
   // 멀어지는지로 앞돌리기·빗겨치기, 장쿠션이 먼저면 같은 기준으로 옆·뒤돌리기.
-  function nameRoute(shot, judged, aim, face) {
-    // 선수의 기준: 1적구의 오른쪽 면을 맞고 오른쪽으로 돌면 옆돌리기(제각),
-    // 반대면 뒤돌리기. "오른쪽으로 돈다"는 접촉 순간의 꺾임이 아니라 테이블을
-    // 도는 방향이다 - 오른쪽 면을 맞으면 수구는 당장은 왼쪽으로 꺾인다.
-    const balls = shot.events.filter((e) => e.kind === "ball");
-    const first = balls[0];
-    const opening = shot.events.filter((e) => e.kind === "cushion" && e.at < first.at);
-    if (opening.length >= 2) return "뱅크샷";
-    if (opening.length === 1) return "걸어치기";
-    const after = shot.events.filter((e) => e.kind === "cushion" && e.at > first.at);
-    if (!after.length) return null;
-    const rails = after.map((e) => e.detail);
-    if (rails.length >= 3 && rails[0] === rails[2]
-        && (SHORT.has(rails[1]) !== SHORT.has(rails[0]))) return "되돌아오기";
+  // 경로 이름은 route.js 한 벌에서만 나온다. 한때 이 판정이 세 벌로 갈라져
+  // 서로 다른 답을 냈다 — 그 파일의 첫 주석 참조.
+  const nameRoute = (shot, judged, aim, face) =>
+    ROUTE.of(shot, judged, face, cue, L, W);
 
-    let area = 0;
-    const path = shot.path;
-    for (let i = 0; i < path.length - 1; i++) {
-      const ax = path[i][0] - L / 2, ay = path[i][1] - W / 2;
-      const bx = path[i + 1][0] - L / 2, by = path[i + 1][1] - W / 2;
-      area += ax * by - ay * bx;
-    }
-    const circuitRight = area > 0;
-    const sameHand = (face === "right") === circuitRight;
-    const shortFirst = SHORT.has(rails[0]);
-    if (sameHand) return shortFirst ? "앞돌리기" : "옆돌리기";
-    return shortFirst ? "빗겨치기" : "뒤돌리기";
-  }
 
   // 탐색은 수천 번의 시뮬레이션이라 한 번에 돌리면 화면이 몇 초씩 멈춘다.
   // 조금씩 끊어 돌리고 사이사이 브라우저에 차례를 넘긴다.

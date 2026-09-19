@@ -36,17 +36,19 @@ def build(data_path, out_dir):
     page.write_text(template.replace(PLACEHOLDER, json.dumps(data, ensure_ascii=False,
                                                              separators=(",", ":"))),
                     encoding="utf-8")
-    shutil.copy(SOURCE / "sim.js", out_dir / "sim.js")
+    for side in ("sim.js", "route.js"):
+        shutil.copy(SOURCE / side, out_dir / side)
 
     # The physics is the part a browser cannot complain about usefully, so run
     # node over it here if node is around.
     try:
-        subprocess.run(["node", "--check", str(out_dir / "sim.js")], check=True)
+        for side in ("sim.js", "route.js"):
+            subprocess.run(["node", "--check", str(out_dir / side)], check=True)
     except FileNotFoundError:
         print("node가 없어 문법 검사는 건너뜁니다", file=sys.stderr)
 
     print(f"{page} — 플레이 {len(data['plays'])}개, {page.stat().st_size / 1024:.0f} KB")
-    print(f"{out_dir / 'sim.js'} — 함께 올려야 합니다")
+    print(f"{out_dir / 'sim.js'}, {out_dir / 'route.js'} — 함께 올려야 합니다")
     return page
 
 

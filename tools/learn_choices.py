@@ -128,6 +128,7 @@ def report(name, places, total_branches):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--limit", type=int, default=None)
+    parser.add_argument("--folds", type=int, default=10, help="경기 단위 겹 수")
     args = parser.parse_args()
 
     rounds = load(args.limit)
@@ -137,27 +138,56 @@ def main():
         return 1
 
     data = as_arrays(rounds)
-    train = [d for d in data if d[2].get("split") == "train"]
-    test = [d for d in data if d[2].get("split") != "train"]
-    if not train or not test:
-        print("train/test가 갈리지 않았습니다"); return 1
+
+    # 경기 단위 k-겹. model.json의 고정 split은 test가 전체의 9%뿐이라 95판이
+    # 되고, 그 위에서 잰 차이는 2 표준오차도 안 된다. 겹으로 나누면 **모든 판이
+    # 한 번씩 test가 되므로** 같은 자료로 열 배 단단한 숫자가 나온다.
+    #
+    # 나누는 단위는 반드시 경기다. 같은 경기가 양쪽에 걸치면 같은 선수의 같은
+    # 버릇을 외운 다음 맞혔다고 하게 된다.
+    matches = sorted({one.get("match") for _r, _c, one in data})
+    folds = min(args.folds, len(matches))
+    where = {m: i % folds for i, m in enumerate(matches)}
+    print(f"경기 {len(matches)}개를 {folds}겹으로 나눕니다 (겹마다 전부 한 번씩 test)\n")
 
     branches = [len(one["found"]) for _r, _c, one in data]
     print(f"쓸 수 있는 판 {len(data)}개 (탐색이 프로의 길을 찾아낸 것만)")
     print(f"  배치당 갈래 중앙값 {np.median(branches):.0f}개"
           f" · 버린 길 {sum(branches) - len(data):,}개")
-    print(f"  train {len(train)}판 · test {len(test)}판 (경기 단위로 갈림)\n")
 
-    weight = fit(train)
+    rng = np.random.default_rng(0)
+    places = {"아무렇게나": [], "손 식": [], "배운 식": []}
+    sizes = []
+    for fold in range(folds):
+        train = [d for d in data if where[d[2].get("match")] != fold]
+        held = [d for d in data if where[d[2].get("match")] == fold]
+        if not train or not held:
+            continue
+        weight = fit(train)
+        for rows, chose, one in held:
+            sizes.append(len(rows))
+            places["아무렇게나"].append(int(rng.integers(1, len(rows) + 1)))
+            places["손 식"].append(
+                sorted(range(len(one["found"])), key=lambda i: -by_hand(one, i)).index(chose) + 1)
+            places["배운 식"].append(where_it_landed(rows, chose, weight))
 
-    print("test에서 프로가 실제로 고른 길이 몇 번째에 오는가")
-    report("아무렇게나", [np.random.randint(1, len(r) + 1) for r, _c, _o in test],
-           [len(r) for r, _c, _o in test])
-    report("손 식", [sorted(range(len(o["found"])), key=lambda i: -by_hand(o, i)).index(c) + 1
-                   for _r, c, o in test], [len(r) for r, _c, _o in test])
-    report("배운 식", [where_it_landed(r, c, weight) for r, c, _o in test],
-           [len(r) for r, _c, _o in test])
+    print(f"프로가 실제로 고른 길이 몇 번째에 오는가 ({len(sizes)}판, 전부 한 번씩 test)")
+    for name in ("아무렇게나", "손 식", "배운 식"):
+        report(name, places[name], sizes)
 
+    # 이겼다고 말해도 되는가. 같은 판을 두 식이 나란히 풀었으므로 짝지어 센다.
+    hand = np.array(places["손 식"]); learned = np.array(places["배운 식"])
+    better, worse = int(np.sum(learned < hand)), int(np.sum(learned > hand))
+    if better + worse:
+        # 부호검정: 비긴 판은 버리고, 나머지가 반반일 확률을 정규근사로 본다.
+        spread = np.sqrt((better + worse) * 0.25)
+        away = abs(better - (better + worse) / 2) / spread
+        print(f"\n  배운 식이 더 위로 올린 판 {better} · 더 내린 판 {worse}"
+              f" · 비긴 판 {len(hand) - better - worse}")
+        print(f"  우연으로 보기 어려운 정도 {away:.1f} 표준편차"
+              + ("  → 차이라고 불러도 된다" if away > 2 else "  → 아직 차이라고 부르지 않는다"))
+
+    weight = fit(data)   # 적어 둘 가중치는 전부로 맞춘 것
     print("\n무엇이 고른 것과 버린 것을 갈랐나 (+면 고르는 쪽)")
     for name, value in sorted(zip(NAMES, weight), key=lambda kv: -abs(kv[1])):
         if name == "기준":
@@ -167,7 +197,7 @@ def main():
     json.dump({"note": "프로가 같은 배치에서 무엇 대신 무엇을 골랐는지로 맞춘 가중치. "
                        "tools/learn_choices.py가 만든다.",
                "names": NAMES, "weights": [round(float(v), 4) for v in weight],
-               "train_rounds": len(train), "test_rounds": len(test)},
+               "rounds": len(data), "folds": folds},
               open(OUT, "w", encoding="utf-8"), ensure_ascii=False, indent=1)
     print(f"\n-> {OUT}")
     return 0
