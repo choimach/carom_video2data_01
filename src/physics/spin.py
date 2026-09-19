@@ -241,7 +241,12 @@ def bounce(ball, rail):
 # they touch - which is the cut angle and the side on the cue ball.
 BALL_FRICTION = 0.06
 BALL_RESTITUTION = 0.944
-CUE_CARRY = 0.089
+# 수구가 충돌 뒤에도 앞으로 나아가는 것은 **남은 구름**이 하는 일이지 상수가
+# 하는 일이 아니다. 여기 0.089가 들어 있던 동안에는 그것이 밀어치기를 흉내
+# 내고 있었고, 그래서 스턴으로 쳐도 분리각이 90도가 아니라 74도였다. 회전이
+# 충돌을 통과하게 고친 지금은 이중 계산이라 0으로 둔다 - 법선 방향으로 남는
+# 것은 반발계수가 정하는 (1-e)/2 = 2.8%뿐이다.
+CUE_CARRY = 0.0
 
 
 def collide(striker, struck_ball):
@@ -271,6 +276,7 @@ def collide(striker, struck_ball):
     throw = -np.sign(surface) * min(BALL_FRICTION * transfer, abs(surface) * 0.5)
     struck_tangent = float(np.dot(struck_ball.velocity, tangent)) - throw
 
+    was_rolling = striker.velocity - striker.slip
     striker.velocity = normal * striker_normal + tangent * (striker_tangent + throw)
     struck_ball.velocity = normal * struck_normal + tangent * struck_tangent
     # The striker keeps most of its side through a contact; the struck ball
@@ -278,5 +284,17 @@ def collide(striker, struck_ball):
     passed = throw * 5.0 / (2.0 * BALL_RADIUS_MM)
     struck_ball.side += passed
     striker.side = striker.side * 0.9 - passed * 0.2
-    striker.slip = striker.velocity.copy()
+
+    # 분리각은 여기서 나온다. 두 공 사이의 충격은 중심을 잇는 선을 따라 두
+    # 중심을 지나므로 **수평축 회전에는 토크를 주지 않는다** - 수구가 갖고 있던
+    # 구름은 충돌을 그대로 통과한다. 속도만 바뀌고 회전은 남으므로, 접촉점의
+    # 속도는 새 속도에서 그 남은 구름을 뺀 것이다.
+    #
+    # 여기를 `slip = velocity`로 두면 "수구는 늘 미끄러지며 떠난다"고 말하는
+    # 셈이고, 그러면 분리각이 당점에도 세기에도 거리에도 꿈쩍하지 않는다 -
+    # 실제로 그랬다. 선수의 말: "분리각은 스트로크가 강할수록, 당점이 아래쪽
+    # 으로 갈수록 커지고 vice versa." 그 셋은 모두 접촉 순간의 미끄럼 하나로
+    # 설명되는데, 그 미끄럼을 충돌이 지우고 있었다.
+    striker.slip = striker.velocity - was_rolling
+    # 맞은 공은 서 있었으므로 회전이 없다. 온전히 미끄러지며 떠난다.
     struck_ball.slip = struck_ball.velocity.copy()

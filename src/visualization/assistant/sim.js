@@ -33,7 +33,9 @@ const SIM = (() => {
   const REBOUND_IN = [0, 6.7, 17.8, 27.2, 38.0, 46.4, 56.0, 66.1, 79.3, 90.0];
   const REBOUND_OUT = [0, 16.7, 33.7, 41.8, 50.1, 55.4, 63.0, 70.6, 80.1, 90.0];
   const REBOUND_SPEED = [0.817, 0.817, 0.844, 0.829, 0.824, 0.818, 0.808, 0.835, 0.912, 0.912];
-  const BALL_FRICTION = 0.06, BALL_RESTITUTION = 0.944, CUE_CARRY = 0.089;
+  // CUE_CARRY는 0이다. 수구가 충돌 뒤에도 앞으로 나아가는 것은 남은 구름이
+  // 하는 일이지 상수가 하는 일이 아니다 — src/physics/spin.py의 설명 참조.
+  const BALL_FRICTION = 0.06, BALL_RESTITUTION = 0.944, CUE_CARRY = 0.0;
   const REST = 12.0;
   const RAILS = { left: [1, 0], right: [-1, 0], top: [0, 1], bottom: [0, -1] };
 
@@ -140,12 +142,16 @@ const SIM = (() => {
     const thrown = -Math.sign(surface) * Math.min(BALL_FRICTION * transfer, Math.abs(surface) * 0.5);
     const bTangent = (b.v[0] * t[0] + b.v[1] * t[1]) - thrown;
 
+    const wasRolling = [a.v[0] - a.slip[0], a.v[1] - a.slip[1]];
     a.v = [n[0] * aNormal + t[0] * (aTangent + thrown), n[1] * aNormal + t[1] * (aTangent + thrown)];
     b.v = [n[0] * bNormal + t[0] * bTangent, n[1] * bNormal + t[1] * bTangent];
     const passed = thrown * 5 / (2 * RADIUS);
     b.side += passed;
     a.side = a.side * 0.9 - passed * 0.2;
-    a.slip = a.v.slice();
+    // 분리각이 여기서 나온다. 두 공 사이의 충격은 중심을 잇는 선을 따라 두
+    // 중심을 지나므로 수평축 회전에 토크를 주지 않는다 — 수구의 구름은 충돌을
+    // 그대로 통과한다. src/physics/spin.py와 같은 식이어야 한다.
+    a.slip = [a.v[0] - wasRolling[0], a.v[1] - wasRolling[1]];
     b.slip = b.v.slice();
   }
 
