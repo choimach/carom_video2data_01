@@ -473,6 +473,15 @@
     return jobs;
   }
 
+  // 무엇을 먼저 맞든 상관하지 않는 그물. 2도로 한 바퀴, 세기마다 무회전으로.
+  function sweepJobs() {
+    const jobs = [];
+    for (const speed of SPEEDS) {
+      for (let deg = 0; deg < 360; deg += COARSE) jobs.push([deg, speed, 0, 0]);
+    }
+    return jobs;
+  }
+
   function seedJobs(near) {
     const { turnAngle } = frameOf();
     const jobs = [];
@@ -503,8 +512,13 @@
 
   async function solve(onProgress, near) {
     const hits = [], counters = { kisses: 0 };
-    // 1) 두께로 훑기 — 모든 시도가 1적구에 맞는다.
-    const contact = contactJobs();
+    // 1) 두께로 훑기 — 모든 시도가 1적구에 맞는다. 여기에 전방위 훑기를
+    //    **함께** 돌린다: 두께 사다리는 적구를 똑바로 겨냥하므로 쿠션을 먼저
+    //    맞는 길(걸어치기·뱅크샷)은 우연히 아니면 걸리지 않는다. 프로가 실제로
+    //    친 걸어치기 7판에 이 탐색을 돌렸더니 0판을 찾았고, 전방위를 더하니
+    //    6/6을 찾았다. 쿠션은 거울이 아니라서(17.8도로 들어간 공이 33.7도로
+    //    나온다) 거울상을 겨냥하는 방법은 쓰지 않는다.
+    const contact = contactJobs().concat(sweepJobs());
     const promising = [];
     for (let i = 0; i < contact.length; i++) {
       const [deg, speed, side, up] = contact[i];

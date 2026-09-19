@@ -98,6 +98,19 @@ function search(layout, cue) {
     }
   }
 
+  // 두께 사다리는 적구를 똑바로 겨냥하므로, **쿠션을 먼저 맞는** 길 — 걸어치기와
+  // 뱅크샷 — 은 우연히 아니면 걸리지 않는다. 실제로 걸어치기는 0/7, 뱅크샷은
+  // 5/11이었다. 그대로 배우면 "프로는 걸어치기를 안 친다"를 배우는데, 그건
+  // 프로에 대한 사실이 아니라 이 탐색에 대한 사실이다.
+  //
+  // 거울상을 겨냥하는 방법은 쓰지 않는다: 쿠션은 거울이 아니다 (측정된 반사
+  // 곡선은 17.8도로 들어간 공을 33.7도로 내보낸다). 대신 전방위를 2도로 한 번
+  // 훑는다 — 무엇을 먼저 맞든 상관하지 않으므로 이쪽이 맞는 그물이고, 값도
+  // 싸다 (180각 × 4세기 = 720번, 0.5초 남짓).
+  for (const speed of SPEEDS) {
+    for (let deg = 0; deg < 360; deg += 2) jobs.push([deg, speed, 0, 0]);
+  }
+
   const hits = [], promising = [];
   const go = (deg, speed, side, up) => {
     const rad = deg * Math.PI / 180;
@@ -186,12 +199,16 @@ function bucket(hits) {
 function main() {
   const args = process.argv.slice(2);
   const limit = args.includes('--limit') ? Number(args[args.indexOf('--limit') + 1]) : Infinity;
+  // 고치려는 유형만 따로 재 볼 때 쓴다. 전체를 돌리며 기다리면 그 유형이
+  // 표본에 몇 개 안 들어와서 무엇이 나아졌는지 보이지 않는다.
+  const only = args.includes('--route') ? args[args.indexOf('--route') + 1] : null;
   const model = JSON.parse(fs.readFileSync(path.join(ROOT, 'data', 'model.json'), 'utf8'));
   const rows = Array.isArray(model) ? model : (model.plays || model.rows);
   const out = path.join(ROOT, 'data', 'alternatives.jsonl');
 
   const done = new Set();
-  if (fs.existsSync(out)) {
+  // 유형만 재 볼 때는 장부에 쓰지 않으므로, 이미 한 것도 다시 본다.
+  if (!only && fs.existsSync(out)) {
     for (const line of fs.readFileSync(out, 'utf8').split('\n')) {
       if (!line.trim()) continue;
       try { done.add(JSON.parse(line).id); } catch (e) { /* 끊긴 줄은 버린다 */ }
@@ -199,7 +216,8 @@ function main() {
   }
   console.log(`이미 한 것 ${done.size}개`);
 
-  const usable = rows.filter((r) => r.route && r.first_object_ball
+  const usable = rows.filter((r) => (!only || r.route === only))
+    .filter((r) => r.route && r.first_object_ball
     && r.struck_side !== null && r.struck_side !== undefined && r.layout_mm
     && ORDER.every((c) => r.layout_mm[c]));
   console.log(`대상 ${usable.length}개 (배치·유형·면이 다 있는 플레이)\n`);
@@ -230,7 +248,8 @@ function main() {
           ? Math.round(SIM.strengthOf(row.speed_ms * 1000) * 10) / 10 : null,
       },
     };
-    fs.appendFileSync(out, JSON.stringify(record) + '\n');
+    if (!only) fs.appendFileSync(out, JSON.stringify(record) + '\n');
+    else console.log(`  ${record.reached ? '찾음 ' : '놓침 '} ${record.chose}  갈래 ${record.found.length}개`);
     counted++;
     if (counted % 10 === 0) {
       const each = (Date.now() - began) / counted / 1000;
