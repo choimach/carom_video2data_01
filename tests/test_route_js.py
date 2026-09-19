@@ -32,9 +32,14 @@ CASES = [
     (0, ["top", "left", "top", "right", "bottom"], True),   # 대회전 (5쿠션)
     (0, ["top", "left", "top"], True),               # 되돌아오기 (장-단-장)
     (0, ["left", "top", "left"], True),              # 되돌아오기 (단-장-단)
-    (0, ["top", "bottom", "top"], True),             # 횡단이 아니라 되돌아오기
-    (0, ["top", "bottom", "top", "bottom"], True),   # 위와 같은 앞 세 개
+    (0, ["top", "bottom", "top"], True),             # 횡단 (장쿠션 3회)
+    (0, ["top", "bottom", "top", "bottom"], True),   # 횡단 (4회)
+    (0, ["top", "bottom", "top", "bottom", "top"], True),  # 횡단 — 대회전보다 먼저
     (0, ["bottom", "top", "bottom"], True),
+    (0, ["left", "right", "left"], True),            # 횡단 (단쿠션끼리, 드물다)
+    (0, ["top", "bottom", "left"], True),            # 더블 (2회 뒤 단쿠션)
+    (0, ["left", "right", "top"], True),             # 더블 (단쿠션 2회 뒤 장쿠션)
+    (0, ["top", "left", "bottom", "right", "top"], True),  # 대회전
     (0, ["top", "left", "bottom"], True),            # 장쿠션 먼저
     (0, ["left", "top", "bottom"], True),            # 단쿠션 먼저
     (0, ["left", "bottom", "top"], True),
@@ -108,13 +113,25 @@ def test_the_two_languages_name_the_same_route():
 
 
 @pytest.mark.skipif(not shutil.which("node"), reason="node가 없습니다")
-def test_the_names_the_javascript_used_to_be_unable_to_produce():
-    """되돌아오기와 횡단 — 이 둘이 없어서 17판이 재현되지 않았다."""
+def test_crossing_and_double_split_on_how_many_times_it_crossed():
+    """그가 준 기준 (2026-09-20):
+
+    *"횡단은 두 장쿠션 사이를 최소한 3회 이상 오간 이후에 득점하는 것. 더블쿠션은
+    두 장쿠션 사이를 두 번 오간 이후 3쿠션 이후에는 단쿠션을 맞고 득점하는 것.
+    아주 드물게는 두 단쿠션 사이를 오가면서도 가능은 하지만 아주 드물어."*
+
+    그는 프로가 아니라 배우는 사람이고 본인도 확정하지 말라고 했다. 바깥 자료
+    (japong.com)와는 맞는다 — "단쿠션에 나란하게 왕복". 라벨이 쌓이면
+    rules_check.py가 점수를 매긴다.
+    """
     got = js_names([
-        [0, ["top", "left", "top"], True, "left", True],
-        [0, ["left", "top", "left"], True, "right", False],
-        [0, ["top", "bottom", "left"], True, "left", True],
+        [0, ["top", "bottom", "top"], True, "left", True],             # 3회
+        [0, ["top", "bottom", "top", "bottom", "top"], True, "left", True],  # 5회
+        [0, ["left", "right", "left"], True, "left", True],            # 단쿠션끼리
+        [0, ["top", "bottom", "left"], True, "left", True],            # 더블
+        [0, ["left", "right", "top"], True, "left", True],             # 더블
+        [0, ["top", "left", "top"], True, "left", True],               # 되돌아오기
     ])
-    assert got[0] == "되돌아오기"
-    assert got[1] == "되돌아오기"
-    assert got[2] is not None
+    assert got[:3] == ["횡단", "횡단", "횡단"], f"횡단을 못 알아봅니다: {got[:3]}"
+    assert got[3:5] == ["더블", "더블"], f"더블을 못 알아봅니다: {got[3:5]}"
+    assert got[5] == "되돌아오기", "되돌아오기와 헷갈립니다"

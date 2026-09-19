@@ -32,6 +32,7 @@ HOOK = "걸어치기"
 BANK = "뱅크샷"
 LONG_AROUND = "대회전"
 CROSSING = "횡단"
+DOUBLE = "더블"
 BEHIND = "뒤돌리기"
 SIDE = "옆돌리기"
 FRONT = "앞돌리기"
@@ -55,6 +56,23 @@ def _rails(events, after=None, before=None):
             if e.kind == "cushion"
             and (after is None or e.frame > after)
             and (before is None or e.frame < before)]
+
+
+def _crossing_run(rails):
+    """마주보는 두 쿠션을 번갈아 맞은 횟수 — 처음부터 이어지는 만큼만 센다.
+
+    ['top','bottom','top'] 이면 3, ['top','bottom','left'] 이면 2,
+    ['top','left',...] 이면 1이다.
+    """
+    if not rails:
+        return 0
+    same_kind = rails[0] in SHORT_RAILS
+    run = 1
+    for before, rail in zip(rails, rails[1:]):
+        if rail == before or (rail in SHORT_RAILS) != same_kind:
+            break
+        run += 1
+    return run
 
 
 def classify(events, layout_mm=None, cue_ball=None, thickness=None, turn_deg=None,
@@ -107,6 +125,32 @@ def classify(events, layout_mm=None, cue_ball=None, thickness=None, turn_deg=Non
     reached_second = result["reached_second"]
 
     if reached_second:
+        # 횡단과 더블은 둘 다 "마주보는 두 쿠션 사이를 오간다". 가르는 것은
+        # 몇 번 오갔느냐다 (2026-09-20, 그가 말로 준 기준):
+        #
+        #   횡단  — 두 장쿠션 사이를 **3회 이상** 오간 뒤 득점
+        #   더블  — **2회** 오간 뒤, 3쿠션째에 단쿠션을 맞고 득점
+        #
+        # "아주 드물게는 두 단쿠션 사이를 오가면서도 가능"하다고 해서, 장·단을
+        # 가리지 않고 **마주보는 한 쌍**을 오가는 것으로 센다.
+        #
+        # 바깥 자료와도 맞는다: "단쿠션에 나란하게 왕복하며 최종적으로는 앞으로
+        # 전진하여 득점" (japong.com). 단쿠션과 나란히 오가면 부딪히는 벽은
+        # 장쿠션이다.
+        crossing = _crossing_run(between)
+        if crossing >= 3:
+            return {**result, "route": CROSSING,
+                    "why": f"{crossing} crossings between the same pair of rails"}
+        if crossing == 2 and len(between) >= 3 \
+                and (between[2] in SHORT_RAILS) != (between[0] in SHORT_RAILS):
+            return {**result, "route": DOUBLE,
+                    "why": "two crossings, then the other pair"}
+
+        # 횡단을 대회전보다 먼저 본다: 그가 "3회 **이상**"이라고 했으므로 다섯 번
+        # 오간 것도 횡단이지 대회전이 아니다. 대회전의 하위 구분은 뒤돌리기
+        # 대회전·옆돌리기 대회전처럼 **테이블을 크게 도는** 것들이라, 오가는 것과
+        # 기하가 다르다. ⚠️ 이 순서는 내 판단이고 확인받은 적이 없다.
+
         if len(between) >= LONG_AROUND_CUSHIONS:
             return {**result, "route": LONG_AROUND,
                     "why": f"{len(between)} cushions before the second ball"}
@@ -119,11 +163,6 @@ def classify(events, layout_mm=None, cue_ball=None, thickness=None, turn_deg=Non
             return {**result, "route": RETURNING,
                     "why": f"back to the same {between[0]} rail"}
 
-        # Crossing the table between the two long rails, without a short rail
-        # in between, is 횡단 whatever else it resembles.
-        if len(between) >= 3 and all(rail in LONG_RAILS for rail in between[:3]) \
-                and between[0] != between[1] and between[1] != between[2]:
-            return {**result, "route": CROSSING, "why": "long rail to long rail"}
 
     return {**result, **_turn(between, struck_side, circuit)}
 

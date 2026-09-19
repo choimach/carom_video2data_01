@@ -27,16 +27,31 @@ const ROUTE = (() => {
     if (!between || between.length === 0) return null;
 
     if (reachedSecond) {
+      // 횡단과 더블은 둘 다 "마주보는 두 쿠션 사이를 오간다". 가르는 것은 몇 번
+      // 오갔느냐다 (2026-09-20, 그가 말로 준 기준):
+      //
+      //   횡단  — 두 장쿠션 사이를 **3회 이상** 오간 뒤 득점
+      //   더블  — **2회** 오간 뒤, 3쿠션째에 단쿠션을 맞고 득점
+      //
+      // "아주 드물게는 두 단쿠션 사이를 오가면서도 가능"하다고 해서, 장·단을
+      // 가리지 않고 마주보는 한 쌍을 오가는 것으로 센다. 바깥 자료와도 맞는다:
+      // "단쿠션에 나란하게 왕복하며 최종적으로는 앞으로 전진하여 득점"
+      // (japong.com) — 단쿠션과 나란히 오가면 부딪히는 벽은 장쿠션이다.
+      const crossing = crossingRun(between);
+      if (crossing >= 3) return "횡단";
+      if (crossing === 2 && between.length >= 3
+          && (SHORT.has(between[2]) !== SHORT.has(between[0]))) return "더블";
+
+      // 횡단을 대회전보다 먼저 본다: "3회 **이상**"이므로 다섯 번 오간 것도
+      // 횡단이다. ⚠️ 이 순서는 내 판단이고 확인받은 적이 없다.
       if (between.length >= LONG_AROUND_CUSHIONS) return "대회전";
 
       // 떠나온 쿠션으로 되돌아온다: 장-단-장이 같은 장쿠션이거나, 단-장-단이
-      // 같은 단쿠션이면 되돌아오기. 선수의 정의 그대로다.
+      // 같은 단쿠션이면 되돌아오기. 그가 말로 준 것을 그대로 옮겼다 (2026-09-19).
+      // 그는 프로가 아니라 배우는 사람이고 본인도 100% 확신하지 않는다 —
+      // 라벨 30개에 대고 rules_check.py로 점수를 받는 가설로 다룬다.
       if (between.length >= 3 && between[0] === between[2]
           && (SHORT.has(between[1]) !== SHORT.has(between[0]))) return "되돌아오기";
-
-      // 단쿠션을 거치지 않고 두 장쿠션 사이를 건너다니면 횡단이다.
-      if (between.length >= 3 && between.slice(0, 3).every((r) => LONG.has(r))
-          && between[0] !== between[1] && between[1] !== between[2]) return "횡단";
     }
 
     // 쿠션이 셋에 못 미쳐도 계열은 읽힌다 — 어느 면을 맞고 어느 쪽으로 도는지가
@@ -51,6 +66,19 @@ const ROUTE = (() => {
     const shortFirst = SHORT.has(between[0]);
     if (sameHand) return shortFirst ? "앞돌리기" : "옆돌리기";
     return shortFirst ? "빗겨치기" : "뒤돌리기";
+  }
+
+  // 마주보는 두 쿠션을 번갈아 맞은 횟수 — 처음부터 이어지는 만큼만 센다.
+  // src/physics/route.py의 _crossing_run과 같은 식이어야 한다.
+  function crossingRun(rails) {
+    if (!rails.length) return 0;
+    const sameKind = SHORT.has(rails[0]);
+    let run = 1;
+    for (let i = 1; i < rails.length; i++) {
+      if (rails[i] === rails[i - 1] || SHORT.has(rails[i]) !== sameKind) break;
+      run += 1;
+    }
+    return run;
   }
 
   // 경로가 테이블 한가운데를 기준으로 쓸고 간 부호 있는 넓이. 한 순간의 꺾임이
@@ -83,7 +111,7 @@ const ROUTE = (() => {
     });
   }
 
-  return { name, of, circuitIsRight, SHORT, LONG, LONG_AROUND_CUSHIONS };
+  return { name, of, circuitIsRight, crossingRun, SHORT, LONG, LONG_AROUND_CUSHIONS };
 })();
 
 if (typeof module !== "undefined") module.exports = ROUTE;
