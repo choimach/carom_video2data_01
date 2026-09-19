@@ -146,6 +146,11 @@
     <h2>이 답이 어떤가요</h2>
     <p>틀린 점을 적어 주세요. 어느 공략이 왜 이상한지, 실제로는 무엇을 치시는지 —
       그 한 줄이 순위 계산을 고치는 근거가 됩니다.</p>
+    <p><b>결과 복사</b>는 배치 좌표와 후보 목록, 그리고 이 의견을 함께 담습니다.
+      영상은 프로가 <i>고른 것</i>만 남기고 고르지 않은 길은 남기지 않습니다.
+      이 화면은 열 가지를 늘어놓고 그중 무엇이 틀렸는지 들을 수 있는
+      <b>유일한 자리</b>라, 붙여넣어 주시면 <code>data/table_feedback.json</code>에
+      쌓여 다음 순위 계산이 채점받는 기준이 됩니다.</p>
     <textarea id="comment" placeholder="예) 1번 추천은 키스가 난다. 실제로는 빨간공 오른쪽을 얇게 맞혀 뒤돌리기로 친다."></textarea>
     <div class="feedback-row">
       <button id="copy" type="button">결과 복사</button>
@@ -1066,6 +1071,33 @@
       lines.push("아직 실행하지 않음");
     }
     if (comment.value.trim()) lines.push("", "의견:", comment.value.trim());
+
+    // 읽으시는 글 아래에 기계가 읽을 한 덩어리를 붙인다. 가상 테이블에서 주신
+    // 판단은 이 프로젝트에서 가장 값진 데이터인데 — 선생님의 배치, 선생님의
+    // 판단이다 — 지금까지는 대화에 한 번 나타났다가 사라졌다. 이 덩어리를
+    // tools/record_feedback.py에 넣으면 data/table_feedback.json에 쌓인다.
+    const record = {
+      at: new Date().toISOString().slice(0, 19),
+      table: [SIM.L, SIM.W],
+      cue,
+      layout: Object.fromEntries(ORDER.filter((c) => layout[c])
+        .map((c) => [c, layout[c].map((v) => Math.round(v))])),
+      want: { first: wantFirst, face: wantFace },
+      picked: picked || null,
+      kisses: result ? result.kisses : null,
+      candidates: !result ? [] : result.routes.map((row) => ({
+        key: row.key, route: row.route, first: row.first, face: row.hit.face,
+        thickness: Math.round(row.hit.thickness * 1000) / 1000,
+        tips: [Math.round(row.hit.side * 100) / 100,
+               Math.round((row.hit.vertical || 0) * 100) / 100],
+        strength: Math.round(SIM.strengthOf(row.hit.speed) * 10) / 10,
+        deg: row.hit.deg, room: row.hit.room, rails: row.hit.judged.rails.length,
+        chosen: row.chosen, scored: row.scored, total: result.total,
+        band: row.band ? [row.band.n, row.band.mid] : null,
+      })),
+      comment: comment.value.trim() || null,
+    };
+    lines.push("", "```carom-feedback", JSON.stringify(record), "```");
     const said = document.getElementById("copied");
     try {
       await navigator.clipboard.writeText(lines.join("\n"));

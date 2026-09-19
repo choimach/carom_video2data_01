@@ -1,0 +1,99 @@
+{
+ "note": "가상 테이블에서 선수가 직접 준 판단. 규칙이 아니라 채점표다 — 순위 계산이 이것에 대고 점수를 받는다.",
+ "rounds": [
+  {
+   "lost": true,
+   "when": "2026-09-18 및 그 이전",
+   "what": "조언판에 대한 판단 여섯 번 — 궤적이 마지막 위치에 그려진 것, '처음 선택은 잘못됐어, 뒤돌리기가 정답이야', '궤적은 좋아 하지만 이것은 옆돌리기야'(두 번), '수구가 1적구의 오른쪽 면을 맞고 오른쪽 회전을 가지고 오른쪽으로 돈다' — 이 장부가 없던 때라 배치 좌표와 후보 목록이 함께 사라졌다. 유형 이름에 대한 것은 data/labels.json과 ref/taxonomy.md §5에 옮겨졌고, 나머지는 코드 변경으로만 남았다.",
+   "lesson": "빠진 것을 빈칸으로 남겨 둔다. 없었던 일로 만들지 않는다."
+  },
+  {
+   "at": "2026-09-19T00:00:00",
+   "table": [
+    2844,
+    1422
+   ],
+   "cue": "white",
+   "layout": {
+    "white": [
+     1450,
+     701
+    ],
+    "yellow": [
+     1534,
+     298
+    ],
+    "red": [
+     2011,
+     1108
+    ]
+   },
+   "want": {
+    "first": "any",
+    "face": "any"
+   },
+   "picked": "1",
+   "kisses": 16,
+   "candidates": [
+    {
+     "key": "1",
+     "route": "옆돌리기",
+     "first": "yellow",
+     "face": "right",
+     "thickness": 0.25,
+     "tips": [
+      0,
+      0
+     ],
+     "strength": 5.5,
+     "deg": 288,
+     "room": 1,
+     "rails": 3,
+     "chosen": 5,
+     "scored": 5,
+     "total": 40,
+     "band": null
+    },
+    {
+     "key": "2",
+     "route": "옆돌리기",
+     "first": "red",
+     "face": "right",
+     "thickness": 0.125,
+     "tips": [
+      -1.5,
+      0
+     ],
+     "strength": 5.5,
+     "deg": 40,
+     "room": 0.5,
+     "rails": 4,
+     "chosen": 4,
+     "scored": 4,
+     "total": 40,
+     "band": null
+    },
+    {
+     "key": "3",
+     "route": "뱅크샷",
+     "first": "yellow",
+     "face": "right",
+     "thickness": 0.0,
+     "tips": [
+      1.5,
+      0
+     ],
+     "strength": 5.5,
+     "deg": 41,
+     "room": 0.5,
+     "rails": 5,
+     "chosen": 4,
+     "scored": 2,
+     "total": 40,
+     "band": null
+    }
+   ],
+   "comment": "선택과 궤적은 아주좋아. 이 플레이 같은 경우 대개 두께는 1/2~2/3에서 잡고 당점은 대개 2팁 상단으로 하는데, 상단 9시에서 12시 사이의 당점을 상황에 따라 정해. 내 경우는 대개 상단 2팁 11시 당점을 줘. 당점 이미지의 동심원이 균등하지 않아."
+  }
+ ]
+}
