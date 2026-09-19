@@ -161,6 +161,33 @@ def test_double_is_a_tag_beside_the_name_not_the_name():
     """
     done = subprocess.run(["node", "-e", script], capture_output=True, text=True, check=True)
     got = json.loads(done.stdout)
-    assert got[0] == ["빗겨치기", "더블"], f"단-단-장이 {got[0]}로 나옵니다"
-    assert got[1][1] == "더블", "장-장-단에도 더블 꼬리표가 붙어야 합니다"
+    assert got[0] == ["빗겨치기", ["더블"]], f"단-단-장이 {got[0]}로 나옵니다"
+    assert got[1][1] == ["더블"], "장-장-단에도 더블 꼬리표가 붙어야 합니다"
     assert got[2][1] is None, "오가지 않은 것에 더블이 붙었습니다"
+
+
+@pytest.mark.skipif(not shutil.which("node"), reason="node가 없습니다")
+def test_reverse_is_a_tag_read_off_the_spin_not_the_rails():
+    """리버스 — "역회전으로 1쿠션을 맞히고 두 번째 쿠션부터는 제회전으로 진행".
+
+    쿠션 차례로는 갈리지 않는 유일한 것이라, 같은 쿠션 차례에 회전만 달리
+    주었을 때 꼬리표가 붙었다 떨어졌다 해야 한다. 그리고 이름은 그대로여야
+    한다 — 뒤돌리기 + 리버스, 대회전 + 리버스처럼 붙는 것이 맞다고 확인받았다
+    (2026-09-20).
+    """
+    script = f"""
+    const ROUTE = require({json.dumps(str(ROUTE_JS))});
+    const rails = ["top", "left", "bottom"];
+    const ask = (english) => ROUTE.subtypeOf(rails, english);
+    console.log(JSON.stringify([
+      ask(["reverse", "running", "running"]),   // 리버스
+      ask(["running", "running", "running"]),   // 아니다
+      ask(["reverse", "reverse", "running"]),   // 2쿠션에서 아직 역 - 아니다
+      ask(null),                                // 회전을 모를 때
+    ]));
+    """
+    done = subprocess.run(["node", "-e", script], capture_output=True, text=True, check=True)
+    got = json.loads(done.stdout)
+    assert got[0] == ["리버스"], f"리버스를 못 알아봅니다: {got[0]}"
+    assert got[1] is None and got[2] is None, f"리버스가 아닌 것에 붙습니다: {got[1:3]}"
+    assert got[3] is None, "회전을 모를 때도 붙입니다"

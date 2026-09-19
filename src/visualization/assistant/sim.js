@@ -104,6 +104,13 @@ const SIM = (() => {
     // 이 아래로는 공이 쿠션에 기대고 있는 것이다. 튕기기는 하되 쿠션으로 세지
     // 않는다 — 세면 구석에 갇힌 공이 3쿠션을 "채워" 득점으로 둔갑한다.
     const counts = Math.hypot(ball.v[0], ball.v[1]) >= CUSHION_SPEED;
+    // 들어갈 때 이 회전이 진행을 돕고 있었나(정회전) 거스르고 있었나(역회전).
+    // 쿠션을 따라가는 방향과 회전이 만드는 표면 속도의 부호가 같으면 미끄럼
+    // (v − Rω)이 줄어드니 정회전이다. 리버스는 1쿠션 역·2쿠션 정인 샷이라,
+    // 쿠션 차례로는 갈리지 않고 이 값으로만 갈린다. spin.py와 같은 계산이다.
+    const turning = along * ball.side;
+    ball.lastEnglish = Math.abs(turning) < 1e-6 ? "none"
+      : (turning > 0 ? "running" : "reverse");
     const speed = Math.hypot(into, along);
     const incoming = Math.atan2(Math.abs(along), Math.abs(into)) * 180 / Math.PI;
     const outgoing = interp(incoming, REBOUND_IN, REBOUND_OUT);
@@ -210,7 +217,8 @@ const SIM = (() => {
         // 나오고 — judge()가 쿠션을 세므로 — 세 개를 못 넘긴 샷이 득점으로
         // 둔갑한다.
         if (bounce(balls[c], rail) && c === cue) {
-          events.push({ kind: "cushion", detail: rail, at: clock, p: balls[c].p.slice() });
+          events.push({ kind: "cushion", detail: rail, at: clock,
+                        p: balls[c].p.slice(), english: balls[c].lastEnglish });
         }
       }
 

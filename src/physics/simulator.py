@@ -242,6 +242,7 @@ def simulate_with_spin(layout, cue, velocity, tips_side=0.0, tips_vertical=0.0,
     frame_gap = 1.0 / fps
     paths = {c: [balls[c].position.copy()] for c in colours}
     events = []
+    english_at_rail = []   # 쿠션마다 정회전이었나 역회전이었나
     clock, next_frame = 0.0, frame_gap
 
     while clock < max_seconds:
@@ -263,6 +264,7 @@ def simulate_with_spin(layout, cue, velocity, tips_side=0.0, tips_vertical=0.0,
             ball.position = _inside(ball.position)
             if spin.bounce(ball, rail) and colour == cue:
                 events.append((frame_index, "cushion", rail))
+                english_at_rail.append(ball.last_english)
 
         for i, first in enumerate(colours):
             for second in colours[i + 1:]:
@@ -287,7 +289,9 @@ def simulate_with_spin(layout, cue, velocity, tips_side=0.0, tips_vertical=0.0,
             next_frame += frame_gap
 
     settled = max(ball.speed for ball in balls.values()) < REST_SPEED_MM_S
-    return Shot({c: np.array(p) for c, p in paths.items()}, events, fps, settled)
+    shot = Shot({c: np.array(p) for c, p in paths.items()}, events, fps, settled)
+    shot.english_at_rail = english_at_rail
+    return shot
 
 
 def _rail_reached(position, length=TABLE_LENGTH_MM, width=TABLE_WIDTH_MM):

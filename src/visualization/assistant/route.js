@@ -75,11 +75,21 @@ const ROUTE = (() => {
   // (두 장쿠션 사이를 두 번 오간 뒤 단쿠션), ref/taxonomy.md의 빗겨치기 행은
   // 패턴이 **단-단-장**이다. 계열 규칙으로 장쿠션이 먼저면 빗겨치기가 아니라
   // 뒤돌리기 쪽이다. 둘 중 무엇이 더블인지 아직 정해지지 않았다.
-  function subtypeOf(between) {
-    if (!between || between.length < 3) return null;
-    if (crossingRun(between) === 2
-        && SHORT.has(between[2]) !== SHORT.has(between[0])) return "더블";
-    return null;
+  function subtypeOf(between, english) {
+    const tags = [];
+    if (between && between.length >= 3 && crossingRun(between) === 2
+        && SHORT.has(between[2]) !== SHORT.has(between[0])) tags.push("더블");
+
+    // 리버스 — "역회전으로 1쿠션을 맞히고 두 번째 쿠션부터는 제회전으로 진행"
+    // (japong.com). 쿠션 차례로는 갈리지 않고 **회전으로만** 갈리는 유일한
+    // 것이라, sim.js가 쿠션마다 남긴 정/역을 읽는다.
+    //
+    // ⚠️ 꼬리표로 둔 것은 확신이 낮은 결정이다. 그의 말 그대로 (2026-09-20):
+    // "리버스는 꼬리표가 맞아 — 글쎄... 그렇게 두는 게 편하긴 하겠지... 나중에
+    // 프로그램이 더 진화하면 더 정확히 하고..." 편하다는 것이 이유의 일부다.
+    if (english && english.length >= 2
+        && english[0] === "reverse" && english[1] === "running") tags.push("리버스");
+    return tags.length ? tags : null;
   }
 
   // 마주보는 두 쿠션을 번갈아 맞은 횟수 — 처음부터 이어지는 만큼만 센다.
@@ -119,10 +129,15 @@ const ROUTE = (() => {
       .filter((e) => e.kind === "cushion" && e.at > first.at
         && (!second || e.at < second.at))
       .map((e) => e.detail);
-    return name({
+    const english = shot.events
+      .filter((e) => e.kind === "cushion" && e.at > first.at
+        && (!second || e.at < second.at))
+      .map((e) => e.english);
+    const route = name({
       before, between, reachedSecond: !!second, face,
       circuitRight: circuitIsRight(shot.paths[cue] || [], length, width),
     });
+    return { route, tags: subtypeOf(between, english) };
   }
 
   return { name, of, subtypeOf, circuitIsRight, crossingRun, SHORT, LONG, LONG_AROUND_CUSHIONS };

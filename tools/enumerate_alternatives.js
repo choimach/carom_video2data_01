@@ -53,7 +53,7 @@ function kissed(shot) {
 
 const ROUTE = require(path.join(ROOT, 'src', 'visualization', 'assistant', 'route.js'));
 const nameRoute = (shot, judged, aim, face) =>
-  ROUTE.of(shot, judged, face, shot.cue, SIM.L, SIM.W);
+  ROUTE.of(shot, judged, face, shot.cue, SIM.L, SIM.W);   // {route, tags}
 
 function search(layout, cue) {
   const from = layout[cue];
@@ -102,7 +102,7 @@ function search(layout, cue) {
     const target = layout[judged.first];
     const across = aim[0] * (target[1] - from[1]) - aim[1] * (target[0] - from[0]);
     const face = across > 0 ? 'left' : 'right';
-    const route = nameRoute(shot, judged, aim, face);
+    const { route, tags } = nameRoute(shot, judged, aim, face);
     if (!route) return maybe;
     const way = shot.paths[judged.first] || [];
     let pushed = 0;
@@ -110,7 +110,7 @@ function search(layout, cue) {
       pushed += Math.hypot(way[i][0] - way[i - 1][0], way[i][1] - way[i - 1][1]);
     }
     hits.push({
-      route, first: judged.first, face,
+      route, tags, first: judged.first, face,
       thickness: Math.max(0, Math.min(1, 1 - Math.abs(across) / SIM.DIAMETER)),
       side, up, deg, strength: SIM.strengthOf(speed),
       rails: judged.rails.length, pushed,
@@ -158,8 +158,11 @@ function bucket(hits) {
       return s[Math.floor(s.length / 2)];
     };
     const [route, first, face] = key.split('|');
+    const tagged = {};
+    for (const h of list) for (const t of (h.tags || [])) tagged[t] = (tagged[t] || 0) + 1;
     out.push({
       key, route, first, face,
+      tags: Object.keys(tagged).length ? tagged : null,
       lines: list.length,
       room: Math.round(widest * 100) / 100,
       thickness: Math.round(middle('thickness') * 1000) / 1000,

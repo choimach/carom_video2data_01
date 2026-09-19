@@ -64,6 +64,9 @@ class Ball:
         self.position = np.asarray(position, dtype=float)
         self.velocity = np.asarray(velocity, dtype=float)
         self.side = float(side)
+        # 마지막으로 맞은 쿠션에서 회전이 정이었나 역이었나. 리버스를 가리는 데
+        # 쓴다 - 쿠션 차례로는 안 갈리는 유일한 유형이다.
+        self.last_english = None
         # A ball struck in the middle leaves sliding: its contact point is
         # moving as fast as the ball is.
         self.slip = (np.asarray(slip, dtype=float) if slip is not None
@@ -210,6 +213,13 @@ def bounce(ball, rail):
     if into >= 0:
         return False  # already leaving
     counts = ball.speed >= CUSHION_SPEED_MM_S
+    # 들어갈 때 이 회전이 진행을 돕고 있었나(정회전) 거스르고 있었나(역회전).
+    # 쿠션을 따라가는 방향 `along`과 회전이 만드는 표면 속도 Rω의 부호가 같으면
+    # 미끄럼(v − Rω)이 줄어드니 정회전이고, 다르면 역회전이다. 리버스는 이것이
+    # 1쿠션에서 역, 2쿠션에서 정인 샷이다.
+    turning = along * ball.side
+    ball.last_english = ("none" if abs(turning) < 1e-6
+                         else ("running" if turning > 0 else "reverse"))
 
     # The measured rebound, with no side on the ball.
     speed = float(np.hypot(into, along))

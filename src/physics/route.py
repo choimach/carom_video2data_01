@@ -33,6 +33,7 @@ BANK = "뱅크샷"
 LONG_AROUND = "대회전"
 CROSSING = "횡단"
 DOUBLE = "더블"
+REVERSE = "리버스"
 BEHIND = "뒤돌리기"
 SIDE = "옆돌리기"
 FRONT = "앞돌리기"
@@ -75,24 +76,31 @@ def _crossing_run(rails):
     return run
 
 
-def _subtype(rails):
-    """최상위 이름과 나란히 붙는 꼬리표. 이름 자체는 아니다.
+def _subtype(rails, english=None):
+    """최상위 이름과 나란히 붙는 꼬리표들. 이름 자체는 아니다.
 
     ⚠️ 풀리지 않은 것: 그가 말한 더블쿠션은 **장-장-단**인데 (두 장쿠션 사이를
     두 번 오간 뒤 단쿠션), ref/taxonomy.md의 빗겨치기 행은 패턴이 **단-단-장**
     이다. 계열 규칙으로 장쿠션이 먼저면 빗겨치기가 아니라 뒤돌리기 쪽이다.
     둘 중 무엇이 더블인지 아직 정해지지 않았다.
     """
-    if len(rails) < 3:
-        return None
-    if _crossing_run(rails) == 2 \
+    tags = []
+    if len(rails) >= 3 and _crossing_run(rails) == 2 \
             and (rails[2] in SHORT_RAILS) != (rails[0] in SHORT_RAILS):
-        return DOUBLE
-    return None
+        tags.append(DOUBLE)
+
+    # 리버스 — "역회전으로 1쿠션을 맞히고 두 번째 쿠션부터는 제회전으로 진행".
+    # 쿠션 차례로는 갈리지 않고 **회전으로만** 갈리는 유일한 것이라, 시뮬레이터가
+    # 쿠션마다 남긴 정/역을 읽어야 한다. 영상 플레이에는 아직 이 값이 없다.
+    if english and len(english) >= 2 \
+            and english[0] == "reverse" and english[1] == "running":
+        tags.append(REVERSE)
+    return tags or None
 
 
 def classify(events, layout_mm=None, cue_ball=None, thickness=None, turn_deg=None,
-             away_mm=None, struck_side=None, english=None, circuit=None):
+             away_mm=None, struck_side=None, english=None, circuit=None,
+             english_at_rail=None):
     """Name the route this shot took.
 
     `events` is what `judge_shot` leaves in its verdict: the cue ball's
@@ -179,8 +187,8 @@ def classify(events, layout_mm=None, cue_ball=None, thickness=None, turn_deg=Non
 
 
     named = {**result, **_turn(between, struck_side, circuit)}
-    subtype = _subtype(between)
-    return {**named, "subtype": subtype} if subtype else named
+    tags = _subtype(between, english_at_rail)
+    return {**named, "tags": tags} if tags else named
 
 
 def _turn(between, struck_side, circuit):

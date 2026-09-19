@@ -332,7 +332,7 @@
   // 경로 이름은 route.js 한 벌에서만 나온다. 한때 이 판정이 세 벌로 갈라져
   // 서로 다른 답을 냈다 — 그 파일의 첫 주석 참조.
   const nameRoute = (shot, judged, aim, face) =>
-    ROUTE.of(shot, judged, face, cue, L, W);
+    ROUTE.of(shot, judged, face, cue, L, W);   // {route, tags}
 
 
   // 탐색은 수천 번의 시뮬레이션이라 한 번에 돌리면 화면이 몇 초씩 멈춘다.
@@ -398,14 +398,14 @@
     const thickness = Math.max(0, Math.min(1, 1 - offset / (SIM.RADIUS * 2)));
     if (wantFace !== "any" && face !== wantFace) return promising;
     if (wantFirst !== "any" && judged.first !== wantFirst) return promising;
-    const route = nameRoute(shot, judged, aim, face);
+    const { route, tags } = nameRoute(shot, judged, aim, face);
     if (!route) return promising;
     const way = shot.paths[judged.first] || [];
     let pushed = 0;
     for (let i = 1; i < way.length; i++) {
       pushed += Math.hypot(way[i][0] - way[i - 1][0], way[i][1] - way[i - 1][1]);
     }
-    hits.push({ deg, speed, side, vertical, route, shot, judged, face, pushed, thickness });
+    hits.push({ deg, speed, side, vertical, route, tags, shot, judged, face, pushed, thickness });
     return true;
   }
 
@@ -951,8 +951,10 @@
     </div>`;
   }
 
+  // 꼬리표는 이름을 대신하지 않고 옆에 붙는다 — 키스빼기와 같은 자리다.
   const label = (row) =>
-    `${row.route} · ${NAMES[row.first]} ${row.hit.face === "left" ? "왼쪽" : "오른쪽"}면`;
+    `${row.route}${row.hit.tags ? ` (${row.hit.tags.join("·")})` : ""}`
+    + ` · ${NAMES[row.first]} ${row.hit.face === "left" ? "왼쪽" : "오른쪽"}면`;
 
   function paint() {
     const ready = placed().length === 3;
