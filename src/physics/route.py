@@ -34,6 +34,7 @@ LONG_AROUND = "대회전"
 CROSSING = "횡단"
 DOUBLE = "더블"
 REVERSE = "리버스"
+STANDING = "세워치기"
 BEHIND = "뒤돌리기"
 SIDE = "옆돌리기"
 FRONT = "앞돌리기"
@@ -96,6 +97,21 @@ def _subtype(rails, english=None):
             and english[0] == "reverse" and english[1] == "running":
         tags.append(REVERSE)
     return tags or None
+
+
+def _standing(route, english):
+    """세워치기 — 앞돌리기인데 회전을 적게 주거나 역으로 주어 반사각을 좁힌 것.
+
+    그가 준 정의 (2026-09-20): *"세워치기는 앞돌리기의 하위구분이고 회전을 적게
+    주거나 어느정도의 역회전을 주어서 반사각이 적게 만들어서 공이 길게 들어오게
+    만드는 방법."*
+
+    바깥 자료에는 가르는 정의가 없었다 - 영어 이름조차 Long inside angle shot과
+    Short angle shot으로 엇갈렸다. 저장소의 `ref/carom_technic.txt`는 "큐를 세워
+    치는 타법"이라고 적고 있었는데, 그의 말은 큐가 아니라 **회전과 반사각**에
+    대한 것이다.
+    """
+    return (route == FRONT and english and english[0] in ("reverse", "none"))
 
 
 def classify(events, layout_mm=None, cue_ball=None, thickness=None, turn_deg=None,
@@ -187,7 +203,9 @@ def classify(events, layout_mm=None, cue_ball=None, thickness=None, turn_deg=Non
 
 
     named = {**result, **_turn(between, struck_side, circuit)}
-    tags = _subtype(between, english_at_rail)
+    tags = _subtype(between, english_at_rail) or []
+    if _standing(named.get("route"), english_at_rail):
+        tags = [*tags, STANDING]
     return {**named, "tags": tags} if tags else named
 
 

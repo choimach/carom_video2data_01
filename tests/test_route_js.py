@@ -191,3 +191,52 @@ def test_reverse_is_a_tag_read_off_the_spin_not_the_rails():
     assert got[0] == ["리버스"], f"리버스를 못 알아봅니다: {got[0]}"
     assert got[1] is None and got[2] is None, f"리버스가 아닌 것에 붙습니다: {got[1:3]}"
     assert got[3] is None, "회전을 모를 때도 붙입니다"
+
+
+@pytest.mark.skipif(not shutil.which("node"), reason="node가 없습니다")
+def test_standing_is_a_front_turn_played_with_the_spin_held_back():
+    """세워치기 — 그가 준 정의 (2026-09-20):
+
+    *"세워치기는 앞돌리기의 하위구분이고 회전을 적게 주거나 어느정도의 역회전을
+    주어서 반사각이 적게 만들어서 공이 길게 들어오게 만드는 방법."*
+
+    그래서 두 가지가 다 맞아야 한다: 이름이 앞돌리기일 것, 그리고 1쿠션에서
+    회전이 적거나 역일 것. 옆돌리기에 같은 회전을 주어도 세워치기가 아니다.
+
+    바깥 자료에는 가르는 정의가 없었다 — 영어 이름부터 Long inside angle shot과
+    Short angle shot으로 엇갈렸고, 저장소의 ref/carom_technic.txt는 "큐를 세워
+    치는 타법"이라고 적고 있었다. 그의 말은 큐가 아니라 회전과 반사각이다.
+    """
+    script = f"""
+    const ROUTE = require({json.dumps(str(ROUTE_JS))});
+    console.log(JSON.stringify([
+      ROUTE.standing("앞돌리기", ["reverse", "running", "running"]),
+      ROUTE.standing("앞돌리기", ["none", "running", "running"]),
+      ROUTE.standing("앞돌리기", ["running", "running", "running"]),
+      ROUTE.standing("옆돌리기", ["reverse", "running", "running"]),
+      ROUTE.standing("앞돌리기", null),
+    ]));
+    """
+    done = subprocess.run(["node", "-e", script], capture_output=True, text=True, check=True)
+    got = json.loads(done.stdout)
+    assert got[0] and got[1], "회전이 역이거나 적은 앞돌리기를 못 알아봅니다"
+    assert not got[2], "순회전을 준 앞돌리기에 붙습니다"
+    assert not got[3], "앞돌리기가 아닌 것에 붙습니다"
+    assert not got[4], "회전을 모를 때도 붙입니다"
+
+
+@pytest.mark.skipif(not shutil.which("node"), reason="node가 없습니다")
+def test_the_little_spin_line_is_the_same_in_both_languages():
+    """"적게"를 가르는 선은 재서 얻은 값이 아니라 고른 값이다. 두 쪽이 같은 선을
+    써야 같은 샷을 같은 이름으로 부른다."""
+    from src.physics import spin as py_spin
+
+    script = f"""
+    const fs = require('fs');
+    const SIM = eval(fs.readFileSync({json.dumps(str(ROUTE_JS.parent / 'sim.js'))}, 'utf8') + '\\nSIM;');
+    console.log(String(eval(fs.readFileSync({json.dumps(str(ROUTE_JS.parent / 'sim.js'))}, 'utf8')
+      .match(/const LITTLE_SPIN = ([0-9.]+);/)[1])));
+    """
+    done = subprocess.run(["node", "-e", script], capture_output=True, text=True, check=True)
+    assert float(done.stdout.strip()) == py_spin.LITTLE_SPIN, \
+        f"JS는 {done.stdout.strip()}, 파이썬은 {py_spin.LITTLE_SPIN}"

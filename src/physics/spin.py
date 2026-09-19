@@ -67,6 +67,7 @@ class Ball:
         # 마지막으로 맞은 쿠션에서 회전이 정이었나 역이었나. 리버스를 가리는 데
         # 쓴다 - 쿠션 차례로는 안 갈리는 유일한 유형이다.
         self.last_english = None
+        self.last_spin_ratio = 0.0
         # A ball struck in the middle leaves sliding: its contact point is
         # moving as fast as the ball is.
         self.slip = (np.asarray(slip, dtype=float) if slip is not None
@@ -172,6 +173,10 @@ RAIL_KEEPS_SIDE = 0.55
 # 갇힌 공이 한 샷에 쿠션을 370개 먹고, judge()가 쿠션을 세므로 3쿠션을 넘긴 적
 # 없는 샷이 득점으로 둔갑한다.
 CUSHION_SPEED_MM_S = 60.0
+# 쿠션에서 "회전을 적게 준" 것으로 칠 선. 회전이 만드는 표면 속도가 쿠션을
+# 따라가는 속도의 이 비율보다 작으면 없다시피로 본다. ⚠️ 재서 얻은 값이 아니라
+# 내가 고른 값이다.
+LITTLE_SPIN = 0.15
 # A cushion meets the ball above its equator, so it leaves rolling. The 0.3 that
 # stood here was fitted against a travel figure the camera had truncated - 381
 # of 426 tracked balls were still moving when the recording window closed - and
@@ -217,9 +222,15 @@ def bounce(ball, rail):
     # 쿠션을 따라가는 방향 `along`과 회전이 만드는 표면 속도 Rω의 부호가 같으면
     # 미끄럼(v − Rω)이 줄어드니 정회전이고, 다르면 역회전이다. 리버스는 이것이
     # 1쿠션에서 역, 2쿠션에서 정인 샷이다.
-    turning = along * ball.side
-    ball.last_english = ("none" if abs(turning) < 1e-6
-                         else ("running" if turning > 0 else "reverse"))
+    # 부호만으로는 "회전을 적게 준" 경우를 잡을 수 없다 - 아주 작은 순회전도
+    # running이 된다. 그래서 크기까지 본다: 회전이 만드는 표면 속도 Rω가 쿠션을
+    # 따라가는 속도의 몇 분의 몇이냐.
+    reach = abs(along)
+    ratio = (BALL_RADIUS_MM * ball.side * np.sign(along) / reach) if reach > 1e-6 else 0.0
+    ball.last_spin_ratio = float(ratio)
+    # 0.15는 "없다시피"의 선이고, 내가 정한 값이다 - 재서 얻은 것이 아니다.
+    ball.last_english = ("none" if abs(ratio) < LITTLE_SPIN
+                         else ("running" if ratio > 0 else "reverse"))
 
     # The measured rebound, with no side on the ball.
     speed = float(np.hypot(into, along))

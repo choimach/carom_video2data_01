@@ -28,6 +28,8 @@ const SIM = (() => {
   // 하고 tests/test_sim_js.py가 그것을 지킨다.
   const SLIDING = 0.12, ROLLING = 0.006, SPIN_DECAY = 0.01;
   const CUSHION_SPEED = 60.0;
+  // 쿠션에서 "회전을 적게 준" 것으로 칠 선. ⚠️ 재서 얻은 값이 아니라 고른 값이다.
+  const LITTLE_SPIN = 0.15;
   const TIP_MM = 5, MAX_TIPS = 3;
   const RAIL_FRICTION = 0.18, RAIL_KEEPS_SIDE = 0.55, RAIL_KEEPS_SLIDE = 0.0;
   const REBOUND_IN = [0, 6.7, 17.8, 27.2, 38.0, 46.4, 56.0, 66.1, 79.3, 90.0];
@@ -108,9 +110,13 @@ const SIM = (() => {
     // 쿠션을 따라가는 방향과 회전이 만드는 표면 속도의 부호가 같으면 미끄럼
     // (v − Rω)이 줄어드니 정회전이다. 리버스는 1쿠션 역·2쿠션 정인 샷이라,
     // 쿠션 차례로는 갈리지 않고 이 값으로만 갈린다. spin.py와 같은 계산이다.
-    const turning = along * ball.side;
-    ball.lastEnglish = Math.abs(turning) < 1e-6 ? "none"
-      : (turning > 0 ? "running" : "reverse");
+    // 부호만으로는 "회전을 적게 준" 경우를 못 잡는다 — 아주 작은 순회전도
+    // running이 된다. 크기까지 본다. spin.py와 같은 계산·같은 선이어야 한다.
+    const reach = Math.abs(along);
+    const ratio = reach > 1e-6 ? RADIUS * ball.side * Math.sign(along) / reach : 0;
+    ball.lastSpinRatio = ratio;
+    ball.lastEnglish = Math.abs(ratio) < LITTLE_SPIN ? "none"
+      : (ratio > 0 ? "running" : "reverse");
     const speed = Math.hypot(into, along);
     const incoming = Math.atan2(Math.abs(along), Math.abs(into)) * 180 / Math.PI;
     const outgoing = interp(incoming, REBOUND_IN, REBOUND_OUT);

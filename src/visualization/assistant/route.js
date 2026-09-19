@@ -92,6 +92,19 @@ const ROUTE = (() => {
     return tags.length ? tags : null;
   }
 
+  // 세워치기 — 앞돌리기인데 회전을 적게 주거나 역으로 주어 **반사각을 좁힌** 것.
+  // 그가 준 정의 (2026-09-20): "세워치기는 앞돌리기의 하위구분이고 회전을 적게
+  // 주거나 어느정도의 역회전을 주어서 반사각이 적게 만들어서 공이 길게 들어오게
+  // 만드는 방법."
+  //
+  // 바깥 자료에는 가르는 정의가 없었고 영어 이름조차 Long inside angle shot과
+  // Short angle shot으로 엇갈렸다. 저장소의 ref/carom_technic.txt는 "큐를 세워
+  // 치는 타법"이라 적고 있었는데, 그의 말은 큐가 아니라 회전과 반사각이다.
+  function standing(route, english) {
+    return route === "앞돌리기" && !!english
+      && (english[0] === "reverse" || english[0] === "none");
+  }
+
   // 마주보는 두 쿠션을 번갈아 맞은 횟수 — 처음부터 이어지는 만큼만 센다.
   // src/physics/route.py의 _crossing_run과 같은 식이어야 한다.
   function crossingRun(rails) {
@@ -137,10 +150,12 @@ const ROUTE = (() => {
       before, between, reachedSecond: !!second, face,
       circuitRight: circuitIsRight(shot.paths[cue] || [], length, width),
     });
-    return { route, tags: subtypeOf(between, english) };
+    const tags = subtypeOf(between, english) || [];
+    if (standing(route, english)) tags.push("세워치기");
+    return { route, tags: tags.length ? tags : null };
   }
 
-  return { name, of, subtypeOf, circuitIsRight, crossingRun, SHORT, LONG, LONG_AROUND_CUSHIONS };
+  return { name, of, subtypeOf, standing, circuitIsRight, crossingRun, SHORT, LONG, LONG_AROUND_CUSHIONS };
 })();
 
 if (typeof module !== "undefined") module.exports = ROUTE;
