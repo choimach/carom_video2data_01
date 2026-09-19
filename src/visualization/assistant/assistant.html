@@ -96,6 +96,34 @@
     font: 700 11px/1 "Gothic A1", sans-serif; letter-spacing: .06em; color: var(--faint);
   }
   .plate .said { font-size: 13px; color: var(--ink); font-variant-numeric: tabular-nums; }
+  .verdicts {
+    margin-top: 16px; background: var(--surface); border: 1px solid var(--line);
+    border-radius: 10px; box-shadow: var(--shadow); padding: 14px; display: grid; gap: 10px;
+  }
+  .verdicts h2 { font-family: "Gothic A1", sans-serif; font-weight: 700; font-size: 17px; margin: 0; }
+  .verdicts p { margin: 0; font-size: 13px; color: var(--soft); }
+  .vrow {
+    display: flex; flex-wrap: wrap; gap: 8px; align-items: center;
+    padding: 7px 0; border-top: 1px solid var(--line);
+  }
+  .vrow:first-child { border-top: none; }
+  .vrow .rank {
+    font: 500 12px/1 "IBM Plex Mono", monospace; color: var(--faint);
+    min-width: 20px; font-variant-numeric: tabular-nums;
+  }
+  .vrow .what { flex: 1 1 200px; min-width: 0; font-size: 13.5px; }
+  .vrow .what small { color: var(--soft); font-family: "IBM Plex Mono", monospace; }
+  .vrow button { padding: 6px 11px; font-size: 13px; }
+  .vrow button[data-say="good"][aria-pressed="true"] {
+    background: var(--good); border-color: var(--good); color: #fff;
+  }
+  .vrow button[data-say="bad"][aria-pressed="true"] {
+    background: var(--warn); border-color: var(--warn); color: #fff;
+  }
+  .vrow.is-picked .what { font-weight: 500; }
+  .played { display: flex; flex-wrap: wrap; gap: 8px; align-items: center;
+            border-top: 1px solid var(--line); padding-top: 11px; font-size: 13px; }
+  .played .ask { color: var(--soft); }
   footer { margin-top: 22px; font-size: 12.5px; color: var(--faint); }
   .feedback {
     margin-top: 16px; background: var(--surface); border: 1px solid var(--line);
@@ -142,6 +170,15 @@
   <div class="choices" id="choices"></div>
   <div class="detail" id="detail"></div>
 
+  <section class="verdicts" id="verdicts" hidden>
+    <h2>어느 것이 맞습니까</h2>
+    <p>후보마다 눌러 주세요. 한 번에 판단 하나가 아니라 <b>열 개</b>가 남습니다 —
+      프로 영상은 선수가 <i>고른 것</i>만 남기고 버린 길은 남기지 않으므로,
+      <b>버렸다는 표시는 여기서만 나옵니다.</b></p>
+    <div id="verdict-list"></div>
+    <div class="played" id="played"></div>
+  </section>
+
   <section class="feedback">
     <h2>이 답이 어떤가요</h2>
     <p>틀린 점을 적어 주세요. 어느 공략이 왜 이상한지, 실제로는 무엇을 치시는지 —
@@ -182,6 +219,9 @@
   let result = null;         // 실행 결과
   let picked = null;
   let playing = null;   // {frame, timer}
+  // 후보마다의 판단과, 실제로 쳐 본 결과. 이것이 곧 "버린 길"의 기록이다.
+  let verdicts = {};    // {후보 key: "good" | "bad"}
+  let played = null;    // {key, scored} — 실제로 쳐 보셨다면
   let wantFirst = "any";   // 1적구: any | 공 이름
   let wantFace = "any";    // 맞히는 면: any | left | right
 
@@ -723,6 +763,69 @@
   }
 
 
+  // 후보 목록을 판단표로 그린다. 순위 그대로 세로로 놓아, 몇 번째에 있는 것이
+  // 맞다고 하셨는지가 그대로 채점 점수가 된다.
+  function paintVerdicts() {
+    const box = document.getElementById("verdicts");
+    const list = document.getElementById("verdict-list");
+    const foot = document.getElementById("played");
+    if (!result || !result.routes.length) { box.hidden = true; return; }
+    box.hidden = false;
+    list.textContent = "";
+    result.routes.forEach((row, index) => {
+      const line = document.createElement("div");
+      line.className = "vrow" + (row.key === picked ? " is-picked" : "");
+      const rank = document.createElement("span");
+      rank.className = "rank";
+      rank.textContent = `${index + 1}.`;
+      const what = document.createElement("span");
+      what.className = "what";
+      what.innerHTML = `${label(row)}<br><small>두께 ${asThickness(row.hit.thickness)} ·
+        당점 ${asTip(row.hit.side, row.hit.vertical || 0)} ·
+        강도 ${SIM.strengthOf(row.hit.speed).toFixed(1)}</small>`;
+      what.style.cursor = "pointer";
+      what.onclick = () => { stopPlaying(); picked = row.key; render(); };
+      line.append(rank, what);
+      for (const [say, text] of [["good", "맞다"], ["bad", "아니다"]]) {
+        const button = document.createElement("button");
+        button.type = "button";
+        button.dataset.say = say;
+        button.textContent = text;
+        button.setAttribute("aria-pressed", String(verdicts[row.key] === say));
+        button.onclick = () => {
+          // 다시 누르면 판단을 거둔다 — 모르겠는 것을 모르겠다고 둘 수 있어야 한다.
+          verdicts[row.key] = verdicts[row.key] === say ? undefined : say;
+          if (verdicts[row.key] === undefined) delete verdicts[row.key];
+          paintVerdicts();
+        };
+        line.appendChild(button);
+      }
+      list.appendChild(line);
+    });
+
+    // 실제로 쳐 보신 결과. 선호가 아니라 결과라서, 이것만이 훈련에 쓸 수 있다.
+    foot.textContent = "";
+    const ask = document.createElement("span");
+    ask.className = "ask";
+    ask.innerHTML = `고르신 <b>${picked ? `${result.routes.findIndex((r) => r.key === picked) + 1}번` : "공략"}</b>을
+      실제로 쳐 보셨다면:`;
+    foot.appendChild(ask);
+    for (const [key, text] of [["in", "들어갔다"], ["out", "빗나갔다"], ["no", "안 쳐봄"]]) {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.textContent = text;
+      const now = key === "no" ? !played
+        : (played && played.key === picked && played.scored === (key === "in"));
+      button.setAttribute("aria-pressed", String(!!now));
+      button.disabled = key !== "no" && !picked;
+      button.onclick = () => {
+        played = key === "no" ? null : { key: picked, scored: key === "in" };
+        paintVerdicts();
+      };
+      foot.appendChild(button);
+    }
+  }
+
   // 한 장이면 된다. 큐를 잡을 때 보는 것은 "수구를 어디 때려서 1적구의 어디에
   // 얼마나 두껍게 붙이느냐" 하나이고, 두께와 당점은 그 한 장면의 두 부분이다.
   // 그래서 수구를 1적구 위에 겹쳐 그린 다음, 그 수구 위에 팁 동심원을 얹는다.
@@ -896,6 +999,7 @@
     } else {
       detail.classList.remove("on");
     }
+    paintVerdicts();
     document.getElementById("footer").innerHTML =
       `${result.how ? `<b>${result.how}</b>에서 찾았습니다. ` : ""}${result.kisses ? `키스가 나는 선 <b>${result.kisses}개</b>는 빼고 보여드립니다. ` : ""}
        순위는 프로 ${DATA.plays.length}개 플레이 중 <b>이 배치와 가장 가까운 ${K}개</b>가 정합니다 —
@@ -1016,7 +1120,8 @@
 
   document.getElementById("clear").onclick = () => {
     stopPlaying();
-    layout = {}; result = null; picked = null; cue = "white"; render();
+    layout = {}; result = null; picked = null; cue = "white";
+    verdicts = {}; played = null; render();
   };
   document.getElementById("run").onclick = () => {
     const button = document.getElementById("run");
@@ -1025,6 +1130,7 @@
     // 한 프레임 쉬어 버튼 상태가 보이게 한 뒤 푼다.
     setTimeout(async () => {
       try {
+        verdicts = {}; played = null;   // 새 계산은 새 판단이다
         result = await advise((done) => {
           button.textContent = `계산 중 ${Math.round(done * 100)}%`;
         });
@@ -1070,6 +1176,18 @@
     } else {
       lines.push("아직 실행하지 않음");
     }
+    const judged = Object.keys(verdicts);
+    if (judged.length) {
+      lines.push("", "판단:");
+      result.routes.forEach((row, index) => {
+        if (!verdicts[row.key]) return;
+        lines.push(`  ${index + 1}. ${label(row)} — ${verdicts[row.key] === "good" ? "맞다" : "아니다"}`);
+      });
+    }
+    if (played) {
+      const at = result.routes.findIndex((r) => r.key === played.key) + 1;
+      lines.push(`실제로 쳐보니: ${at}번 ${played.scored ? "들어갔다" : "빗나갔다"}`);
+    }
     if (comment.value.trim()) lines.push("", "의견:", comment.value.trim());
 
     // 읽으시는 글 아래에 기계가 읽을 한 덩어리를 붙인다. 가상 테이블에서 주신
@@ -1095,6 +1213,9 @@
         chosen: row.chosen, scored: row.scored, total: result.total,
         band: row.band ? [row.band.n, row.band.mid] : null,
       })),
+      // 버린 길의 기록. 프로 영상에는 없는 것이고, 순위 계산이 채점받는 근거다.
+      verdicts,
+      played,
       comment: comment.value.trim() || null,
     };
     lines.push("", "```carom-feedback", JSON.stringify(record), "```");

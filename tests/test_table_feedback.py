@@ -52,3 +52,26 @@ def test_the_ledger_on_disk_still_parses():
     # 무엇이 빠졌는지도 장부가 알고 있어야 한다.
     assert any(r.get("lost") for r in kept["rounds"]), \
         "잃어버린 기록에 대한 빈칸이 사라졌습니다"
+
+
+def test_the_page_carries_the_verdicts_and_the_outcome():
+    page = PAGE.read_text(encoding="utf-8")
+    for field in ("verdicts,", "played,"):
+        assert field in page, f"기록 덩어리에 {field}가 없습니다"
+    assert 'data-say="good"' in page or 'dataset.say = say' in page, \
+        "후보마다 누를 버튼이 사라졌습니다"
+
+
+def test_the_scorer_finds_where_the_right_answer_sat():
+    from tools.table_check import score
+
+    # 순위 1·2번이 틀렸다고 하셨고 3번이 맞다고 하신 판.
+    one = {"candidates": [{"key": "a"}, {"key": "b"}, {"key": "c"}, {"key": "d"}],
+           "verdicts": {"a": "bad", "b": "bad", "c": "good"}}
+    got = score(one)
+    assert got["best_rank"] == 3, "맞는 것의 자리를 잘못 셉니다"
+    assert got["bad_above"] == 2, "그 위의 틀린 것을 잘못 셉니다"
+    assert got["top_is_bad"] and not got["top_is_good"]
+
+    # 아무것도 안 누르신 판은 채점하지 않는다 - 0점이 아니라 무점이다.
+    assert score({"candidates": [{"key": "a"}], "verdicts": {}}) is None
