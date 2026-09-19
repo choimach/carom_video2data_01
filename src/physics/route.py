@@ -75,6 +75,22 @@ def _crossing_run(rails):
     return run
 
 
+def _subtype(rails):
+    """최상위 이름과 나란히 붙는 꼬리표. 이름 자체는 아니다.
+
+    ⚠️ 풀리지 않은 것: 그가 말한 더블쿠션은 **장-장-단**인데 (두 장쿠션 사이를
+    두 번 오간 뒤 단쿠션), ref/taxonomy.md의 빗겨치기 행은 패턴이 **단-단-장**
+    이다. 계열 규칙으로 장쿠션이 먼저면 빗겨치기가 아니라 뒤돌리기 쪽이다.
+    둘 중 무엇이 더블인지 아직 정해지지 않았다.
+    """
+    if len(rails) < 3:
+        return None
+    if _crossing_run(rails) == 2 \
+            and (rails[2] in SHORT_RAILS) != (rails[0] in SHORT_RAILS):
+        return DOUBLE
+    return None
+
+
 def classify(events, layout_mm=None, cue_ball=None, thickness=None, turn_deg=None,
              away_mm=None, struck_side=None, english=None, circuit=None):
     """Name the route this shot took.
@@ -141,10 +157,8 @@ def classify(events, layout_mm=None, cue_ball=None, thickness=None, turn_deg=Non
         if crossing >= 3:
             return {**result, "route": CROSSING,
                     "why": f"{crossing} crossings between the same pair of rails"}
-        if crossing == 2 and len(between) >= 3 \
-                and (between[2] in SHORT_RAILS) != (between[0] in SHORT_RAILS):
-            return {**result, "route": DOUBLE,
-                    "why": "two crossings, then the other pair"}
+        # 더블은 **최상위 이름이 아니다**. 2026-09-20에 확인: "더블은 빗겨치기의
+        # 하위구분이 맞아." 이름은 계열 규칙에 맡기고, 꼬리표만 붙인다.
 
         # 횡단을 대회전보다 먼저 본다: 그가 "3회 **이상**"이라고 했으므로 다섯 번
         # 오간 것도 횡단이지 대회전이 아니다. 대회전의 하위 구분은 뒤돌리기
@@ -164,7 +178,9 @@ def classify(events, layout_mm=None, cue_ball=None, thickness=None, turn_deg=Non
                     "why": f"back to the same {between[0]} rail"}
 
 
-    return {**result, **_turn(between, struck_side, circuit)}
+    named = {**result, **_turn(between, struck_side, circuit)}
+    subtype = _subtype(between)
+    return {**named, "subtype": subtype} if subtype else named
 
 
 def _turn(between, struck_side, circuit):

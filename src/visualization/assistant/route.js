@@ -39,8 +39,9 @@ const ROUTE = (() => {
       // (japong.com) — 단쿠션과 나란히 오가면 부딪히는 벽은 장쿠션이다.
       const crossing = crossingRun(between);
       if (crossing >= 3) return "횡단";
-      if (crossing === 2 && between.length >= 3
-          && (SHORT.has(between[2]) !== SHORT.has(between[0]))) return "더블";
+      // 더블은 **최상위 이름이 아니다**. 2026-09-20에 확인: "더블은 빗겨치기의
+      // 하위구분이 맞아." 그래서 여기서 이름을 가로채지 않고 계열 규칙에
+      // 맡긴다. 하위 구분은 subtypeOf()가 따로 돌려준다.
 
       // 횡단을 대회전보다 먼저 본다: "3회 **이상**"이므로 다섯 번 오간 것도
       // 횡단이다. ⚠️ 이 순서는 내 판단이고 확인받은 적이 없다.
@@ -66,6 +67,19 @@ const ROUTE = (() => {
     const shortFirst = SHORT.has(between[0]);
     if (sameHand) return shortFirst ? "앞돌리기" : "옆돌리기";
     return shortFirst ? "빗겨치기" : "뒤돌리기";
+  }
+
+  // 하위 구분 — 최상위 이름과 나란히 붙는 꼬리표이지 이름 자체가 아니다.
+  //
+  // ⚠️ 여기에 풀리지 않은 것이 있다. 그가 말한 더블쿠션은 **장-장-단**인데
+  // (두 장쿠션 사이를 두 번 오간 뒤 단쿠션), ref/taxonomy.md의 빗겨치기 행은
+  // 패턴이 **단-단-장**이다. 계열 규칙으로 장쿠션이 먼저면 빗겨치기가 아니라
+  // 뒤돌리기 쪽이다. 둘 중 무엇이 더블인지 아직 정해지지 않았다.
+  function subtypeOf(between) {
+    if (!between || between.length < 3) return null;
+    if (crossingRun(between) === 2
+        && SHORT.has(between[2]) !== SHORT.has(between[0])) return "더블";
+    return null;
   }
 
   // 마주보는 두 쿠션을 번갈아 맞은 횟수 — 처음부터 이어지는 만큼만 센다.
@@ -111,7 +125,7 @@ const ROUTE = (() => {
     });
   }
 
-  return { name, of, circuitIsRight, crossingRun, SHORT, LONG, LONG_AROUND_CUSHIONS };
+  return { name, of, subtypeOf, circuitIsRight, crossingRun, SHORT, LONG, LONG_AROUND_CUSHIONS };
 })();
 
 if (typeof module !== "undefined") module.exports = ROUTE;

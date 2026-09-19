@@ -133,5 +133,34 @@ def test_crossing_and_double_split_on_how_many_times_it_crossed():
         [0, ["top", "left", "top"], True, "left", True],               # 되돌아오기
     ])
     assert got[:3] == ["횡단", "횡단", "횡단"], f"횡단을 못 알아봅니다: {got[:3]}"
-    assert got[3:5] == ["더블", "더블"], f"더블을 못 알아봅니다: {got[3:5]}"
+    # 더블은 **최상위 이름이 아니다** — "더블은 빗겨치기의 하위구분이 맞아"
+    # (2026-09-20). 이름은 계열 규칙이 붙이고, 더블은 꼬리표로 나란히 간다.
+    assert "더블" not in got, "더블이 다시 이름 자리로 올라왔습니다"
     assert got[5] == "되돌아오기", "되돌아오기와 헷갈립니다"
+
+
+@pytest.mark.skipif(not shutil.which("node"), reason="node가 없습니다")
+def test_double_is_a_tag_beside_the_name_not_the_name():
+    """단-단-장이 빗겨치기로 나오는지 — taxonomy의 빗겨치기 행과 맞아야 한다.
+
+    그 행은 "중단 빗겨치기(단-단-장 / 단-장-단-장)"이고 더블을 하위 구분으로
+    올려 두었다. 이 배치가 계열 규칙만으로 빗겨치기가 되어야 둘이 맞는 것이고,
+    실제로 그렇게 나온다 — 강제한 것이 아니다.
+    """
+    script = f"""
+    const ROUTE = require({json.dumps(str(ROUTE_JS))});
+    const ask = (between, face, circuitRight) => [
+      ROUTE.name({{ before: 0, between, reachedSecond: true, face, circuitRight }}),
+      ROUTE.subtypeOf(between),
+    ];
+    console.log(JSON.stringify([
+      ask(["left", "right", "top"], "left", true),     // 단-단-장
+      ask(["top", "bottom", "left"], "left", true),    // 장-장-단
+      ask(["top", "left", "bottom"], "left", true),    // 오간 것이 아니다
+    ]));
+    """
+    done = subprocess.run(["node", "-e", script], capture_output=True, text=True, check=True)
+    got = json.loads(done.stdout)
+    assert got[0] == ["빗겨치기", "더블"], f"단-단-장이 {got[0]}로 나옵니다"
+    assert got[1][1] == "더블", "장-장-단에도 더블 꼬리표가 붙어야 합니다"
+    assert got[2][1] is None, "오가지 않은 것에 더블이 붙었습니다"
