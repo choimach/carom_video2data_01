@@ -31,6 +31,7 @@ from src.data_acquisition.screen import STREAM_FORMAT, _yt_dlp  # noqa: E402
 VIDEOS = os.path.join(ROOT, "data", "videos")
 SCREENING = os.path.join(ROOT, "data", "_screening.json")
 UNREADABLE = os.path.join(ROOT, "data", "_unreadable.json")
+RETIRED = os.path.join(ROOT, "data", "videos.json")
 ATTEMPTS = 2
 
 
@@ -53,9 +54,26 @@ def note_unreadable(vod_id):
     return seen[str(vod_id)]
 
 
+def retired():
+    """스캔이 끝나 지운 경기. 다시 받으면 안 된다.
+
+    `tools/retire_videos.py`가 영상을 지우면서 주소를 `data/videos.json`에 적어
+    둔다. 그 목록을 여기서 빼지 않으면, 지운 39경기가 전부 "아직 안 받은 것"으로
+    보여서 **347 GB를 그대로 다시 받는다.** 지우기와 받기는 짝이라, 한쪽만
+    만들어 두면 다음 라운드가 되돌린다.
+    """
+    if not os.path.exists(RETIRED):
+        return set()
+    kept = json.load(open(RETIRED, encoding="utf-8"))
+    return {str(row.get("vod_id")) for row in kept.get("matches", {}).values()
+            if row.get("vod_id")}
+
+
 def wanted(only=()):
     entries = json.load(open(SCREENING, encoding="utf-8"))
     rows = [e for e in entries if e.get("usable") and e.get("vod_id")]
+    gone = retired()
+    rows = [e for e in rows if str(e["vod_id"]) not in gone]
     if only:
         rows = [e for e in rows if e.get("event") in only or str(e["vod_id"]) in only]
     else:
