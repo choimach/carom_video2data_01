@@ -379,14 +379,22 @@
     return balls.some((e) => e !== first && e.detail === first.detail && e.at < second.at);
   }
 
-  function tryAngle(deg, speed, side, hits, counters, vertical = 0) {
+  function tryAngle(deg, speed, side, hits, counters, vertical = 0, fromSweep = false) {
     const rad = deg * Math.PI / 180;
     const aim = [Math.cos(rad), Math.sin(rad)];
     const shot = SIM.play(layout, cue, [aim[0] * speed, aim[1] * speed], side, vertical);
     const judged = SIM.judge(shot);
     const balls = shot.events.filter((e) => e.kind === "ball");
     const cushions = shot.events.filter((e) => e.kind === "cushion").length;
-    const promising = balls.length > 0 && cushions >= 2;
+    // 전방위 그물에서 나온 자리는 **쿠션을 먼저 맞은 것만**, 그리고 **쿠션 4개
+    // 이상**일 때만 본다. 그게 이 그물을 친 이유(걸어치기·뱅크샷)이고 — 먼저
+    // 하나 + 적구 사이 셋 = 넷이 필요하다 — 두께 사다리가 이미 나머지를 덮는다.
+    // 이 조건이 없으면 될 만한 자리가 137개에서 381개로 불어나고, 그 각각이
+    // 당점 13곳 × 각도 9칸으로 퍼져서 실행이 2.6초에서 18.1초가 된다.
+    const promising = fromSweep
+      ? (balls.length > 0 && cushions >= 4
+         && shot.events.some((e) => e.kind === "cushion" && e.at < balls[0].at))
+      : (balls.length > 0 && cushions >= 2);
     if (!judged.scored) return promising;
     if (kissed(shot, judged)) { counters.kisses++; return promising; }
     const target = layout[judged.first];
@@ -454,8 +462,11 @@
   // 무엇을 먼저 맞든 상관하지 않는 그물. 2도로 한 바퀴, 세기마다 무회전으로.
   function sweepJobs() {
     const jobs = [];
+    // 다섯째 칸이 "이 자리는 전방위 그물에서 나왔다"는 표식이다.
+    // ⚠️ 세기 하나로만 훑어 보았다가 되돌렸다: 실행이 8.7초에서 5.7초가 되는
+    // 대신 걸어치기 재현율이 10/10에서 8/10으로 떨어졌다.
     for (const speed of SPEEDS) {
-      for (let deg = 0; deg < 360; deg += COARSE) jobs.push([deg, speed, 0, 0]);
+      for (let deg = 0; deg < 360; deg += COARSE) jobs.push([deg, speed, 0, 0, "sweep"]);
     }
     return jobs;
   }
@@ -499,17 +510,22 @@
     const contact = contactJobs().concat(sweepJobs());
     const promising = [];
     for (let i = 0; i < contact.length; i++) {
-      const [deg, speed, side, up] = contact[i];
-      if (tryAngle(deg, speed, side, hits, counters, up)) promising.push(contact[i]);
+      const [deg, speed, side, up, born] = contact[i];
+      if (tryAngle(deg, speed, side, hits, counters, up, born === "sweep")) {
+        promising.push(contact[i]);
+      }
       if (i % CHUNK === CHUNK - 1) { onProgress(0.45 * i / contact.length); await pause(); }
     }
     // 2) 그중 될 뻔한 자리 둘레만 0.25도로 다시 — 득점 창이 그만큼 좁다.
     // 될 만한 자리에서만 시계 열두 방향을 펼친다. 방향은 여기서부터 중요해진다.
     const key4 = ([d, s, x, u]) => `${d}:${s}:${x}:${u || 0}`;
     const seen = new Set(contact.map(key4));
+    // 전방위에서 나온 자리는 당점을 다섯 곳만 펼친다. 열세 곳을 다 펼치면
+    // 얻는 것에 비해 너무 비싸다 (18.1초 → 7.4초).
+    const FEW_TIPS = [[0, 0], ...[12, 3, 6, 9].map((h) => atClock(h, 2))];
     const around = [];
-    for (const [deg, speed] of promising) {
-      for (const [side, up] of TIP_POINTS) {
+    for (const [deg, speed, , , born] of promising) {
+      for (const [side, up] of (born === "sweep" ? FEW_TIPS : TIP_POINTS)) {
         for (let d = -1.0; d <= 1.0; d += FINE) {
           const at = Math.round((((deg + d) % 360 + 360) % 360) / FINE) * FINE;
           const job = [at, speed, side, up];

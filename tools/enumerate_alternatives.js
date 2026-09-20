@@ -84,12 +84,16 @@ function search(layout, cue) {
   // 곡선은 17.8도로 들어간 공을 33.7도로 내보낸다). 대신 전방위를 2도로 한 번
   // 훑는다 — 무엇을 먼저 맞든 상관하지 않으므로 이쪽이 맞는 그물이고, 값도
   // 싸다 (180각 × 4세기 = 720번, 0.5초 남짓).
+  // ⚠️ 세기 하나로만 훑어 보았다가 되돌렸다. 8.7초가 5.7초가 되는 대신 프로가
+  // 실제로 친 걸어치기 재현율이 10/10에서 8/10으로 떨어졌다. 3초를 아끼려고 이
+  // 그물을 친 이유를 무너뜨리는 거래다 — 못 찾은 길은 "그가 버린 길"로 잘못
+  // 읽히고, 모델은 프로가 걸어치기를 피한다고 배운다.
   for (const speed of SPEEDS) {
-    for (let deg = 0; deg < 360; deg += 2) jobs.push([deg, speed, 0, 0]);
+    for (let deg = 0; deg < 360; deg += 2) jobs.push([deg, speed, 0, 0, "sweep"]);
   }
 
   const hits = [], promising = [];
-  const go = (deg, speed, side, up) => {
+  const go = (deg, speed, side, up, fromSweep) => {
     const rad = deg * Math.PI / 180;
     const aim = [Math.cos(rad), Math.sin(rad)];
     const shot = SIM.play(layout, cue, [aim[0] * speed, aim[1] * speed], side, up);
@@ -97,7 +101,11 @@ function search(layout, cue) {
     const judged = SIM.judge(shot);
     const balls = shot.events.filter((e) => e.kind === 'ball');
     const cushions = shot.events.filter((e) => e.kind === 'cushion').length;
-    const maybe = balls.length > 0 && cushions >= 2;
+    // 조언판과 같아야 한다 — assistant.html의 같은 자리 주석 참조.
+    const maybe = fromSweep
+      ? (balls.length > 0 && cushions >= 4
+         && shot.events.some((e) => e.kind === 'cushion' && e.at < balls[0].at))
+      : (balls.length > 0 && cushions >= 2);
     if (!judged.scored || kissed(shot)) return maybe;
     const target = layout[judged.first];
     const across = aim[0] * (target[1] - from[1]) - aim[1] * (target[0] - from[0]);
@@ -118,11 +126,12 @@ function search(layout, cue) {
     return true;
   };
 
-  for (const job of jobs) if (go(...job)) promising.push(job);
+  for (const job of jobs) if (go(job[0], job[1], job[2], job[3], job[4] === 'sweep')) promising.push(job);
   const key4 = (j) => `${j[0]}:${j[1]}:${j[2]}:${j[3]}`;
   const seen = new Set(jobs.map(key4));
-  for (const [deg, speed] of promising) {
-    for (const [side, up] of TIP_POINTS) {
+  const FEW_TIPS = [[0, 0], ...[12, 3, 6, 9].map((h) => atClock(h, 2))];
+  for (const [deg, speed, , , born] of promising) {
+    for (const [side, up] of (born === 'sweep' ? FEW_TIPS : TIP_POINTS)) {
       for (let d = -1.0; d <= 1.0; d += FINE) {
         const at = Math.round((((deg + d) % 360 + 360) % 360) / FINE) * FINE;
         const job = [at, speed, side, up];
