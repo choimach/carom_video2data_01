@@ -121,6 +121,8 @@ url정보만 남기고 지우면 된다."*
 |---|---|---|
 | `src/physics/spin.py` | `src/visualization/assistant/sim.js` | `tests/test_sim_js.py` |
 | `src/physics/strength.py` 표 | `sim.js`의 `STRENGTH` | `tests/test_strength.py` |
+| `src/physics/route.py` | `route.js` | `tests/test_route_js.py` |
+| `tools/learn_choices.py`의 `features()` | `choice.js` | `tests/test_choice_js.py` |
 
 **물리 상수를 고치면 강도 표를 다시 재야 한다** (`strength.measure()`). 같은
 이름이 다른 세기를 가리키게 된다.
@@ -150,3 +152,12 @@ node --check build/sim.js
 측정에 쓰는 자를 맞춘 값으로 만들지 말 것. 한 번 이동거리에 맞춰 감쇠곡선을
 다시 잡았다가 테이블이 2.5배 느려진 적이 있다 — 영상 창이 닫힐 때 아직 구르던
 공을 "다 간 거리"로 읽은 탓이었다.
+
+★**고친 쪽만 재지 말고 나빠진 쪽도 재라.** 전방위 훑기를 넣어 걸어치기 재현율을
+0/7 → 6/6으로 고치고 **그것만** 확인한 채 올렸는데, 같은 변경이 조언판 실행을
+2.6초에서 **18.1초**로 만들었다. 이틀 뒤 다른 도구가 "배치당 20초"를 찍어서야
+알았다. 변경마다 **얻은 것과 잃은 것을 같이 적는다.**
+
+★**배운 가중치는 손으로 베끼지 않는다.** `tools/build_assistant.py`가
+`data/choice_weights.json`에서 넣는다. 베끼면 다시 재고도 옛 숫자를 내보낸 채
+"좋아졌다"고 말하게 된다.
