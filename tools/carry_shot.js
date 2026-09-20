@@ -45,6 +45,94 @@ function apart(a, b, steps = 24) {
   return sum / (steps + 1);
 }
 
+// 궤적을 **고리별로** 읽는다. 선수가 정한 차례 (2026-09-21): 반사각 > 첫 쿠션
+// 포인트 > 그리로 가는 곡선 > 총 이동거리 > 둘째 쿠션 포인트. 앞의 고리일수록
+// 무겁다 — 오차가 뒤로 갈수록 불어나기 때문이다. 전체 평균 거리 하나로 재면
+// 어느 고리가 끊어졌는지 가려진다.
+function links(path, firstBall) {
+  // 쿠션은 "쿠션 가까이 있는 점"으로 찾지 않는다. 프로의 길은 32점으로 솎아져
+  // 있어 점 간격이 200 mm인데 쿠션 띠는 49 mm라, 대부분 놓친다. 대신 **방향이
+  // 뒤집히는 자리**로 찾는다 — 쿠션을 맞으면 x나 y의 부호가 바뀌고, 그건 성기게
+  // 솎아도 남는다.
+  function turns(p, from) {
+    const out = [];
+    for (let i = from + 2; i < p.length - 1; i++) {
+      for (const ax of [0, 1]) {
+        const before = p[i][ax] - p[i - 1][ax], after = p[i + 1][ax] - p[i][ax];
+        if (Math.abs(before) < 20 || Math.abs(after) < 20) continue;
+        if ((before > 0) === (after > 0)) continue;
+        // 방향이 뒤집혔다. 그 축에서 쿠션 쪽에 있어야 쿠션이다.
+        const wall = ax === 0 ? SIM.L : SIM.W;
+        if (p[i][ax] > wall * 0.25 && p[i][ax] < wall * 0.75) continue;
+        if (out.length && i - out[out.length - 1].i < 2) continue;
+        out.push({ i, at: p[i] });
+      }
+      if (out.length >= 2) break;
+    }
+    return out;
+  }
+  // 1적구에 가장 가까이 간 자리를 충돌 지점으로 본다. 얇은 길은 어차피 스치므로
+  // 이보다 나은 것을 이 32점짜리 길에서 뽑아내기 어렵다.
+  let hit = 0, near = Infinity;
+  for (let i = 0; i < path.length; i++) {
+    const d = Math.hypot(path[i][0] - firstBall[0], path[i][1] - firstBall[1]);
+    if (d < near) { near = d; hit = i; }
+  }
+  // 충돌 뒤 떠나는 방향 — 반사각의 방향과 크기가 여기서 나온다.
+  const after = Math.min(hit + 2, path.length - 1);
+  const leave = (after > hit)
+    ? Math.atan2(path[after][1] - path[hit][1], path[after][0] - path[hit][0]) * 180 / Math.PI
+    : null;
+  // 충돌 뒤 처음으로 쿠션에 닿는 자리, 그 다음 자리.
+  const found = turns(path, hit);
+  const rails = found.map((f) => f.at);
+  // 충돌부터 첫 쿠션까지가 얼마나 휘었나: 직선 거리 대비 실제로 간 거리.
+  let curve = null;
+  if (rails.length) {
+    let gone = 0, upto = found[0].i;
+    for (let i = hit + 1; i <= upto; i++) gone += Math.hypot(path[i][0] - path[i-1][0], path[i][1] - path[i-1][1]);
+    const straight = Math.hypot(rails[0][0] - path[hit][0], rails[0][1] - path[hit][1]);
+    if (straight > 100) curve = gone / straight;
+  }
+  let travel = 0;
+  for (let i = 1; i < path.length; i++) travel += Math.hypot(path[i][0] - path[i-1][0], path[i][1] - path[i-1][1]);
+  return { hitAt: path[hit], leave, rail1: rails[0] || null, rail2: rails[1] || null, curve, travel };
+}
+
+// 접촉 자리와 쿠션 자리를 알고 있을 때, 선수가 정한 다섯 고리를 뽑는다.
+function fromEvents(path, hit, rails) {
+  let travel = 0;
+  for (let i = 1; i < path.length; i++) {
+    travel += Math.hypot(path[i][0] - path[i - 1][0], path[i][1] - path[i - 1][1]);
+  }
+  const rail1 = rails[0] || null, rail2 = rails[1] || null;
+  // 1. 반사각의 방향 — 1적구를 맞고 첫 쿠션으로 떠나는 방향.
+  const leave = (hit && rail1)
+    ? Math.atan2(rail1[1] - hit[1], rail1[0] - hit[0]) * 180 / Math.PI : null;
+  // 3. 그 사이가 얼마나 휘었나 — 실제로 간 거리 ÷ 직선 거리. 1.0이면 곧은 길.
+  let curve = null;
+  if (hit && rail1) {
+    let gone = 0, started = false;
+    for (let i = 1; i < path.length; i++) {
+      const d0 = Math.hypot(path[i - 1][0] - hit[0], path[i - 1][1] - hit[1]);
+      const d1 = Math.hypot(path[i][0] - rail1[0], path[i][1] - rail1[1]);
+      if (!started && d0 < 120) started = true;
+      if (started) gone += Math.hypot(path[i][0] - path[i - 1][0], path[i][1] - path[i - 1][1]);
+      if (started && d1 < 120) break;
+    }
+    const straight = Math.hypot(rail1[0] - hit[0], rail1[1] - hit[1]);
+    if (straight > 200 && gone > 0) curve = gone / straight;
+  }
+  return { leave, rail1, rail2, curve, travel };
+}
+
+const angleGap = (a, b) => {
+  if (a === null || b === null) return null;
+  let d = Math.abs(a - b) % 360;
+  return d > 180 ? 360 - d : d;
+};
+const pointGap = (a, b) => (a && b) ? Math.hypot(a[0] - b[0], a[1] - b[1]) : null;
+
 // 이웃이 준 (공·면·두께·세기)로 이 배치에서 겨냥을 세우고, 그 둘레를 다듬는다.
 function play(layout, carried) {
   const cue = layout.white;
@@ -89,6 +177,7 @@ function play(layout, carried) {
 function main() {
   const jobs = JSON.parse(fs.readFileSync(path.join(ROOT, 'build', '_carry_jobs.json'), 'utf8')).jobs;
   const gaps = [], firstRight = [], faceRight = [], rightGaps = [], wrongGaps = [];
+  const link = { leave: [], rail1: [], curve: [], travel: [], rail2: [] };
   let played = 0;
   for (const job of jobs) {
     const layout = { white: job.layout.cue, yellow: job.layout.balls[0], red: job.layout.balls[1] };
@@ -106,6 +195,23 @@ function main() {
       gaps.push(d);
       const right = top.near === job.truth.near && top.face === job.truth.face;
       (right ? rightGaps : wrongGaps).push(d);
+      // 고리별 오차는 **고르기가 맞았을 때만** 본다. 틀린 공을 친 궤적의 반사각을
+      // 재는 것은 뜻이 없다.
+      if (right) {
+        // 우리 쪽은 시뮬레이터가 이벤트로 알려 주고, 프로 쪽은 파이프라인이
+        // 실어 보낸 값을 쓴다. 양쪽 다 추측이 아니다.
+        const ev = got.shot.events;
+        const ball = ev.find((e) => e.kind === 'ball');
+        const cush = ev.filter((e) => e.kind === 'cushion' && ball && e.at > ball.at);
+        const mine = fromEvents(got.shot.paths.white, ball && ball.p, cush.map((e) => e.p));
+        const theirs = fromEvents(job.path, job.hit, job.rails || []);
+        const put = (k, v) => { if (v !== null && Number.isFinite(v)) link[k].push(v); };
+        put('leave', angleGap(mine.leave, theirs.leave));
+        put('rail1', pointGap(mine.rail1, theirs.rail1));
+        put('curve', (mine.curve && theirs.curve) ? Math.abs(mine.curve - theirs.curve) : null);
+        put('travel', Math.abs(mine.travel - theirs.travel));
+        put('rail2', pointGap(mine.rail2, theirs.rail2));
+      }
     }
   }
   const mid = (a) => a.length ? [...a].sort((x, y) => x - y)[Math.floor(a.length / 2)] : NaN;
@@ -121,6 +227,19 @@ function main() {
   }
   console.log(`\n  공과 면을 맞게 골랐을 때 (${rightGaps.length}개)  중앙값 ${mid(rightGaps).toFixed(0)} mm`);
   console.log(`  틀리게 골랐을 때      (${wrongGaps.length}개)  중앙값 ${mid(wrongGaps).toFixed(0)} mm`);
+  console.log('\n  고리별로 (고르기가 맞은 것만) — 앞의 고리일수록 무겁다');
+  const unit = { leave: '도', rail1: 'mm', curve: '배', travel: 'mm', rail2: 'mm' };
+  const name = { leave: '1. 반사각 방향', rail1: '2. 첫 쿠션 자리', curve: '3. 곡선',
+                 travel: '4. 총 이동거리 ⚠️', rail2: '5. 둘째 쿠션 자리' };
+  for (const k of ['leave', 'rail1', 'curve', 'travel', 'rail2']) {
+    const v = link[k];
+    if (!v.length) { console.log(`    ${name[k]}  —`); continue; }
+    console.log(`    ${name[k].padEnd(16)} 중앙값 ${mid(v).toFixed(k === 'curve' ? 2 : 0)} ${unit[k]}  (n=${v.length})`);
+  }
+  console.log('\n  ⚠️ 4번은 믿지 말 것. 영상의 궤적은 카메라 창이 닫히며 잘린다 —');
+  console.log('     추적된 공의 대부분이 창이 닫힐 때 아직 구르고 있었다. 끝까지');
+  console.log('     굴린 시뮬레이터와 견주면 우리가 더 간 것처럼 보일 뿐이다.');
+  console.log('     이 함정에 한 번 걸려 감쇠곡선을 잘못 맞춘 적이 있다.');
   console.log('\n  당구대 장축이 2844 mm, 공 하나가 62 mm다.');
 }
 

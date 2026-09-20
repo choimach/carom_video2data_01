@@ -104,6 +104,8 @@ def main():
         jobs.append({
             "layout": {"cue": play["cue"], "balls": play["balls"]},
             "path": play["path"],
+            # 파이프라인이 아는 진짜 자리들 — 솎인 길에서 되짚지 않는다.
+            "rails": play.get("rails"), "hit": play.get("hit"),
             "carried": carry(play, near, plays),
             "truth": {"near": bool(play["near"]), "face": play["face"],
                       "thickness": play.get("thick"), "speed": play.get("speed")},

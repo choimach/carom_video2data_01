@@ -63,6 +63,50 @@ def thin(path):
             for i in range(POINTS)]
 
 
+def _at(original, frame, flip_x, flip_y):
+    """이벤트의 프레임 번호를 궤적 위의 자리로.
+
+    ⚠️ 두 가지에 걸린 적이 있다. (1) events의 프레임은 **플레이 시작 기준
+    상대값**이지 영상 전체의 절대 프레임이 아니다. (2) 그러므로 NaN을 걸러낸
+    뒤의 배열에 대고 세면 안 된다 — 거른 만큼 인덱스가 밀린다. 원본 배열에서
+    집어내고, 그 점만 캐노니컬 프레임으로 돌린다.
+    """
+    if frame is None:
+        return None
+    i = int(frame)
+    if i < 0 or i >= len(original):
+        return None
+    point = original[i]
+    if not np.isfinite(point).all():
+        return None
+    return [int(round(v)) for v in transform(point, flip_x, flip_y)]
+
+
+def rail_points(original, events, flip_x, flip_y):
+    """수구가 쿠션을 맞은 자리들, 순서대로.
+
+    쿠션이 **어디서** 일어났는지는 파이프라인이 이미 알고 있다. 그것을 옮겨
+    적지 않으면 읽는 쪽은 32점으로 솎인 길에서 되짚어야 하고 대개 놓친다 —
+    점 간격이 200 mm인데 쿠션 띠는 49 mm다.
+    """
+    out = []
+    for item in events:
+        if len(item) < 2 or item[1] != "cushion":
+            continue
+        at = _at(original, item[0], flip_x, flip_y)
+        if at:
+            out.append(at)
+    return out or None
+
+
+def ball_point(original, events, flip_x, flip_y):
+    """수구가 제1적구를 맞은 자리. 반사각을 재는 기준점이다."""
+    for item in events:
+        if len(item) >= 2 and item[1] == "ball":
+            return _at(original, item[0], flip_x, flip_y)
+    return None
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--data", default=os.path.join(ROOT, "data", "model.json"))
@@ -81,6 +125,23 @@ def main(argv=None):
         match = os.path.basename(name)[:-9]
         paths[match] = np.load(name)
 
+    # 쿠션이 **어디서** 일어났는지는 파이프라인이 이미 알고 있다 (경기별 JSON의
+    # events가 프레임으로 들고 있다). 그것을 여기서 옮겨 적지 않으면, 읽는 쪽은
+    # 32점으로 솎인 길에서 쿠션 자리를 되짚어야 하고 대개 놓친다.
+    # 선수가 정한 궤적 안의 차례 (2026-09-21)에서 2번과 5번이 바로 이 값이다.
+    events = {}
+    for name in sorted(glob.glob(os.path.join(ROOT, "data", "dataset", "*.json"))):
+        if name.endswith("index.json"):
+            continue
+        match = os.path.basename(name)[:-5]
+        try:
+            body = json.load(open(name, encoding="utf-8"))
+        except (json.JSONDecodeError, OSError):
+            continue
+        for play in (body["plays"] if isinstance(body, dict) and "plays" in body else body):
+            events[(match, play.get("inning"), play.get("shot_number"))] = \
+                play.get("events") or []
+
     plays, missing = [], 0
     for row, point in zip(rows, scaled):
         bundle = paths.get(row["match"])
@@ -96,6 +157,7 @@ def main(argv=None):
         flip_y = bool(abs(original[0][0] - raw[0]) > 1.0) if len(original) else False
         flip_x = bool(abs(original[0][1] - raw[1]) > 1.0) if len(original) else False
         turned = [transform(p, flip_x, flip_y) for p in original if np.isfinite(p).all()]
+        marks = events.get((row["match"], row["inning"], row["shot"]), [])
         # Which object ball was struck first, as near or far from the cue -
         # the colours are arbitrary but "the one nearer him" survives every
         # mirror and every swap of who is playing which ball.
@@ -119,6 +181,10 @@ def main(argv=None):
             "balls": [[int(round(v)) for v in row["layout_mm"][c]]
                       for c in BALLS if c != row["cue"]],
             "path": thin(turned),
+            # 쿠션과 1적구 접촉이 궤적의 어디였나. 궤적은 이미 캐노니컬 프레임으로
+            # 돌려 두었으므로, 프레임 번호로 그 위에서 집어내면 된다.
+            "rails": rail_points(original, marks, flip_x, flip_y),
+            "hit": ball_point(original, marks, flip_x, flip_y),
             "aim": opening(turned)[0],
             "speed": opening(turned)[1],
             # 두께는 절반쯤의 플레이에만 있다 (적구가 떠나는 각을 읽을 만큼
