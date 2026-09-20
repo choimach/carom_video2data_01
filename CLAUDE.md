@@ -95,8 +95,22 @@ bash tools/keep_up.sh --no-collect
 ```
 
 파이썬은 항상 `~/.venvs/carom/bin/python`. 각 단계는 이미 한 것을 건너뛰므로
-언제 다시 돌려도 안전하다. `data/`와 `build/`는 git에 안 올라간다 (`labels.json`
-과 `table_feedback.json`만 `git add -f`로 추적).
+언제 다시 돌려도 안전하다. `data/`와 `build/`는 git에 안 올라간다 —
+`labels.json`, `table_feedback.json`, **`videos.json`** 만 `git add -f`로 추적.
+
+**스캔이 끝난 영상은 지운다.** 경기당 7~15 GB이고 스캔 결과는 1 MB도 안 되므로
+들고 있을 이유가 없다. 선수가 처음부터 정한 방식이다: *"완료된 경기 video는
+url정보만 남기고 지우면 된다."*
+
+```bash
+~/.venvs/carom/bin/python tools/retire_videos.py            # 말만 한다
+~/.venvs/carom/bin/python tools/retire_videos.py --delete
+```
+
+★**주소를 먼저 적고 그 다음에 지운다.** URL은 `data/_screening.json`에만 있었고
+`data/`는 git에 안 올라가므로, 그대로 지웠으면 **영상을 영영 잃을 뻔했다.** 이
+도구가 `data/videos.json`에 옮겨 적은 뒤에만 지운다. 스캔이 안 된 영상과 주소를
+모르는 영상은 건드리지 않는다.
 
 ## 5. 두 벌로 갈라진 것들
 
