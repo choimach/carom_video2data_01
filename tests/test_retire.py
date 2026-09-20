@@ -50,3 +50,20 @@ def test_the_ledger_keeps_an_address_for_every_retired_match():
     kept = json.load(open(retire_videos.LEDGER, encoding="utf-8"))
     without = [name for name, row in kept.get("matches", {}).items() if not row.get("url")]
     assert not without, f"주소 없이 지운 경기가 있습니다: {without}"
+
+
+def test_a_match_that_yielded_no_plays_is_kept(tmp_path, monkeypatch):
+    """스캔이 "끝났다"와 "쓸모가 있었다"는 다르다.
+
+    2026-09-15에 적어 둔 규칙 — *"수율이 낮은 경기는 검출기를 고칠 때까지 남겨
+    둔다. 다시 스캔하려면 영상이 있어야 하고 SOOP VOD는 사라질 수 있다"* — 을
+    읽지 않고 2026-09-20에 0판짜리 다섯 경기 47 GB를 지웠다.
+    """
+    model = [{"match": "soop_111_A"}, {"match": "soop_111_A"}]
+    model_file = tmp_path / "model.json"
+    model_file.write_text(json.dumps(model), encoding="utf-8")
+    monkeypatch.setattr(retire_videos, "MODEL", str(model_file))
+
+    yields = retire_videos.plays_per_match()
+    assert yields["soop_111_A"] == 2
+    assert not yields.get("soop_222_B"), "플레이가 없는 경기가 있는 것으로 읽힙니다"

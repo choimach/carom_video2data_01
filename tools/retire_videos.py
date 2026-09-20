@@ -5,9 +5,14 @@
 결과(`data/scans/*.npz`)는 1 MB도 안 되므로, 영상을 들고 있을 이유는 다시 스캔할
 일이 있을 때뿐이다.
 
-지우기 전에 반드시 두 가지를 확인한다:
+지우기 전에 반드시 **세** 가지를 확인한다:
 
 * **스캔이 끝났는가.** 안 끝난 영상을 지우면 30분짜리 다운로드를 다시 해야 한다.
+* ★**플레이가 실제로 나왔는가.** 스캔이 "끝났다"는 것과 "쓸모가 있었다"는 것은
+  다르다. 2026-09-15에 적어 둔 규칙 — *"수율이 낮은 경기는 검출기를 고칠 때까지
+  남겨 둔다. 다시 스캔하려면 영상이 있어야 하고 SOOP VOD는 사라질 수 있다"* —
+  을 읽지 않고 2026-09-20에 **0판짜리 다섯 경기 47 GB를 지웠다** (AKR2025 하나와
+  T3WC2026 넷). 주소는 남겼으니 되찾을 수는 있지만, 그게 규칙이 있었던 이유다.
 * **URL이 git에 남았는가.** 지금 URL은 `data/_screening.json`에만 있는데 `data/`는
   git에 올라가지 않는다. 그래서 이 도구가 먼저 `data/videos.json`에 옮겨 적고
   (`git add -f`로 추적), 그 다음에 지운다. **주소를 잃으면 영상을 잃는 것이다.**
@@ -23,12 +28,14 @@ import glob
 import json
 import os
 import sys
+from collections import Counter
 from datetime import date
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
 
 VIDEOS = os.path.join(ROOT, "data", "videos")
+MODEL = os.path.join(ROOT, "data", "model.json")
 SCANS = os.path.join(ROOT, "data", "scans")
 SCREENING = os.path.join(ROOT, "data", "_screening.json")
 LEDGER = os.path.join(ROOT, "data", "videos.json")
@@ -47,6 +54,15 @@ def ledger():
     return kept
 
 
+def plays_per_match():
+    """경기마다 모델 자료에 남은 플레이 수. 0이면 아직 지우지 않는다."""
+    if not os.path.exists(MODEL):
+        return {}
+    rows = json.load(open(MODEL, encoding="utf-8"))
+    rows = rows if isinstance(rows, list) else rows.get("plays", rows.get("rows", []))
+    return Counter(r["match"] for r in rows)
+
+
 def screened():
     if not os.path.exists(SCREENING):
         return {}
@@ -61,6 +77,7 @@ def main():
 
     known = screened()
     scans = {os.path.basename(p)[:-4] for p in glob.glob(os.path.join(SCANS, "*.npz"))}
+    yields = plays_per_match()
     kept = ledger()
 
     ready, held = [], []
@@ -72,6 +89,9 @@ def main():
         why = []
         if stem not in scans:
             why.append("스캔 안 됨")
+        elif not yields.get(stem):
+            # 검출기를 고치면 다시 스캔해야 하고, 그러려면 영상이 있어야 한다.
+            why.append("플레이 0판 (검출기 고칠 때까지 보관)")
         if not (row and row.get("url")):
             why.append("주소 모름")
         (held if why else ready).append((stem, size, path, row, why))
@@ -82,7 +102,7 @@ def main():
             "vod_id": row.get("vod_id"), "url": row.get("url"),
             "title": row.get("title"), "event": row.get("event"),
             "duration": row.get("duration"), "gigabytes": round(size, 2),
-            "scanned": True, "retired": str(date.today()),
+            "scanned": True, "plays": yields.get(stem, 0), "retired": str(date.today()),
         }
     if ready:
         json.dump(kept, open(LEDGER, "w", encoding="utf-8"), ensure_ascii=False, indent=1)
