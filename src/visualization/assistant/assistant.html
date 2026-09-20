@@ -199,6 +199,7 @@
 
 <script src="sim.js"></script>
 <script src="route.js"></script>
+<script src="choice.js"></script>
 <script id="data" type="application/json">__DATA__</script>
 <script>
   const DATA = JSON.parse(document.getElementById("data").textContent);
@@ -604,12 +605,17 @@
       }
       hit.room = Math.round(room * 100) / 100;
     }
-    const best = new Map();
+    // 묶음마다 들어가는 줄이 몇 개인지 센다. 배운 식에서 **가장 무거운 값**이고
+    // (가중치 +2.40), 뜻은 "이 공략이 얼마나 너그러운가"다 — 프로가 고른 것과
+    // 버린 것을 가르는 첫째가 바로 이것이었다.
+    const best = new Map(), lines = new Map();
     for (const hit of hits) {
       const id = `${hit.route}|${hit.judged.first}|${hit.face}`;
+      lines.set(id, (lines.get(id) || 0) + 1);
       const kept = best.get(id);
       if (!kept || hit.room > kept.room) best.set(id, hit);
     }
+    for (const [id, hit] of best) hit.lines = lines.get(id);
     return { best, kisses: counters.kisses, how };
   }
 
@@ -647,9 +653,14 @@
       routes.push({
         route: hit.route, key, hit, chosen, first, scored,
         proRate: chosen ? Math.round((scored / chosen) * 100) : null,
-        // 프로가 고르고 또 넣은 공략이면서, 조준 여유가 넓고, 1적구를 덜 흔드는 것.
+        // 두 가지 근거를 곱한다. 한쪽이 0에 가까우면 가라앉아야 하기 때문이다 —
+        // 기하적으로 예쁜데 프로가 아무도 안 치는 뱅크샷이 그 경우다 (탐색이
+        // 만드는 갈래의 19.8%가 뱅크샷인데 프로는 11%만 친다).
+        //   이웃 프로  — 닮은 자리에서 몇 명이 골랐고 몇 %가 넣었나, 두께는 얼마였나
+        //   배운 식    — 이 길 자체가 얼마나 칠 만한가
+        // 예전에는 뒤쪽이 `여유 ÷ (1 + 1적구이동/4000)` 두 항뿐이었다.
         band, thickOff: off,
-        score: (chosen + 0.5) * rate * agree * hit.room / (1 + hit.pushed / 4000),
+        score: (chosen + 0.5) * rate * agree * learnedScore(hit),
       });
     }
     routes.sort((a, b) => b.score - a.score);
@@ -968,6 +979,17 @@
   }
 
   // 꼬리표는 이름을 대신하지 않고 옆에 붙는다 — 키스빼기와 같은 자리다.
+  // 배운 점수는 choice.js 한 벌에서 나온다 — 특징 계산이 파이썬과 같아야 하고
+  // tests/test_choice_js.py가 둘을 대조한다. 가중치는 build_assistant.py가
+  // data/choice_weights.json에서 넣어 준다 (손으로 베끼면 다시 재고도 화면이
+  // 안 바뀐다).
+  const CHOICE_WEIGHTS = __WEIGHTS__;
+  const learnedScore = (hit) => CHOICE.score({
+    room: hit.room, thickness: hit.thickness,
+    strength: SIM.strengthOf(hit.speed), rails: hit.judged.rails.length,
+    pushed: hit.pushed, lines: hit.lines, side: hit.side, up: hit.vertical,
+  }, CHOICE_WEIGHTS);
+
   const label = (row) =>
     `${row.route}${row.hit.tags ? ` (${row.hit.tags.join("·")})` : ""}`
     + ` · ${NAMES[row.first]} ${row.hit.face === "left" ? "왼쪽" : "오른쪽"}면`;

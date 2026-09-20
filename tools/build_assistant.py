@@ -23,6 +23,10 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 SOURCE = ROOT / "src" / "visualization" / "assistant"
 PLACEHOLDER = "__DATA__"
+# 배운 가중치는 손으로 베끼지 않는다. 베끼면 tools/learn_choices.py를 다시
+# 돌리고도 화면이 그대로인 채로 "좋아졌다"고 말하게 된다.
+WEIGHTS_MARK = "__WEIGHTS__"
+WEIGHTS_FILE = ROOT / "data" / "choice_weights.json"
 
 
 def build(data_path, out_dir):
@@ -31,24 +35,33 @@ def build(data_path, out_dir):
     if PLACEHOLDER not in template:
         raise SystemExit(f"{SOURCE / 'assistant.html'} 안에 {PLACEHOLDER}가 없습니다")
 
+    if WEIGHTS_MARK in template:
+        if not WEIGHTS_FILE.exists():
+            raise SystemExit(f"{WEIGHTS_FILE}가 없습니다 — tools/learn_choices.py를 먼저 돌리세요")
+        learned = json.loads(WEIGHTS_FILE.read_text(encoding="utf-8"))
+        template = template.replace(WEIGHTS_MARK, json.dumps(learned["weights"]))
+        print(f"배운 가중치 {len(learned['weights'])}개 "
+              f"({learned.get('rounds', '?')}판으로 맞춘 것)")
+
     out_dir.mkdir(parents=True, exist_ok=True)
     page = out_dir / "carom_assistant.html"
     page.write_text(template.replace(PLACEHOLDER, json.dumps(data, ensure_ascii=False,
                                                              separators=(",", ":"))),
                     encoding="utf-8")
-    for side in ("sim.js", "route.js"):
+    for side in ("sim.js", "route.js", "choice.js"):
         shutil.copy(SOURCE / side, out_dir / side)
 
     # The physics is the part a browser cannot complain about usefully, so run
     # node over it here if node is around.
     try:
-        for side in ("sim.js", "route.js"):
+        for side in ("sim.js", "route.js", "choice.js"):
             subprocess.run(["node", "--check", str(out_dir / side)], check=True)
     except FileNotFoundError:
         print("node가 없어 문법 검사는 건너뜁니다", file=sys.stderr)
 
     print(f"{page} — 플레이 {len(data['plays'])}개, {page.stat().st_size / 1024:.0f} KB")
-    print(f"{out_dir / 'sim.js'}, {out_dir / 'route.js'} — 함께 올려야 합니다")
+    print(f"{out_dir / 'sim.js'}, {out_dir / 'route.js'}, {out_dir / 'choice.js'}"
+          " — 함께 올려야 합니다")
     return page
 
 
