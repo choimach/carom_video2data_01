@@ -118,3 +118,29 @@ def test_no_constant_stands_in_for_follow(field):
     """앞으로 나아가는 몫은 남은 구름이 낸다. 상수로 흉내 내면 스턴이 스턴이
     아니게 되고, 분리각이 당점에도 세기에도 꿈쩍하지 않는다."""
     assert getattr(spin, field) == 0.0, f"{field}가 다시 살아났습니다"
+
+
+def test_the_cue_ball_deflects_toward_the_face_it_struck():
+    """선수 (2026-09-21): *"반사각이 움직이는 쪽이 맞는 면 쪽이야."*
+
+    ⚠️ 헷갈리기 쉬운 자리다. `struck_side`가 재는 `cross(진행방향, 적구까지)`는
+    **적구가 어느 쪽에 있나**이고, **맞히는 면은 그 반대쪽**이다 — 적구가
+    오른쪽에 있으면 수구는 그 왼쪽 면을 맞힌다. 그래서 "적구 쪽"과 "꺾이는 쪽"의
+    부호가 반대로 나오는 것이 **정상**이고, 2026-09-21에 이것을 보고 "면 이름이
+    뒤집혔다"고 잠깐 잘못 단정했다.
+
+    여기서 지키는 것은 **맞힌 면과 꺾이는 쪽이 같다**는 것이다.
+    """
+    speed = speed_for(4.0)
+    for where in (+1.0, -1.0):
+        cue = spin.struck((0.0, 0.0), (1.0, 0.0), speed)
+        offset = spin.BALL_DIAMETER_MM * 0.5 * where      # 적구 중심이 놓인 쪽
+        along = np.sqrt(spin.BALL_DIAMETER_MM ** 2 - offset ** 2)
+        spin.collide(cue, spin.Ball((along, offset)))
+
+        # 수구가 지나가는 쪽 = 맞히는 면 = 적구가 있는 쪽의 반대.
+        face = -where
+        turned = np.sign(cue.velocity[1])
+        assert turned == face, (
+            f"적구가 {'+y' if where > 0 else '-y'}에 있으면 수구는 그 반대 면을 "
+            f"맞고 그쪽으로 꺾여야 하는데 {turned:+.0f} 쪽으로 갔습니다")
