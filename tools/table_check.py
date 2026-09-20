@@ -18,6 +18,7 @@ import argparse
 import json
 import os
 import sys
+from collections import Counter
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 LEDGER = os.path.join(ROOT, "data", "table_feedback.json")
@@ -93,6 +94,30 @@ def main():
     if tops:
         print(f"  1번 추천               맞다 {right}판 · 아니다 {wrong}판"
               f" · 판단 없음 {len(tops) - right - wrong}판")
+
+    # 판 단위 점수는 한 판에 숫자 하나씩만 쌓인다. 그런데 한 판에 후보가 스무
+    # 개쯤 있고 거기 전부 판단이 붙으므로, **유형별로 세면 훨씬 빨리 보인다** —
+    # 두 판이 스물한 개의 판단이 된다. 어느 유형을 우리가 과대평가하는지는 이
+    # 쪽에서 먼저 드러난다.
+    by_route = {}
+    for one, _got in usable:
+        verdicts = one.get("verdicts") or {}
+        for branch in one["candidates"]:
+            say = verdicts.get(branch.get("key"))
+            if not say:
+                continue
+            tally = by_route.setdefault(branch.get("route", "?"), Counter())
+            tally[say] += 1
+            tally["rank"] += one["candidates"].index(branch) + 1
+    if by_route:
+        print("\n유형별로 맞다/아니다 (판단이 붙은 후보 "
+              f"{sum(t['good'] + t['bad'] for t in by_route.values())}개)")
+        rows = sorted(by_route.items(),
+                      key=lambda kv: -(kv[1]["bad"] / max(kv[1]["good"] + kv[1]["bad"], 1)))
+        for route, tally in rows:
+            n = tally["good"] + tally["bad"]
+            print(f"  {route:<10} 맞다 {tally['good']:>2} · 아니다 {tally['bad']:>2}"
+                  f"   ({tally['bad'] / n:.0%} 아니다, 평균 자리 {tally['rank'] / n:.1f})")
 
     done = [one for one in kept if one.get("played")]
     if done:

@@ -338,6 +338,307 @@
     "scored": true
    },
    "comment": "두께 1/4 (노란공 오른쪽면, 빗나감 45 mm) · 당점 1시 2팁  -> 두께 1/2 (노란공 오른쪽면,) · 당점10시 2팁 \n6.빗겨치기 · 노란공 왼쪽면 는 빗겨치기가 아니고 앞돌리기 짧게야\n7.걸어치기 · 노란공 왼쪽면 불가능하지는 않은데 이렇게는 잘 안침\n8.뱅크샷 · 빨간공 왼쪽면 불가능하지는 않은데 이렇게는 잘 안침\n\n당점결정을 좌우가 바뀌는것 같아\n당점 위치를 내가 drag해서 바꿀 수 있게 헤줘\n결과복사 후에는 comment란을 지워줘"
+  },
+  {
+   "at": "2026-09-20T13:19:42",
+   "table": [
+    2844,
+    1422
+   ],
+   "cue": "white",
+   "layout": {
+    "white": [
+     1551,
+     703
+    ],
+    "yellow": [
+     730,
+     535
+    ],
+    "red": [
+     2353,
+     382
+    ]
+   },
+   "want": {
+    "first": "any",
+    "face": "any"
+   },
+   "picked": "뒤돌리기|yellow|right",
+   "kisses": 68,
+   "candidates": [
+    {
+     "key": "뒤돌리기|red|left",
+     "route": "뒤돌리기",
+     "first": "red",
+     "face": "left",
+     "thickness": 0.348,
+     "tips": [
+      2,
+      0
+     ],
+     "strength": 4.5,
+     "deg": 335.5,
+     "room": 1.25,
+     "rails": 3,
+     "chosen": 5,
+     "scored": 4,
+     "total": 40,
+     "band": [
+      4,
+      0.445
+     ]
+    },
+    {
+     "key": "빗겨치기|yellow|left",
+     "route": "빗겨치기",
+     "first": "yellow",
+     "face": "left",
+     "thickness": 0.38,
+     "tips": [
+      -1.73,
+      1
+     ],
+     "strength": 5.5,
+     "deg": 189,
+     "room": 0.5,
+     "rails": 3,
+     "chosen": 2,
+     "scored": 0,
+     "total": 40,
+     "band": [
+      4,
+      0.291
+     ]
+    },
+    {
+     "key": "뱅크샷|yellow|left",
+     "route": "뱅크샷",
+     "first": "yellow",
+     "face": "left",
+     "thickness": 0,
+     "tips": [
+      0,
+      0
+     ],
+     "strength": 5.5,
+     "deg": 20.25,
+     "room": 0.5,
+     "rails": 3,
+     "chosen": 1,
+     "scored": 1,
+     "total": 40,
+     "band": [
+      106,
+      0.401
+     ]
+    },
+    {
+     "key": "빗겨치기|yellow|right",
+     "route": "빗겨치기",
+     "first": "yellow",
+     "face": "right",
+     "thickness": 0.016,
+     "tips": [
+      1.73,
+      -1
+     ],
+     "strength": 7,
+     "deg": 195.75,
+     "room": 1,
+     "rails": 4,
+     "chosen": 5,
+     "scored": 2,
+     "total": 40,
+     "band": [
+      4,
+      0.291
+     ]
+    },
+    {
+     "key": "대회전|red|left",
+     "route": "대회전",
+     "first": "red",
+     "face": "left",
+     "thickness": 0.165,
+     "tips": [
+      2,
+      0
+     ],
+     "strength": 4.5,
+     "deg": 334.75,
+     "room": 1.25,
+     "rails": 5,
+     "chosen": 0,
+     "scored": 0,
+     "total": 40,
+     "band": null
+    },
+    {
+     "key": "뱅크샷|red|left",
+     "route": "뱅크샷",
+     "first": "red",
+     "face": "left",
+     "thickness": 0.916,
+     "tips": [
+      0,
+      0
+     ],
+     "strength": 5.5,
+     "deg": 158.5,
+     "room": 0.5,
+     "rails": 4,
+     "chosen": 0,
+     "scored": 0,
+     "total": 40,
+     "band": [
+      106,
+      0.401
+     ]
+    },
+    {
+     "key": "앞돌리기|red|right",
+     "route": "앞돌리기",
+     "first": "red",
+     "face": "right",
+     "thickness": 0.61,
+     "tips": [
+      1.73,
+      -1
+     ],
+     "strength": 5.5,
+     "deg": 339.75,
+     "room": 1,
+     "rails": 3,
+     "chosen": 0,
+     "scored": 0,
+     "total": 40,
+     "band": [
+      103,
+      0.302
+     ]
+    },
+    {
+     "key": "앞돌리기|yellow|left",
+     "route": "앞돌리기",
+     "first": "yellow",
+     "face": "left",
+     "thickness": 0.142,
+     "tips": [
+      0,
+      0
+     ],
+     "strength": 5.5,
+     "deg": 188,
+     "room": 0.75,
+     "rails": 3,
+     "chosen": 1,
+     "scored": 0,
+     "total": 40,
+     "band": [
+      103,
+      0.302
+     ]
+    },
+    {
+     "key": "빗겨치기|red|right",
+     "route": "빗겨치기",
+     "first": "red",
+     "face": "right",
+     "thickness": 0.671,
+     "tips": [
+      1.73,
+      -1
+     ],
+     "strength": 5.5,
+     "deg": 339.5,
+     "room": 1,
+     "rails": 3,
+     "chosen": 0,
+     "scored": 0,
+     "total": 40,
+     "band": [
+      4,
+      0.291
+     ]
+    },
+    {
+     "key": "대회전|yellow|right",
+     "route": "대회전",
+     "first": "yellow",
+     "face": "right",
+     "thickness": 0.253,
+     "tips": [
+      -2,
+      0
+     ],
+     "strength": 5.5,
+     "deg": 194.75,
+     "room": 0.75,
+     "rails": 5,
+     "chosen": 0,
+     "scored": 0,
+     "total": 40,
+     "band": null
+    },
+    {
+     "key": "뒤돌리기|yellow|right",
+     "route": "뒤돌리기",
+     "first": "yellow",
+     "face": "right",
+     "thickness": 0.194,
+     "tips": [
+      1.73,
+      -1
+     ],
+     "strength": 7,
+     "deg": 195,
+     "room": 1,
+     "rails": 4,
+     "chosen": 0,
+     "scored": 0,
+     "total": 40,
+     "band": [
+      12,
+      0.44
+     ]
+    },
+    {
+     "key": "대회전|red|right",
+     "route": "대회전",
+     "first": "red",
+     "face": "right",
+     "thickness": 0.549,
+     "tips": [
+      1.73,
+      -1
+     ],
+     "strength": 7,
+     "deg": 340,
+     "room": 0.5,
+     "rails": 5,
+     "chosen": 0,
+     "scored": 0,
+     "total": 40,
+     "band": null
+    }
+   ],
+   "verdicts": {
+    "뒤돌리기|red|left": "good",
+    "빗겨치기|yellow|left": "good",
+    "뱅크샷|yellow|left": "bad",
+    "빗겨치기|yellow|right": "bad",
+    "대회전|red|left": "good",
+    "뱅크샷|red|left": "bad",
+    "앞돌리기|red|right": "good",
+    "앞돌리기|yellow|left": "good",
+    "빗겨치기|red|right": "good",
+    "대회전|yellow|right": "good",
+    "뒤돌리기|yellow|right": "good",
+    "대회전|red|right": "bad"
+   },
+   "played": null,
+   "comment": null
   }
  ]
 }
