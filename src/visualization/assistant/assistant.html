@@ -185,6 +185,7 @@
       <span style="flex:1 1 100%; height:0"></span>
       <button id="play" type="button" disabled>재생</button>
       <button id="clear" type="button">다시 놓기</button>
+      <button id="dice" type="button">무작위 배치</button>
       <button id="run" class="run" type="button">실행</button>
     </div>
   </div>
@@ -243,6 +244,47 @@
   let played = null;    // {key, scored} — 실제로 쳐 보셨다면
   let wantFirst = "any";   // 1적구: any | 공 이름
   let wantFace = "any";    // 맞히는 면: any | left | right
+  let dealt = null;        // 무작위로 깔았다면 그 씨앗 — 같은 판을 다시 만들 수 있게
+
+  // 선수 (2026-09-23): *"지금까지는 공배치를 내가 정했기 때문에 내가 익숙한
+  // 배치만 놓았어. 사실은 공 배치와 수구 선택을 claude가 random하게 한 다음
+  // model을 적용해 보고 그 결과에 대한 내 의견을 적어주는게 맞는 approach라
+  // 생각해."* 맞는 말이다 — 지금까지의 채점표는 그가 아는 배치에서만 점수를
+  // 받은 것이라, 낯선 배치에서 어떤지는 잰 적이 없다.
+  //
+  // 고르게 뿌린다. 프로 배치에서 뽑는 방법도 있지만 두 가지가 걸린다:
+  // 그 판이 **자기 자신을 이웃으로 찾아** 성적을 부풀리고 (같은 경기를 빼야
+  // 한다), 프로가 실제로 마주친 배치만 보게 되어 또 한 번 치우친다. 고르게
+  // 뿌리는 쪽이 공간을 다 덮는다 — 이상한 배치가 섞이는 것은 감수한다.
+  //
+  // 씨앗을 적어 두는 이유: 같은 판을 다시 만들 수 있어야 "그때 그 배치"를
+  // 놓고 다시 이야기할 수 있다.
+  function dealRandom(seed) {
+    // 32비트 한 줄짜리 난수. 씨앗만 있으면 어디서든 같은 배치가 나온다.
+    let state = (seed >>> 0) || 1;
+    const next = () => {
+      state ^= state << 13; state >>>= 0;
+      state ^= state >>> 17;
+      state ^= state << 5; state >>>= 0;
+      return state / 4294967296;
+    };
+    const margin = SIM.RADIUS + 2;
+    const spot = () => [margin + next() * (L - 2 * margin),
+                        margin + next() * (W - 2 * margin)];
+    const far = (a, b) => Math.hypot(a[0] - b[0], a[1] - b[1]) >= SIM.DIAMETER + 1;
+    const put = {};
+    for (const colour of ORDER) {
+      let at, tries = 0;
+      do { at = spot(); tries++; }
+      while (tries < 200 && ORDER.some((c) => put[c] && !far(at, put[c])));
+      put[colour] = at;
+    }
+    layout = put;
+    cue = next() < 0.5 ? "white" : "yellow";   // 수구도 뽑는다
+    dealt = seed >>> 0;
+    // 조건은 푼다 — 무작위 배치에서 1적구나 면을 고정해 두면 그것도 치우침이다.
+    wantFirst = "any"; wantFace = "any";
+  }
 
   const el = (parent, tag, attrs) => {
     const node = document.createElementNS(NS, tag);
@@ -1277,6 +1319,8 @@
         stopPlaying();
         result = null;
         picked = null;
+        // 손으로 옮겼으면 더는 그 씨앗의 배치가 아니다.
+        dealt = null;
         render();
       };
       ball.addEventListener("pointermove", move);
@@ -1290,7 +1334,7 @@
     if (!colour) return;
     stopPlaying();
     layout[colour] = point(event, event.currentTarget);
-    result = null; picked = null;
+    result = null; picked = null; dealt = null;
     render();
   });
 
@@ -1357,7 +1401,15 @@
   document.getElementById("clear").onclick = () => {
     stopPlaying();
     layout = {}; result = null; picked = null; cue = "white";
-    verdicts = {}; played = null; render();
+    verdicts = {}; played = null; dealt = null; render();
+  };
+  document.getElementById("dice").onclick = () => {
+    stopPlaying();
+    result = null; picked = null; verdicts = {}; played = null;
+    dealRandom((Math.random() * 4294967296) >>> 0);
+    render();
+    // 깔았으면 바로 푼다 — 단추를 두 번 누르게 할 이유가 없다.
+    document.getElementById("run").click();
   };
   document.getElementById("run").onclick = () => {
     const button = document.getElementById("run");
@@ -1395,6 +1447,7 @@
     for (const colour of ORDER) lines.push(`  ${NAMES[colour]} ${at(colour)}${colour === cue ? "  ← 수구" : ""}`);
     lines.push(`조건: 1적구 ${wantFirst === "any" ? "자동" : NAMES[wantFirst]} · 면 ${
       wantFace === "any" ? "자동" : (wantFace === "left" ? "왼쪽" : "오른쪽")}`);
+    if (dealt !== null) lines.push(`이 배치는 무작위로 깔린 것입니다 (씨앗 ${dealt})`);
     if (result && result.routes.length) {
       lines.push(`후보 ${result.routes.length}가지 (키스 제외 ${result.kisses}개):`);
       result.routes.forEach((row, index) => {
@@ -1437,6 +1490,11 @@
       layout: Object.fromEntries(ORDER.filter((c) => layout[c])
         .map((c) => [c, layout[c].map((v) => Math.round(v))])),
       want: { first: wantFirst, face: wantFace },
+      // 이 배치를 누가 놓았는가. 선수가 놓은 판만 모으면 그가 아는 배치에서만
+      // 점수를 받게 된다 — 그가 2026-09-23에 짚은 것이다. 씨앗이 있으면 같은
+      // 판을 어디서든 다시 만들 수 있다.
+      origin: dealt === null ? "hand" : "random",
+      seed: dealt,
       picked: picked || null,
       kisses: result ? result.kisses : null,
       candidates: !result ? [] : result.routes.map((row) => ({
