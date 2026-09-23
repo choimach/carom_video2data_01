@@ -21,14 +21,14 @@ WEIGHTS = Path(__file__).resolve().parent.parent / "data" / "choice_weights.json
 
 BRANCHES = [
     {"room": 0.25, "thickness": 0.1, "strength": 3.5, "rails": 3,
-     "pushed": 500, "lines": 1, "side": 0.0, "up": 0.0, "chosen": 0, "rate": 0.5},
+     "pushed": 500, "lines": 1, "side": 0.0, "up": 0.0, "chosen": 0, "rate": 0.5, "prior": -2.1},
     {"room": 4.0, "thickness": 0.55, "strength": 5.5, "rails": 4,
-     "pushed": 4200, "lines": 80, "side": 1.73, "up": 1.0, "chosen": 7, "rate": 0.62},
+     "pushed": 4200, "lines": 80, "side": 1.73, "up": 1.0, "chosen": 7, "rate": 0.62, "prior": -1.34},
     {"room": 12.5, "thickness": 0.95, "strength": 7.0, "rails": 6,
-     "pushed": 9000, "lines": 300, "side": -3.0, "up": -2.0, "chosen": 1, "rate": 0.33},
+     "pushed": 9000, "lines": 300, "side": -3.0, "up": -2.0, "chosen": 1, "rate": 0.33, "prior": -5.11},
     {"room": 1.0, "thickness": 0.3, "strength": 2.0, "rails": 5,
      "pushed": 0, "lines": 12, "side": 0.0, "up": 2.0, "chosen": 0, "rate": 0.5},
-]
+]   # 마지막 하나는 prior 없이 — 바닥값으로 떨어지는지 본다
 
 
 @pytest.mark.skipif(not shutil.which("node"), reason="node가 없습니다")

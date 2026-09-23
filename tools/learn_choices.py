@@ -24,6 +24,7 @@ import os
 import sys
 
 import numpy as np
+from collections import Counter
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
@@ -53,12 +54,33 @@ def features(branch, layout=None, cue=None):
         # 넣으면 1등 24.7% → 33.4%, 3등 안 49.9% → 60.0% (10.8 표준편차).
         math.log1p(branch.get("chosen", 0)),
         branch.get("rate", 0.5),
+        # 이 유형을 프로가 얼마나 자주 치는가 (로그 비율). 이웃 프로 수와 겹칠까
+        # 봐 재 봤는데 겹치지 않는다 — 이웃은 40명뿐이라 후보의 45%가 0이고,
+        # 기본 비율은 촘촘하다. 넣으면 1등 33.4% → 34.4% (4.1 표준편차,
+        # tools/test_route_prior.py).
+        #
+        # 선수가 먼저 말했다 (2026-09-23): "뱅크샷 이런 선택은 안함." 세어 보니
+        # 우리 후보 목록이 프로와 많이 달랐다 — 횡단 17.8배, 걸어치기 2.5배,
+        # 뱅크샷 1.6배로 넘치고, 프로가 치는 절반(뒤돌리기 26% + 옆돌리기 23%)이
+        # 후보에서는 20%뿐이었다. 전방위 훑기가 쿠션 먼저 맞는 길을 잘 잡는
+        # 대가다. 손으로 유형을 깎지 않고 가중치가 정하게 둔다.
+        branch.get("prior", LOG_FLOOR),
         1.0,                                 # 기준선
     ]
 
 
 NAMES = ["여유", "두께", "세기", "쿠션수", "1적구이동", "줄두께", "회전량", "상단당점",
-         "이웃프로수", "이웃득점률", "기준"]
+         "이웃프로수", "이웃득점률", "유형빈도", "기준"]
+
+# 유형을 한 번도 못 본 경우의 바닥값. 2,000판쯤에서 "한 번 봤다"보다 낮다.
+LOG_FLOOR = math.log(1 / 2000.0)
+
+
+def route_prior(routes):
+    """유형마다 log((센 수 + 1) / (전체 + 유형 수)) — 라플라스로 눌러 둔다."""
+    total = sum(routes.values())
+    kinds = max(len(routes), 1)
+    return {r: math.log((n + 1) / (total + kinds)) for r, n in routes.items()}
 
 
 def load(limit=None):
@@ -134,6 +156,24 @@ def with_neighbours(rounds):
     return out
 
 
+def with_prior(rounds, routes=None):
+    """후보마다 그 유형을 프로가 얼마나 자주 치는지를 붙인다.
+
+    세는 곳은 **프로가 실제로 고른 것**(각 판의 chose)이지 우리 후보 목록이
+    아니다 — 후보 목록의 치우침이 바로 고치려는 대상이다.
+
+    `routes`를 주면 그것으로 센다. 교차검증에서 학습 겹만으로 세려고 있는
+    구멍이다 (tools/test_route_prior.py).
+    """
+    if routes is None:
+        routes = Counter(one["chose"].split("|")[0] for one in rounds)
+    prior = route_prior(routes)
+    for one in rounds:
+        for branch in one["found"]:
+            branch["prior"] = prior.get(branch["route"], LOG_FLOOR)
+    return rounds
+
+
 def as_arrays(rounds):
     """한 판을 (갈래별 특징, 고른 것의 자리)로."""
     out = []
@@ -197,7 +237,7 @@ def main():
               "tools/enumerate_alternatives.js를 먼저 끝까지 돌리세요.")
         return 1
 
-    data = as_arrays(with_neighbours(rounds))
+    data = as_arrays(with_prior(with_neighbours(rounds)))
 
     # 경기 단위 k-겹. model.json의 고정 split은 test가 전체의 9%뿐이라 95판이
     # 되고, 그 위에서 잰 차이는 2 표준오차도 안 된다. 겹으로 나누면 **모든 판이

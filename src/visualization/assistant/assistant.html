@@ -1077,11 +1077,30 @@
   // data/choice_weights.json에서 넣어 준다 (손으로 베끼면 다시 재고도 화면이
   // 안 바뀐다).
   const CHOICE_WEIGHTS = __WEIGHTS__;
+
+  // 유형마다 프로가 얼마나 자주 치는가. 세는 곳은 프로가 실제로 친 플레이이지
+  // 우리 후보 목록이 아니다 — 후보 목록의 치우침이 바로 이것으로 누르려는
+  // 대상이다 (횡단 17.8배, 걸어치기 2.5배, 뱅크샷 1.6배로 넘친다).
+  // learn_choices.py의 route_prior()와 같은 식이어야 한다.
+  const ROUTE_PRIOR = (() => {
+    const seen = new Map();
+    for (const play of DATA.plays) {
+      if (!play.route) continue;
+      seen.set(play.route, (seen.get(play.route) || 0) + 1);
+    }
+    let total = 0;
+    for (const n of seen.values()) total += n;
+    const kinds = Math.max(seen.size, 1);
+    const out = new Map();
+    for (const [route, n] of seen) out.set(route, Math.log((n + 1) / (total + kinds)));
+    return out;
+  })();
+
   const learnedScore = (hit, chosen, rate) => CHOICE.score({
     room: hit.room, thickness: hit.thickness,
     strength: SIM.strengthOf(hit.speed), rails: hit.judged.rails.length,
     pushed: hit.pushed, lines: hit.lines, side: hit.side, up: hit.vertical,
-    chosen, rate,
+    chosen, rate, prior: ROUTE_PRIOR.get(hit.route),
   }, CHOICE_WEIGHTS);
 
   const label = (row) =>
