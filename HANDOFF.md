@@ -13,7 +13,10 @@
 ## 지금 돌고 있는 것
 
 **`tools/enumerate_alternatives.js` 전체 재실행** (2026-09-24 시작).
-로그 `data/_alternatives.log`. 옛 파일은 `data/alternatives_coarse.jsonl.bak`
+로그 `data/_alternatives.log` · 진행은 `wc -l data/alternatives.jsonl`.
+**배치당 7.5초, 2,444판이므로 약 5시간**이다 (전에 "한 시간"이라 적었던 것은
+전방위 훑기가 들어오기 전의 값이다). 끊겨도 이어받는다 — 이미 한 판은
+건너뛰므로 같은 명령을 다시 돌리면 된다. 옛 파일은 `data/alternatives_coarse.jsonl.bak`
 (1,801판, 굵은 눈금·중앙값 대표).
 
 **왜 다시 도나 — 세 가지가 한꺼번에 바뀌었다:**
