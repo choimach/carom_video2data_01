@@ -24,7 +24,7 @@ sys.path.insert(0, ROOT)
 sys.path.insert(0, os.path.join(ROOT, "tools"))
 
 from model_dataset import BALLS, canonical, transform  # noqa: E402
-from route_model import OUTCOME_IN_NAME, player_features  # noqa: E402
+from route_model import player_features  # noqa: E402
 
 POINTS = 32
 
@@ -113,8 +113,18 @@ def main(argv=None):
     parser.add_argument("--out", default=os.path.join(ROOT, "build", "app-data.json"))
     args = parser.parse_args(argv)
 
-    rows = [r for r in json.load(open(args.data, encoding="utf-8"))
-            if r["route"] not in OUTCOME_IN_NAME]
+    # 유형을 가리지 않는다. 한때 `OUTCOME_IN_NAME`(대회전·되돌아오기·횡단)을
+    # 여기서도 뺐는데, 그 목록의 이유는 **유형 이름 맞히기 실험**에서 "이름이
+    # 결과를 담고 있어 채점할 수 없다"는 것이지(`route_model.py`), 이 풀과는
+    # 상관이 없다. 이 풀이 하는 일은 "닮은 배치에서 프로가 무엇을 쳤나"를
+    # 모으는 것이고, 프로가 대회전을 쳤으면 그건 센다.
+    #
+    # 2026-09-24에 재 보니 진짜 갈라짐이었다. 학습 쪽(`learn_choices.py`)은
+    # 이 목록을 쓰지 않아 세 유형에도 표를 주는데(후보 400판에서 643번),
+    # 화면은 **무조건 0명**을 주고 있었다. 후보 중 이웃 0명의 비율도 학습
+    # 45.5% 대 화면 50.9%로 달랐다 — `이웃프로수 +0.95`가 배운 분포와 화면이
+    # 먹이는 분포가 다르다는 뜻이다. 대회전은 프로가 10.7%나 치는 공략이다.
+    rows = json.load(open(args.data, encoding="utf-8"))
     features = np.array([player_features(r) for r in rows])
     middle, spread = features.mean(axis=0), features.std(axis=0)
     spread[spread == 0] = 1.0
