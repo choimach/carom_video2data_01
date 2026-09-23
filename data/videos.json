@@ -390,6 +390,116 @@
    "gigabytes": 10.73,
    "scanned": true,
    "retired": "2026-09-20"
+  },
+  "soop_165128231_POWC2025": {
+   "vod_id": "165128231",
+   "url": "https://vod.sooplive.com/player/165128231",
+   "title": null,
+   "event": "POWC2025",
+   "duration": null,
+   "gigabytes": 12.43,
+   "scanned": true,
+   "plays": 31,
+   "retired": "2026-09-22"
+  },
+  "soop_165143401_POWC2025": {
+   "vod_id": "165143401",
+   "url": "https://vod.sooplive.com/player/165143401",
+   "title": "[POWC2025_FINAL] M.W. CHO vs J. BURY (한국어 중계)",
+   "event": "POWC2025",
+   "duration": 9621,
+   "gigabytes": 8.98,
+   "scanned": true,
+   "plays": 20,
+   "retired": "2026-09-22"
+  },
+  "soop_174625603_ANWC2025": {
+   "vod_id": "174625603",
+   "url": "https://vod.sooplive.com/player/174625603",
+   "title": "[ANWC2025_L8] H. J. KIM vs M. HORN (한국어 중계)",
+   "event": "ANWC2025",
+   "duration": 8257,
+   "gigabytes": 7.86,
+   "scanned": true,
+   "plays": 23,
+   "retired": "2026-09-22"
+  },
+  "soop_177241169_GWWC2025": {
+   "vod_id": "177241169",
+   "url": "https://vod.sooplive.com/player/177241169",
+   "title": null,
+   "event": "GWWC2025",
+   "duration": null,
+   "gigabytes": 7.99,
+   "scanned": true,
+   "plays": 21,
+   "retired": "2026-09-22"
+  },
+  "soop_177251523_GWWC2025": {
+   "vod_id": "177251523",
+   "url": "https://vod.sooplive.com/player/177251523",
+   "title": "[GWWC2025_L8] W.Y. CHOI vs M.W. CHO (한국어 중계)",
+   "event": "GWWC2025",
+   "duration": 7779,
+   "gigabytes": 7.12,
+   "scanned": true,
+   "plays": 19,
+   "retired": "2026-09-22"
+  },
+  "soop_180371933_SHWC2025": {
+   "vod_id": "180371933",
+   "url": "https://vod.sooplive.com/player/180371933",
+   "title": "[SHWC2025_Q] M.J. CHA vs S. OZBAS (한국어 중계)",
+   "event": "SHWC2025",
+   "duration": 5755,
+   "gigabytes": 5.11,
+   "scanned": true,
+   "plays": 28,
+   "retired": "2026-09-22"
+  },
+  "soop_196365047_HCMC2026": {
+   "vod_id": "196365047",
+   "url": "https://vod.sooplive.com/player/196365047",
+   "title": "[HCMC2026_Q] M.K. DOAN vs J.I. KANG (한국어 중계)",
+   "event": "HCMC2026",
+   "duration": 4709,
+   "gigabytes": 4.5,
+   "scanned": true,
+   "plays": 22,
+   "retired": "2026-09-22"
+  },
+  "soop_198413227_AKR2026": {
+   "vod_id": "198413227",
+   "url": "https://vod.sooplive.com/player/198413227",
+   "title": "[AKR2026_Q] M.J. CHA vs J.P. DE BRUIJN (한국어 중계)",
+   "event": "AKR2026",
+   "duration": 5292,
+   "gigabytes": 5.05,
+   "scanned": true,
+   "plays": 53,
+   "retired": "2026-09-22"
+  },
+  "soop_201594801_POWC2026": {
+   "vod_id": "201594801",
+   "url": "https://vod.sooplive.com/player/201594801",
+   "title": "[POWC2026_Qual.] N.POLY. vs W.Y.CHOI (한국어 중계)",
+   "event": "POWC2026",
+   "duration": 6364,
+   "gigabytes": 6.08,
+   "scanned": true,
+   "plays": 61,
+   "retired": "2026-09-22"
+  },
+  "soop_206301161_LIWC2026": {
+   "vod_id": "206301161",
+   "url": "https://vod.sooplive.com/player/206301161",
+   "title": "[LIWC2026_L16] M.W. CHO vs T.L. TRAN (한국어 중계)",
+   "event": "LIWC2026",
+   "duration": 6870,
+   "gigabytes": 6.56,
+   "scanned": true,
+   "plays": 68,
+   "retired": "2026-09-22"
   }
  }
 }
