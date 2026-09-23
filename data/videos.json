@@ -500,6 +500,105 @@
    "scanned": true,
    "plays": 68,
    "retired": "2026-09-22"
+  },
+  "soop_152984323_BOWC2025": {
+   "vod_id": "152984323",
+   "url": "https://vod.sooplive.com/player/152984323",
+   "title": "[BOWC2025_SEMI FINAL] T. KIRAZ vs T. TASDEMIR",
+   "event": "BOWC2025",
+   "duration": 9061,
+   "gigabytes": 7.23,
+   "scanned": true,
+   "plays": 27,
+   "retired": "2026-09-24"
+  },
+  "soop_161344643_HCMC2025": {
+   "vod_id": "161344643",
+   "url": "https://vod.sooplive.com/player/161344643",
+   "title": "[HCMC2025_SEMI FINAL] D. JASPERS vs Q.C. TRAN",
+   "event": "HCMC2025",
+   "duration": 9189,
+   "gigabytes": 6.38,
+   "scanned": true,
+   "plays": 61,
+   "retired": "2026-09-24"
+  },
+  "soop_165101527_POWC2025": {
+   "vod_id": "165101527",
+   "url": "https://vod.sooplive.com/player/165101527",
+   "title": "[POWC2025_SEMI FINAL] M.W. CHO vs G. SALMAN (한국어 중계)",
+   "event": "POWC2025",
+   "duration": 5952,
+   "gigabytes": 5.55,
+   "scanned": true,
+   "plays": 32,
+   "retired": "2026-09-24"
+  },
+  "soop_174618409_ANWC2025": {
+   "vod_id": "174618409",
+   "url": "https://vod.sooplive.com/player/174618409",
+   "title": "[ANWC2025_L8] P. V. BAO vs S. SIDHOM (한국어 중계)",
+   "event": "ANWC2025",
+   "duration": 7785,
+   "gigabytes": 7.41,
+   "scanned": true,
+   "plays": 20,
+   "retired": "2026-09-24"
+  },
+  "soop_180362479_SHWC2025": {
+   "vod_id": "180362479",
+   "url": "https://vod.sooplive.com/player/180362479",
+   "title": "[SHWC2025_Q] P.V. BAO vs A. IBRAIMOV (한국어 중계)",
+   "event": "SHWC2025",
+   "duration": 4021,
+   "gigabytes": 3.56,
+   "scanned": true,
+   "plays": 16,
+   "retired": "2026-09-24"
+  },
+  "soop_196356461_HCMC2026": {
+   "vod_id": "196356461",
+   "url": "https://vod.sooplive.com/player/196356461",
+   "title": "[HCMC2026_Q] G. HOFMAN vs D.H. KIM (한국어 중계)",
+   "event": "HCMC2026",
+   "duration": 5942,
+   "gigabytes": 5.67,
+   "scanned": true,
+   "plays": 44,
+   "retired": "2026-09-24"
+  },
+  "soop_198402071_AKR2026": {
+   "vod_id": "198402071",
+   "url": "https://vod.sooplive.com/player/198402071",
+   "title": "[AKR2026_Q]  J.H. HEO vs  A. IBRAIMOV (한국어 중계)",
+   "event": "AKR2026",
+   "duration": 4368,
+   "gigabytes": 4.17,
+   "scanned": true,
+   "plays": 29,
+   "retired": "2026-09-24"
+  },
+  "soop_201588271_POWC2026": {
+   "vod_id": "201588271",
+   "url": "https://vod.sooplive.com/player/201588271",
+   "title": "[POWC2026_Qual.] T.KIRAZ vs H.CATANO (한국어 중계)",
+   "event": "POWC2026",
+   "duration": 7018,
+   "gigabytes": 6.7,
+   "scanned": true,
+   "plays": 36,
+   "retired": "2026-09-24"
+  },
+  "soop_206161771_LIWC2026": {
+   "vod_id": "206161771",
+   "url": "https://vod.sooplive.com/player/206161771",
+   "title": "[LIWC2026_Q] B.J. HWANG vs H. CATANO (한국어 중계)",
+   "event": "LIWC2026",
+   "duration": 7132,
+   "gigabytes": 6.81,
+   "scanned": true,
+   "plays": 39,
+   "retired": "2026-09-24"
   }
  }
 }

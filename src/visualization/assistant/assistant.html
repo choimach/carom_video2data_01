@@ -803,10 +803,13 @@
           "stroke-linecap": "round", opacity: .65,
         });
       }
+      // 손으로 옮기다 득점을 잃으면 선 색이 바뀐다 — 창이 얼마나 좁은지
+      // 끌어 보면서 바로 보이는 것이 이 기능의 값어치다.
+      const scoring = row.hit.judged.scored;
       el(svg, "polyline", {
         points: shot.path.map((p) => p.map(Math.round).join(",")).join(" "), fill: "none",
-        stroke: "var(--track)", "stroke-width": 9, "stroke-linecap": "round",
-        "stroke-linejoin": "round", opacity: .9,
+        stroke: scoring ? "var(--track)" : "var(--warn)", "stroke-width": 9,
+        "stroke-linecap": "round", "stroke-linejoin": "round", opacity: .9,
       });
       const rad = row.hit.deg * Math.PI / 180;
       const from = layout[cue];
@@ -818,6 +821,7 @@
       for (const e of shot.events.filter((e) => e.kind === "cushion")) {
         el(svg, "circle", { cx: e.p[0], cy: e.p[1], r: 13, fill: "var(--track)", opacity: .75 });
       }
+      if (!playing) armCushionDrag(svg);
       // 어디서 시작해 어디서 끝나는지 글자로 박아둔다. 궤적이 처음 배치가 아니라
       // 끝난 배치에 붙어 보인다는 지적이 있었는데, 그때 눈으로 가릴 수 있어야 한다.
       const head = shot.path[0], tail = shot.path[shot.path.length - 1];
@@ -1014,7 +1018,118 @@
       pushed += Math.hypot(way[i][0] - way[i - 1][0], way[i][1] - way[i - 1][1]);
     }
     row.hit.pushed = pushed;
+    // 겨냥이 바뀌면 두께도 바뀐다. 1쿠션 지점을 끌 때가 그렇고, 당점을 바꿔
+    // 1적구가 달라질 때도 그렇다. 여기서 다시 세지 않으면 화면의 두께가
+    // 옛 겨냥의 것으로 남는다.
+    const first = row.hit.judged.first;
+    if (first && layout[first]) {
+      const aim = [Math.cos(rad), Math.sin(rad)];
+      const from = layout[cue], to = layout[first];
+      const across = aim[0] * (to[1] - from[1]) - aim[1] * (to[0] - from[0]);
+      row.hit.thickness = Math.max(0, Math.min(1, 1 - Math.abs(across) / SIM.DIAMETER));
+      row.hit.face = across > 0 ? "left" : "right";
+    }
     drawOnly();
+  }
+
+  // 1쿠션 지점을 손으로 옮긴다 (선수 요청, 2026-09-24).
+  //
+  // **쿠션을 먼저 맞는 공략에서만** 단다 — 뱅크샷과 걸어치기다. 선수의 말:
+  // *"뱅크샷을 칠 경우를 말하는 거야. 이때는 수구와 두께가 없으니까 스트로크
+  // 강도, 당점이 정해진 상태에서 1쿠션 지점을 바꾸면 그에 따라 궤적이 바뀔 수
+  // 있지?"* 그렇다 — 두께가 없으니 **겨냥이 곧 1쿠션 지점**이고, 강도와 당점을
+  // 붙잡은 채로 그 점 하나만 움직이면 된다.
+  //
+  // 1적구를 먼저 맞는 공략(뒤돌리기·옆돌리기 등)에는 달지 않는다. 거기서는
+  // 강도·당점·두께가 정해지면 1쿠션 지점이 이미 정해져 움직일 수 없다 —
+  // 두께가 수구의 출발 방향을 정하고 1적구 자리가 꺾이는 곳을 정하기 때문이다.
+  //
+  // 겨냥은 **잴 것이 없다**. 수구는 첫 쿠션까지 곧게 가므로 끄는 자리를 향한
+  // 각도가 곧 답이다. 한때 각도를 훑어 찾게 짰다가 버렸다 — ±2.5도만 보아
+  // 1쿠션이 80~160 mm밖에 안 움직였고, 600 mm를 옮기려면 22도가 필요했다.
+  // 훑기를 넓히는 대신 기하로 바로 푼다: 정확하고, 한 번 치는 값이면 된다.
+  //
+  // 다만 끌다 보면 쿠션이 아니라 **공을 먼저 맞는** 각이 될 수 있다. 그때는
+  // 더는 뱅크샷이 아니므로 받지 않고 직전 각도를 지킨다.
+  function aimForCushion(row, target) {
+    const from = layout[cue];
+    const deg = Math.atan2(target[1] - from[1], target[0] - from[0]) * 180 / Math.PI;
+    const at = ((deg % 360) + 360) % 360;
+    const rad = at * Math.PI / 180, speed = row.hit.speed;
+    const shot = SIM.play(layout, cue, [Math.cos(rad) * speed, Math.sin(rad) * speed],
+                          row.hit.side, row.hit.vertical || 0);
+    const cushion = shot.events.find((e) => e.kind === "cushion");
+    const ball = shot.events.find((e) => e.kind === "ball");
+    if (!cushion || (ball && ball.at <= cushion.at)) return row.hit.deg;
+    return at;
+  }
+
+  // 1쿠션 자리에 손잡이를 달고, 끌면 그때그때 다시 친다.
+  function armCushionDrag(svg) {
+    const row = chosenRow();
+    if (!row) return;
+    const first = row.hit.shot.events.find((e) => e.kind === "cushion");
+    if (!first) return;
+    // 쿠션이 1적구보다 먼저여야 한다. 아니면 겨냥이 두께에 묶여 있어 이 점은
+    // 끌 수 있는 것이 아니다.
+    const ball = row.hit.shot.events.find((e) => e.kind === "ball");
+    if (ball && ball.at <= first.at) return;
+    if (row.hit.deg0 === undefined) {
+      row.hit.deg0 = row.hit.deg;   // 되돌릴 자리
+    }
+    el(svg, "circle", { cx: first.p[0], cy: first.p[1], r: 30, fill: "none",
+                        stroke: "var(--warn)", "stroke-width": 6, opacity: .9 });
+    const grab = el(svg, "circle", { cx: first.p[0], cy: first.p[1], r: 64,
+                                     fill: "transparent", style: "cursor:grab" });
+    const mark = el(svg, "text", { x: first.p[0], y: first.p[1] + 92, "text-anchor": "middle",
+                                   fill: "var(--warn)", "font-size": 46, "font-weight": 700,
+                                   "font-family": "Gothic A1, sans-serif" });
+    const rails = row.hit.judged.rails.length;
+    mark.textContent = row.hit.byHand
+      ? (row.hit.judged.scored ? `득점 · 쿠션 ${rails}개` : "안 들어감")
+      : "1쿠션 — 끌어 보세요";
+    if (row.hit.byHand && !row.hit.judged.scored) mark.setAttribute("fill", "var(--warn)");
+
+    let waiting = false, want = null;
+    const place = (event) => {
+      want = point(event, svg);
+      if (waiting) return;                  // 한 프레임에 한 번만 다시 친다
+      waiting = true;
+      requestAnimationFrame(() => {
+        waiting = false;
+        row.hit.deg = aimForCushion(row, want);
+        row.hit.byHand = true;
+        replay(row);   // 테이블만. 옆 판은 손을 뗄 때 한 번 새로 만든다.
+      });
+    };
+    // 끌면 테이블을 다시 그리므로 이 손잡이는 매 프레임 사라진다. 그래서
+    // 포인터는 **테이블 자체**에 붙들어 두고 거기서 듣는다 — 당점 끌기가 같은
+    // 함정에 걸렸던 자리다 (drawOnly()의 주석 참조).
+    grab.onpointerdown = (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      svg.setPointerCapture(event.pointerId);
+      stopPlaying();
+      const move = (e) => place(e);
+      const done = () => {
+        svg.removeEventListener("pointermove", move);
+        svg.removeEventListener("pointerup", done);
+        svg.removeEventListener("pointercancel", done);
+        render();
+      };
+      svg.addEventListener("pointermove", move);
+      svg.addEventListener("pointerup", done);
+      svg.addEventListener("pointercancel", done);
+    };
+    // 두 번 누르면 조언판이 찾아 준 겨냥으로 되돌린다.
+    grab.ondblclick = (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      row.hit.deg = row.hit.deg0;
+      row.hit.byHand = false;
+      replay(row);
+      paint();
+    };
   }
 
   // 후보 목록을 판단표로 그린다. 순위 그대로 세로로 놓아, 몇 번째에 있는 것이
@@ -1267,6 +1382,9 @@
         점선은 조준 방향, 흰 점은 쿠션에 닿는 자리,
         <b>색 점선은 적구가 굴러간 길</b>, <b>테두리만 있는 공이 멈추는 자리</b>입니다.
         <b>재생</b>을 누르면 실제 속도로 움직입니다.<br><br>
+        ${row.hit.byHand ? "<b>손으로 옮긴 선입니다.</b> 아래 여유·순위는 조언판이 "
+          + "처음 찾아 준 선의 것이고, 옮긴 선의 것이 아닙니다. 1쿠션 자리를 두 번 "
+          + "누르면 원래대로 돌아갑니다.<br><br>" : ""}
         <b>조준 여유 ${row.hit.room}°</b>는 좌우로 얼마나 빗나가도 득점하는지입니다.
         <b>어느 쪽으로 도는 공략인지 보여주는 그림이지 그대로 치면 되는 처방이 아닙니다.</b>`;
     } else {
