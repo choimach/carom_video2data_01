@@ -670,19 +670,17 @@
       routes.push({
         route: hit.route, key, hit, chosen, first, scored,
         proRate: chosen ? Math.round((scored / chosen) * 100) : null,
-        // ★2026-09-23: 이웃 프로의 **투표**를 점수에서 뺐다. 잰 결과 그것이
-        // 우연과 구별되지 않았기 때문이다 — 닮은 배치에서 프로가 어느 공을 어느
-        // 면으로 칠지 맞히는 비율이 28.0%인데, 배치와 무관할 때가 26.7%다.
-        // 차원을 3축까지 줄여 이웃을 6배 가깝게 만들어도 0.2점밖에 안 움직였다.
-        // 거의 같은 배치를 놓고도 프로들은 서로 다르게 친다.
+        // ★2026-09-23 아침에 이웃 프로 수를 뺐다가 같은 날 되돌렸다. 뺀 근거는
+        // "닮은 배치에서 프로가 어느 길을 고를지 맞히는 비율이 우연과 다르지
+        // 않다"였는데, **엉뚱한 것을 잰 것이었다.** 쓸모는 맞히는 데 있지 않고
+        // **아무도 안 치는 길을 가라앉히는 데** 있었다 — 후보의 45%가 이웃 중
+        // 아무도 고른 적이 없다. 넣으면 1등 24.7% → 33.4%, 3등 안 49.9% → 60.0%
+        // (10.8 표준편차). 선수가 먼저 알아챘다: "프로 0명이라면서 왜 최우선?"
         //
-        // 남은 둘은 잰 것이다:
-        //   배운 식  — 후보를 그 자체의 성질로 줄 세운다. 1등 25%(우연 4%).
-        //              닮은 배치를 찾지 않으므로 위의 벽과 무관하다.
-        //   두께일치 — 프로는 있는 것 중 **더 두꺼운 쪽을 70%** 고른다.
-        // 이웃이 몇 명 골랐는지는 이제 **점수가 아니라 근거로만** 보여준다.
+        // 다만 옛날처럼 곱하지 않는다. **배운 식 안의 특징 둘**로 들어가서,
+        // 무게를 내가 정하지 않고 자료가 정한다 (이웃프로수 +1.18, 이웃득점률 +0.82).
         band, thickOff: off,
-        score: agree * learnedScore(hit),
+        score: agree * learnedScore(hit, chosen, rate),
       });
     }
     routes.sort((a, b) => b.score - a.score);
@@ -1047,10 +1045,11 @@
   // data/choice_weights.json에서 넣어 준다 (손으로 베끼면 다시 재고도 화면이
   // 안 바뀐다).
   const CHOICE_WEIGHTS = __WEIGHTS__;
-  const learnedScore = (hit) => CHOICE.score({
+  const learnedScore = (hit, chosen, rate) => CHOICE.score({
     room: hit.room, thickness: hit.thickness,
     strength: SIM.strengthOf(hit.speed), rails: hit.judged.rails.length,
     pushed: hit.pushed, lines: hit.lines, side: hit.side, up: hit.vertical,
+    chosen, rate,
   }, CHOICE_WEIGHTS);
 
   const label = (row) =>

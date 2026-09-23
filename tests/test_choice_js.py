@@ -21,13 +21,13 @@ WEIGHTS = Path(__file__).resolve().parent.parent / "data" / "choice_weights.json
 
 BRANCHES = [
     {"room": 0.25, "thickness": 0.1, "strength": 3.5, "rails": 3,
-     "pushed": 500, "lines": 1, "side": 0.0, "up": 0.0},
+     "pushed": 500, "lines": 1, "side": 0.0, "up": 0.0, "chosen": 0, "rate": 0.5},
     {"room": 4.0, "thickness": 0.55, "strength": 5.5, "rails": 4,
-     "pushed": 4200, "lines": 80, "side": 1.73, "up": 1.0},
+     "pushed": 4200, "lines": 80, "side": 1.73, "up": 1.0, "chosen": 7, "rate": 0.62},
     {"room": 12.5, "thickness": 0.95, "strength": 7.0, "rails": 6,
-     "pushed": 9000, "lines": 300, "side": -3.0, "up": -2.0},
+     "pushed": 9000, "lines": 300, "side": -3.0, "up": -2.0, "chosen": 1, "rate": 0.33},
     {"room": 1.0, "thickness": 0.3, "strength": 2.0, "rails": 5,
-     "pushed": 0, "lines": 12, "side": 0.0, "up": 2.0},
+     "pushed": 0, "lines": 12, "side": 0.0, "up": 2.0, "chosen": 0, "rate": 0.5},
 ]
 
 
@@ -42,7 +42,7 @@ def test_both_languages_build_the_same_features():
     theirs = json.loads(done.stdout)
 
     for branch, got in zip(BRANCHES, theirs):
-        mine = features({**branch, "up": branch["up"]}, None, None)
+        mine = features(branch)
         assert got == pytest.approx(mine, rel=1e-9), \
             f"{branch} → 파이썬 {mine} · JS {got}"
 

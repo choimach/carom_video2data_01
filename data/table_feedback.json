@@ -639,6 +639,298 @@
    },
    "played": null,
    "comment": null
+  },
+  {
+   "at": "2026-09-23T12:53:59",
+   "table": [
+    2844,
+    1422
+   ],
+   "cue": "white",
+   "layout": {
+    "white": [
+     829,
+     399
+    ],
+    "yellow": [
+     1401,
+     768
+    ],
+    "red": [
+     1915,
+     321
+    ]
+   },
+   "want": {
+    "first": "any",
+    "face": "any"
+   },
+   "picked": "앞돌리기|red|right",
+   "kisses": 73,
+   "candidates": [
+    {
+     "key": "빗겨치기|yellow|left",
+     "route": "빗겨치기",
+     "first": "yellow",
+     "face": "left",
+     "thickness": 0.357,
+     "tips": [
+      1.5,
+      2.6
+     ],
+     "strength": 5.5,
+     "deg": 29.5,
+     "room": 0.5,
+     "rails": 3,
+     "chosen": 0,
+     "scored": 0,
+     "total": 40,
+     "band": [
+      104,
+      0.318
+     ]
+    },
+    {
+     "key": "뒤돌리기|red|left",
+     "route": "뒤돌리기",
+     "first": "red",
+     "face": "left",
+     "thickness": 0.563,
+     "tips": [
+      1,
+      1.73
+     ],
+     "strength": 7,
+     "deg": 354.5,
+     "room": 1.5,
+     "rails": 3,
+     "chosen": 7,
+     "scored": 4,
+     "total": 40,
+     "band": [
+      6,
+      0.369
+     ]
+    },
+    {
+     "key": "앞돌리기|red|right",
+     "route": "앞돌리기",
+     "first": "red",
+     "face": "right",
+     "thickness": 0.356,
+     "tips": [
+      -1.73,
+      1
+     ],
+     "strength": 7,
+     "deg": 358,
+     "room": 0.25,
+     "rails": 4,
+     "chosen": 1,
+     "scored": 1,
+     "total": 40,
+     "band": [
+      122,
+      0.303
+     ]
+    },
+    {
+     "key": "뱅크샷|yellow|right",
+     "route": "뱅크샷",
+     "first": "yellow",
+     "face": "right",
+     "thickness": 0,
+     "tips": [
+      2,
+      0
+     ],
+     "strength": 7,
+     "deg": 195,
+     "room": 0.75,
+     "rails": 3,
+     "chosen": 1,
+     "scored": 0,
+     "total": 40,
+     "band": [
+      137,
+      0.371
+     ]
+    },
+    {
+     "key": "뒤돌리기|yellow|right",
+     "route": "뒤돌리기",
+     "first": "yellow",
+     "face": "right",
+     "thickness": 0.146,
+     "tips": [
+      -2,
+      0
+     ],
+     "strength": 3.5,
+     "deg": 37.25,
+     "room": 0.5,
+     "rails": 3,
+     "chosen": 4,
+     "scored": 2,
+     "total": 40,
+     "band": [
+      4,
+      0.629
+     ]
+    },
+    {
+     "key": "뱅크샷|yellow|left",
+     "route": "뱅크샷",
+     "first": "yellow",
+     "face": "left",
+     "thickness": 0,
+     "tips": [
+      0,
+      2
+     ],
+     "strength": 4.5,
+     "deg": 3.75,
+     "room": 0.5,
+     "rails": 5,
+     "chosen": 0,
+     "scored": 0,
+     "total": 40,
+     "band": [
+      137,
+      0.371
+     ]
+    },
+    {
+     "key": "걸어치기|red|right",
+     "route": "걸어치기",
+     "first": "red",
+     "face": "right",
+     "thickness": 0,
+     "tips": [
+      0,
+      2
+     ],
+     "strength": 3.5,
+     "deg": 359.5,
+     "room": 0.25,
+     "rails": 3,
+     "chosen": 1,
+     "scored": 1,
+     "total": 40,
+     "band": [
+      75,
+      0.249
+     ]
+    },
+    {
+     "key": "횡단|yellow|right",
+     "route": "횡단",
+     "first": "yellow",
+     "face": "right",
+     "thickness": 0.435,
+     "tips": [
+      -1,
+      -1.73
+     ],
+     "strength": 5.5,
+     "deg": 35.75,
+     "room": 0.25,
+     "rails": 4,
+     "chosen": 0,
+     "scored": 0,
+     "total": 40,
+     "band": null
+    },
+    {
+     "key": "대회전|red|left",
+     "route": "대회전",
+     "first": "red",
+     "face": "left",
+     "thickness": 0.1,
+     "tips": [
+      0,
+      2
+     ],
+     "strength": 7,
+     "deg": 353,
+     "room": 0.75,
+     "rails": 5,
+     "chosen": 0,
+     "scored": 0,
+     "total": 40,
+     "band": null
+    },
+    {
+     "key": "횡단|red|right",
+     "route": "횡단",
+     "first": "red",
+     "face": "right",
+     "thickness": 0.047,
+     "tips": [
+      -1.73,
+      1
+     ],
+     "strength": 3.5,
+     "deg": 359,
+     "room": 0.25,
+     "rails": 3,
+     "chosen": 0,
+     "scored": 0,
+     "total": 40,
+     "band": null
+    },
+    {
+     "key": "앞돌리기|yellow|left",
+     "route": "앞돌리기",
+     "first": "yellow",
+     "face": "left",
+     "thickness": 0.405,
+     "tips": [
+      1,
+      1.73
+     ],
+     "strength": 5.5,
+     "deg": 29.75,
+     "room": 0.5,
+     "rails": 4,
+     "chosen": 1,
+     "scored": 0,
+     "total": 40,
+     "band": [
+      122,
+      0.303
+     ]
+    },
+    {
+     "key": "횡단|yellow|left",
+     "route": "횡단",
+     "first": "yellow",
+     "face": "left",
+     "thickness": 0.116,
+     "tips": [
+      0,
+      -2
+     ],
+     "strength": 5.5,
+     "deg": 28.25,
+     "room": 0.5,
+     "rails": 3,
+     "chosen": 0,
+     "scored": 0,
+     "total": 40,
+     "band": null
+    }
+   ],
+   "verdicts": {
+    "빗겨치기|yellow|left": "good",
+    "뒤돌리기|red|left": "good",
+    "앞돌리기|red|right": "good"
+   },
+   "played": {
+    "key": "빗겨치기|yellow|left",
+    "scored": true
+   },
+   "comment": "실제순위는 뒤돌리기 - 앞돌리기 - 빗겨치기 순. 빗겨치기는 프로 0명인데 왜 최우선? 앞돌리기 당점은 10시가 아니라 1시 정도여야 함"
   }
  ]
 }

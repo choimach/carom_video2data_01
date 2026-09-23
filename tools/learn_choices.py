@@ -29,11 +29,12 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
 
 FOUND = os.path.join(ROOT, "data", "alternatives.jsonl")
+NEIGHBOURS = 40
 OUT = os.path.join(ROOT, "data", "choice_weights.json")
 
 # 한 갈래를 설명하는 값들. 전부 그 갈래 자체에서 나오는 것이고, 프로가 무엇을
 # 골랐는지는 절대 들어가지 않는다 - 그것이 맞혀야 할 답이다.
-def features(branch, layout, cue):
+def features(branch, layout=None, cue=None):
     side, up = branch["side"], branch["up"]
     tips = math.hypot(side, up)
     return [
@@ -45,11 +46,19 @@ def features(branch, layout, cue):
         math.log1p(branch["lines"]) / 5.0,   # 그 갈래가 얼마나 두툼한가
         tips / 3.0,                          # 준 회전의 양
         1.0 if up > 0.3 else 0.0,            # 상단 당점인가
+        # 이웃 프로 둘. 2026-09-23에 한 번 뺐다가 되돌렸다 — 뺄 때는 "이웃이
+        # 무엇을 고를지 맞힐 수 있나"를 쟀는데(거의 못 맞힌다), 쓸모는 다른 데
+        # 있었다. **후보의 45%는 이웃 중 아무도 고른 적이 없고**, 우승자를 맞히지
+        # 않아도 그런 길을 가라앉히는 것만으로 순위가 좋아진다.
+        # 넣으면 1등 24.7% → 33.4%, 3등 안 49.9% → 60.0% (10.8 표준편차).
+        math.log1p(branch.get("chosen", 0)),
+        branch.get("rate", 0.5),
         1.0,                                 # 기준선
     ]
 
 
-NAMES = ["여유", "두께", "세기", "쿠션수", "1적구이동", "줄두께", "회전량", "상단당점", "기준"]
+NAMES = ["여유", "두께", "세기", "쿠션수", "1적구이동", "줄두께", "회전량", "상단당점",
+         "이웃프로수", "이웃득점률", "기준"]
 
 
 def load(limit=None):
@@ -72,6 +81,57 @@ def load(limit=None):
             if limit and len(rounds) >= limit:
                 break
     return rounds
+
+
+def with_neighbours(rounds):
+    """판마다 후보에 "이웃 중 몇 명이 이 길을 골랐나"를 붙인다.
+
+    열쇠를 공 색깔이 아니라 **가까운 공이냐 먼 공이냐**로 맞춰야 한다 — 이웃의
+    '빨간공'은 이 배치의 '빨간공'과 아무 상관이 없다.
+    """
+    from route_model import player_features
+    model = json.load(open(os.path.join(ROOT, "data", "model.json"), encoding="utf-8"))
+    rows = model if isinstance(model, list) else model.get("plays", model.get("rows"))
+    rows = [r for r in rows if r.get("route") and r.get("layout_mm")]
+    F = np.array([player_features(r) for r in rows], dtype=float)
+    F = (F - F.mean(0)) / (F.std(0) + 1e-9)
+    match = np.array([r["match"] for r in rows])
+    seat = {f"{r['match']}:{r['inning']}:{r['shot']}": i for i, r in enumerate(rows)}
+
+    def bucket(row):
+        cue = np.array(row["layout_mm"][row["cue"]], dtype=float)
+        gaps = {c: float(np.linalg.norm(np.array(xy, dtype=float) - cue))
+                for c, xy in row["layout_mm"].items() if c != row["cue"]}
+        first, side = row.get("first_object_ball"), row.get("struck_side")
+        if not first or first not in gaps or side is None:
+            return None
+        return f"{row['route']}|{gaps[first] == min(gaps.values())}|{'left' if side > 0 else 'right'}"
+
+    picked = [bucket(r) for r in rows]
+    out = []
+    for one in rounds:
+        i = seat.get(one["id"])
+        if i is None:
+            continue
+        gap = np.linalg.norm(F - F[i], axis=1)
+        gap[match == match[i]] = np.inf
+        votes, wins = {}, {}
+        for j in np.argsort(gap)[:NEIGHBOURS]:
+            key = picked[j]
+            if not key:
+                continue
+            votes[key] = votes.get(key, 0) + 1
+            wins[key] = wins.get(key, 0) + (1 if rows[j].get("scored") else 0)
+        at = one["layout"]
+        cue_at = np.array(at[one["cue"]], dtype=float)
+        reach = {c: float(np.linalg.norm(np.array(xy, dtype=float) - cue_at))
+                 for c, xy in at.items() if c != one["cue"]}
+        for branch in one["found"]:
+            key = f"{branch['route']}|{reach.get(branch['first']) == min(reach.values())}|{branch['face']}"
+            branch["chosen"] = votes.get(key, 0)
+            branch["rate"] = (wins.get(key, 0) + 1) / (branch["chosen"] + 2)
+        out.append(one)
+    return out
 
 
 def as_arrays(rounds):
@@ -137,7 +197,7 @@ def main():
               "tools/enumerate_alternatives.js를 먼저 끝까지 돌리세요.")
         return 1
 
-    data = as_arrays(rounds)
+    data = as_arrays(with_neighbours(rounds))
 
     # 경기 단위 k-겹. model.json의 고정 split은 test가 전체의 9%뿐이라 95판이
     # 되고, 그 위에서 잰 차이는 2 표준오차도 안 된다. 겹으로 나누면 **모든 판이

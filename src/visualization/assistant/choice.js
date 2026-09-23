@@ -20,7 +20,7 @@
 const CHOICE = (() => {
   // learn_choices.py의 NAMES와 같은 차례.
   const NAMES = ["여유", "두께", "세기", "쿠션수", "1적구이동",
-                 "줄두께", "회전량", "상단당점", "기준"];
+                 "줄두께", "회전량", "상단당점", "이웃프로수", "이웃득점률", "기준"];
 
   // room      : 조준 여유(도) — 좌우로 얼마나 빗나가도 득점하는가
   // thickness : 두께 0~1
@@ -29,7 +29,10 @@ const CHOICE = (() => {
   // pushed    : 1적구가 굴러간 거리(mm)
   // lines     : 이 공략에 들어가는 줄의 수 — 얼마나 너그러운가
   // side, up  : 당점 (팁)
-  function features({ room, thickness, strength, rails, pushed, lines, side, up }) {
+  // chosen : 닮은 배치의 프로 40명 중 몇 명이 이 길을 골랐나
+  // rate   : 그중 몇이 넣었나 (한 번의 성공과 한 번의 실패를 미리 얹어 누른 값)
+  function features({ room, thickness, strength, rails, pushed, lines, side, up,
+                      chosen, rate }) {
     const tips = Math.hypot(side || 0, up || 0);
     return [
       Math.log1p(room),
@@ -40,6 +43,14 @@ const CHOICE = (() => {
       Math.log1p(lines || 1) / 5,
       tips / 3,
       (up || 0) > 0.3 ? 1 : 0,
+      // 2026-09-23에 한 번 뺐다가 되돌렸다. 뺄 때 잰 것은 "이웃이 무엇을 고를지
+      // 맞힐 수 있나"였고 그건 거의 안 된다. 그런데 쓸모는 다른 데 있었다 —
+      // **후보의 45%는 이웃 중 아무도 고른 적이 없고**, 우승자를 맞히지 않아도
+      // 그런 길을 가라앉히는 것만으로 순위가 좋아진다. 1등 24.7% → 33.4%,
+      // 3등 안 49.9% → 60.0%, 짝지은 부호검정 10.8 표준편차.
+      // 선수가 먼저 알아챘다: "프로 0명이라면서 왜 이 공을 최우선으로?"
+      Math.log1p(chosen || 0),
+      rate == null ? 0.5 : rate,
       1,
     ];
   }
