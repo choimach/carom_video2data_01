@@ -41,7 +41,10 @@
 
   .table-card { background: var(--surface); border: 1px solid var(--line);
                 border-radius: 12px; box-shadow: var(--shadow); overflow: hidden; }
-  svg.table { display: block; width: 100%; height: auto; touch-action: none; cursor: crosshair; }
+  /* 화면 하나에 다 담으려면 당구대가 세로를 다 먹으면 안 된다. viewBox가 있으니
+     높이를 묶으면 알아서 줄어든다. */
+  svg.table { display: block; width: 100%; height: auto; max-height: 46vh;
+              touch-action: none; cursor: crosshair; }
 
   .bar { display: flex; flex-wrap: wrap; gap: 6px; align-items: center;
          padding: 8px 10px; border-top: 1px solid var(--line); }
@@ -150,10 +153,9 @@
     border: 1px solid var(--line); background: var(--sunk); color: var(--ink);
     min-height: 52px; resize: vertical; width: 100%; box-sizing: border-box;
   }
-  .feedback { padding: 10px 12px; gap: 7px; }
-  .feedback h2 { font-size: 15px; }
-  .feedback p { font-size: 12px; }
-  footer { margin-top: 12px; font-size: 11.5px; }
+  .feedback { padding: 9px 11px; gap: 6px; margin-top: 8px; }
+  .feedback h2 { font-size: 13.5px; margin: 0; }
+  footer { margin-top: 8px; font-size: 11px; line-height: 1.5; }
   .feedback-row { display: flex; gap: 10px; align-items: center; }
   #copied { font-size: 12.5px; color: var(--good); }
 </style>
@@ -199,15 +201,9 @@
   </section>
 
   <section class="feedback">
-    <h2>이 답이 어떤가요</h2>
-    <p>틀린 점을 적어 주세요. 어느 공략이 왜 이상한지, 실제로는 무엇을 치시는지 —
-      그 한 줄이 순위 계산을 고치는 근거가 됩니다.</p>
-    <p><b>결과 복사</b>는 배치 좌표와 후보 목록, 그리고 이 의견을 함께 담습니다.
-      영상은 프로가 <i>고른 것</i>만 남기고 고르지 않은 길은 남기지 않습니다.
-      이 화면은 열 가지를 늘어놓고 그중 무엇이 틀렸는지 들을 수 있는
-      <b>유일한 자리</b>라, 붙여넣어 주시면 <code>data/table_feedback.json</code>에
-      쌓여 다음 순위 계산이 채점받는 기준이 됩니다.</p>
-    <textarea id="comment" placeholder="예) 1번 추천은 키스가 난다. 실제로는 빨간공 오른쪽을 얇게 맞혀 뒤돌리기로 친다."></textarea>
+    <!-- 긴 설명은 뺐다 (2026-09-23, 선수 요청). 무엇을 위한 칸인지는 자리표로
+         충분하고, 화면 하나에 다 들어가는 편이 낫다. -->
+    <textarea id="comment" placeholder="틀린 점을 한 줄로 — 어느 공략이 왜 이상한지, 실제로는 무엇을 치시는지"></textarea>
     <div class="feedback-row">
       <button id="copy" type="button">결과 복사</button>
       <span id="copied"></span>
@@ -1118,14 +1114,13 @@
     }
     paintVerdicts();
     armTipDrag();
+    // 긴 설명은 한 줄로. 근거를 자세히 쓴 것은 오른쪽 칸(detail)에 있다 —
+    // 화면 하나에 다 담으려면 아래쪽이 길면 안 된다.
     document.getElementById("footer").innerHTML =
-      `${result.how ? `<b>${result.how}</b>에서 찾았습니다. ` : ""}${result.kisses ? `키스가 나는 선 <b>${result.kisses}개</b>는 빼고 보여드립니다. ` : ""}
-       확률은 프로 ${DATA.plays.length}개 플레이에서 <b>무엇 대신 무엇을 골랐는지</b>로
-       맞춘 식이 냅니다 (버린 길 3만 개, 1등 적중 25%·우연이면 4%). 궤적은
-       <b>이 배치에서 직접 계산</b>합니다.<br>
-       ⚠️ <b>닮은 배치에서 프로가 어느 길을 고르는지는 거의 정해져 있지 않습니다</b> —
-       거의 같은 배치를 놓고도 서로 다르게 칩니다 (일치 28%, 배치와 무관할 때 27%).
-       그래서 하나를 맞히려 하지 않고 <b>확률로 보여드립니다.</b>`;
+      `들어가는 길 <b>${result.routes.length}가지</b>`
+      + `${result.kisses ? ` · 키스 나는 <b>${result.kisses}개</b>는 제외` : ""}`
+      + ` · 확률은 프로 ${DATA.plays.length}개 플레이로 맞춘 식 (1등 25%, 우연이면 4%)`
+      + ` · 궤적은 이 배치에서 직접 계산`;
   }
 
   function point(event, svg) {
