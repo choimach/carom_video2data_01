@@ -54,7 +54,8 @@
   :focus-visible { outline: 2px solid var(--warn); outline-offset: 2px; }
 
   .choices { display: grid; gap: 12px; margin-top: 16px; align-items: stretch; }
-  @media (min-width: 720px) { .choices { grid-template-columns: 1.2fr 1fr; } }
+  /* 첫째가 답이고 나머지 둘은 곁이다 — 넓이로도 그렇게 보이게. */
+  @media (min-width: 720px) { .choices { grid-template-columns: 1.6fr 1fr 1fr; } }
   .best { position: relative; border-width: 2px; border-color: var(--cloth); }
   .best .badge {
     font: 700 11px/1 "Noto Sans KR", sans-serif; letter-spacing: .04em;
@@ -653,17 +654,26 @@
       routes.push({
         route: hit.route, key, hit, chosen, first, scored,
         proRate: chosen ? Math.round((scored / chosen) * 100) : null,
-        // 두 가지 근거를 곱한다. 한쪽이 0에 가까우면 가라앉아야 하기 때문이다 —
-        // 기하적으로 예쁜데 프로가 아무도 안 치는 뱅크샷이 그 경우다 (탐색이
-        // 만드는 갈래의 19.8%가 뱅크샷인데 프로는 11%만 친다).
-        //   이웃 프로  — 닮은 자리에서 몇 명이 골랐고 몇 %가 넣었나, 두께는 얼마였나
-        //   배운 식    — 이 길 자체가 얼마나 칠 만한가
-        // 예전에는 뒤쪽이 `여유 ÷ (1 + 1적구이동/4000)` 두 항뿐이었다.
+        // ★2026-09-23: 이웃 프로의 **투표**를 점수에서 뺐다. 잰 결과 그것이
+        // 우연과 구별되지 않았기 때문이다 — 닮은 배치에서 프로가 어느 공을 어느
+        // 면으로 칠지 맞히는 비율이 28.0%인데, 배치와 무관할 때가 26.7%다.
+        // 차원을 3축까지 줄여 이웃을 6배 가깝게 만들어도 0.2점밖에 안 움직였다.
+        // 거의 같은 배치를 놓고도 프로들은 서로 다르게 친다.
+        //
+        // 남은 둘은 잰 것이다:
+        //   배운 식  — 후보를 그 자체의 성질로 줄 세운다. 1등 25%(우연 4%).
+        //              닮은 배치를 찾지 않으므로 위의 벽과 무관하다.
+        //   두께일치 — 프로는 있는 것 중 **더 두꺼운 쪽을 70%** 고른다.
+        // 이웃이 몇 명 골랐는지는 이제 **점수가 아니라 근거로만** 보여준다.
         band, thickOff: off,
-        score: (chosen + 0.5) * rate * agree * learnedScore(hit),
+        score: agree * learnedScore(hit),
       });
     }
     routes.sort((a, b) => b.score - a.score);
+    // 점수를 확률로. learn_choices.py가 맞춘 것이 softmax라 이 몫이 곧
+    // "프로가 이것을 고를 확률"이다 — 지금까지는 순서로만 쓰고 버리고 있었다.
+    const heat = routes.reduce((sum, r) => sum + r.score, 0) || 1;
+    for (const row of routes) row.share = row.score / heat;
     return { routes: routes.slice(0, 12), total: pros.total, tried: lines.size, kisses, how };
   }
 
@@ -1036,47 +1046,39 @@
       return;
     }
 
-    const best = result.routes[0];
-    const card = document.createElement("button");
-    card.className = "choice best";
-    card.type = "button";
-    card.setAttribute("aria-pressed", String(best.key === picked));
-    card.innerHTML = `<span class="badge">가장 확률 높은 공략</span>
-      <span class="name"></span>
-      <span class="count">조준 여유 ${best.hit.room}° ·
-        ${best.chosen ? `프로 ${best.chosen}／${result.total}명 · 그중 득점 ${best.proRate}%`
-                      : '<span class="thin">프로가 고른 적 없음</span>'} ·
-        두께 ${asThickness(best.hit.thickness)}${best.band
-          ? `(프로 ${asThickness(best.band.mid)})` : ""} ·
-        강도 ${SIM.strengthOf(best.hit.speed).toFixed(1)} ·
-        1적구 ${Math.round(best.hit.pushed)} mm 이동</span>`;
-    card.querySelector(".name").textContent = label(best);
-    card.onclick = () => { stopPlaying(); picked = best.key; render(); };
-    box.appendChild(card);
-
-    const manual = document.createElement("div");
-    manual.className = "manual";
-    manual.innerHTML = `<label for="other">다른 공략 (${result.routes.length}가지)</label>`;
-    const pick = document.createElement("select");
-    pick.id = "other";
-    for (const row of result.routes) {
-      const option = document.createElement("option");
-      option.value = row.key;
-      option.textContent = `${label(row)} — 두께 ${asThickness(row.hit.thickness)}`
-        + ` · 강도 ${SIM.strengthOf(row.hit.speed).toFixed(1)}`
-        + ` · 여유 ${row.hit.room}°`
-        + (row.chosen ? ` · 프로 ${row.chosen}명` : " · 프로 0명")
-        + ` · 1적구 ${Math.round(row.hit.pushed)} mm`;
-      option.selected = row.key === picked;
-      pick.appendChild(option);
+    // 선수가 원한 모양 (2026-09-21): "궤적 1개를 보여주면 돼. 그 다음 두 개
+    // 정도 보여주면 더 좋고." 열두 개 목록을 늘어놓지 않는다 — 배치가 선택을
+    // 거의 정하지 않으므로 **정답 하나를 맞히는 것이 아니라 확률을 보여주는
+    // 것**이 맞다. 3등 안 커버리지가 절반쯤이니 1개 + 2개면 절반은 든다.
+    const show = result.routes.slice(0, 3);
+    show.forEach((row, rank) => {
+      const card = document.createElement("button");
+      card.className = "choice" + (rank === 0 ? " best" : "");
+      card.type = "button";
+      card.setAttribute("aria-pressed", String(row.key === picked));
+      const chance = `${Math.round(row.share * 100)}%`;
+      card.innerHTML = `${rank === 0
+          ? `<span class="badge">프로가 고를 확률 ${chance}</span>`
+          : `<span class="count" style="color:var(--soft)">${rank + 1}순위 · ${chance}</span>`}
+        <span class="name"></span>
+        <span class="count">두께 ${asThickness(row.hit.thickness)} ·
+          당점 ${asTip(row.hit.side, row.hit.vertical || 0)} ·
+          강도 ${SIM.strengthOf(row.hit.speed).toFixed(1)} ·
+          여유 ${row.hit.room}°<br>
+          ${row.chosen ? `가까운 프로 ${row.chosen}／${result.total}명이 이 길을 골랐고 그중 ${row.proRate}% 득점`
+                       : '<span class="thin">가까운 프로 중 이 길을 고른 사람은 없음</span>'}</span>`;
+      card.querySelector(".name").textContent = label(row);
+      card.onclick = () => { stopPlaying(); picked = row.key; render(); };
+      box.appendChild(card);
+    });
+    if (result.routes.length > show.length) {
+      const more = document.createElement("div");
+      more.className = "manual";
+      more.style.cssText = "grid-column:1/-1;font-size:12.5px;color:var(--soft)";
+      more.textContent = `들어가는 길은 모두 ${result.routes.length}가지입니다. `
+        + `아래 "어느 것이 맞습니까"에서 전부 보고 판단을 눌러 주실 수 있습니다.`;
+      box.appendChild(more);
     }
-    pick.onchange = () => { stopPlaying(); picked = pick.value; render(); };
-    manual.appendChild(pick);
-    const note = document.createElement("div");
-    note.style.cssText = "font-size:12.5px;color:var(--soft)";
-    note.textContent = "여유가 넓고 프로가 많이 고른 순서입니다. 골라서 궤적을 비교해 보세요.";
-    manual.appendChild(note);
-    box.appendChild(manual);
 
     const row = chosenRow();
     if (row) {
@@ -1108,9 +1110,12 @@
     armTipDrag();
     document.getElementById("footer").innerHTML =
       `${result.how ? `<b>${result.how}</b>에서 찾았습니다. ` : ""}${result.kisses ? `키스가 나는 선 <b>${result.kisses}개</b>는 빼고 보여드립니다. ` : ""}
-       순위는 프로 ${DATA.plays.length}개 플레이 중 <b>이 배치와 가장 가까운 ${K}개</b>가 정합니다 —
-       몇 명이 그 유형을 골랐는지, 그중 몇 %가 득점했는지, 그리고 <b>그들이 실제로 쓴 두께</b>에
-       얼마나 가까운지. 궤적은 <b>이 배치에서 직접 계산</b>합니다.`;
+       확률은 프로 ${DATA.plays.length}개 플레이에서 <b>무엇 대신 무엇을 골랐는지</b>로
+       맞춘 식이 냅니다 (버린 길 3만 개, 1등 적중 25%·우연이면 4%). 궤적은
+       <b>이 배치에서 직접 계산</b>합니다.<br>
+       ⚠️ <b>닮은 배치에서 프로가 어느 길을 고르는지는 거의 정해져 있지 않습니다</b> —
+       거의 같은 배치를 놓고도 서로 다르게 칩니다 (일치 28%, 배치와 무관할 때 27%).
+       그래서 하나를 맞히려 하지 않고 <b>확률로 보여드립니다.</b>`;
   }
 
   function point(event, svg) {
