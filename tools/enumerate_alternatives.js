@@ -118,6 +118,9 @@ function search(layout, cue) {
       pushed += Math.hypot(way[i][0] - way[i - 1][0], way[i][1] - way[i - 1][1]);
     }
     hits.push({
+      // shot은 조언판의 hits에도 들어 있다. 대표 줄을 고를 때 도는 방향을
+      // 물어보려면 궤적이 있어야 하는데, 없으면 같은 공을 두 번 치게 된다.
+      shot,
       route, tags, first: judged.first, face,
       thickness: Math.max(0, Math.min(1, 1 - Math.abs(across) / SIM.DIAMETER)),
       side, up, deg, strength: SIM.strengthOf(speed),
@@ -249,4 +252,6 @@ function main() {
   console.log(`\n${counted}개 새로 담았습니다 -> ${out}`);
 }
 
-main();
+// 이 탐색은 조언판과 같은 것이라, 한 배치를 따로 들여다볼 때도 이걸 쓴다.
+if (require.main === module) main();
+module.exports = { search, bucket, SIM, ORDER, FINE };

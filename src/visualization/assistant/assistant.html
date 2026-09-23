@@ -625,12 +625,44 @@
     // 묶음마다 들어가는 줄이 몇 개인지 센다. 배운 식에서 **가장 무거운 값**이고
     // (가중치 +2.40), 뜻은 "이 공략이 얼마나 너그러운가"다 — 프로가 고른 것과
     // 버린 것을 가르는 첫째가 바로 이것이었다.
-    const best = new Map(), lines = new Map();
+    const best = new Map(), lines = new Map(), perTip = new Map();
+    const idOf = (h) => `${h.route}|${h.judged.first}|${h.face}`;
+    // 당점은 극좌표 한 점이다 — 좌우와 상하를 따로 세면 아무도 치지 않는 점이
+    // 나온다. 여기서는 (좌우, 상하) 쌍째로 센다.
+    const tipOf = (h) => `${Math.round((h.side || 0) * 100)}:${Math.round((h.vertical || 0) * 100)}`;
     for (const hit of hits) {
-      const id = `${hit.route}|${hit.judged.first}|${hit.face}`;
+      const id = idOf(hit);
       lines.set(id, (lines.get(id) || 0) + 1);
+      const tip = `${id}@${tipOf(hit)}`;
+      perTip.set(tip, (perTip.get(tip) || 0) + 1);
+    }
+    // 도는 쪽으로 회전을 주었는가. 동점을 가를 때만 쓰므로 그때만 계산한다.
+    const running = (hit) => {
+      if (hit.running === undefined) {
+        const side = hit.side || 0;
+        hit.running = Math.abs(side) < 0.01 ? 0
+          : ((side > 0) === ROUTE.circuitIsRight(hit.shot.paths[cue] || [], L, W) ? 1 : -1);
+      }
+      return hit.running;
+    };
+    // 여유가 같으면 지금까지는 **배열에 먼저 들어온 줄**이 그냥 이겼다. 좁은
+    // 묶음에서는 그게 늘 일어난다: 선수가 잡아낸 앞돌리기 묶음은 득점 줄 14개가
+    // 전부 바닥값 0.25도였고, 그가 말한 1시 당점은 그 묶음에서 줄이 가장 많은
+    // 당점이었는데도 10시에 밀렸다. 동점이면 두 가지로 가른다.
+    //  1) 같은 당점으로 득점하는 줄이 몇 개인가 — 그 당점이 얼마나 너그러운가.
+    //  2) 그래도 같으면 도는 쪽으로 회전을 준 줄. 프로의 73%가 그렇게 친다
+    //     (tools/check_side_vs_circuit.py). 경향이지 규칙이 아니라서 순위에는
+    //     넣지 않지만, 아무것도 가릴 수 없을 때 배열 순서보다는 낫다.
+    const beats = (a, b) => {
+      if (a.room !== b.room) return a.room > b.room;
+      const wa = perTip.get(`${idOf(a)}@${tipOf(a)}`), wb = perTip.get(`${idOf(b)}@${tipOf(b)}`);
+      if (wa !== wb) return wa > wb;
+      return running(a) > running(b);
+    };
+    for (const hit of hits) {
+      const id = idOf(hit);
       const kept = best.get(id);
-      if (!kept || hit.room > kept.room) best.set(id, hit);
+      if (!kept || beats(hit, kept)) best.set(id, hit);
     }
     for (const [id, hit] of best) hit.lines = lines.get(id);
     return { best, kisses: counters.kisses, how };
