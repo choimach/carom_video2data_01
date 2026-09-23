@@ -170,7 +170,14 @@ def main(argv=None):
             near_first = gaps[struck] == min(gaps.values())
         # Negative offset is the object ball's right face - the same
         # convention the page uses when it names a candidate.
+        #
+        # ★거울 한 번은 손을 바꾼다. 배치는 캐노니컬 구역으로 뒤집어 저장하면서
+        # 면은 원본 프레임의 값을 그대로 쓰고 있었다 — 거울이 한 번 걸린 판에서
+        # 왼쪽 면이 오른쪽 면으로 저장된 것이다. 절반쯤이 그랬고, 그래서 면이
+        # 동전 던지기로 나왔다. 거울 두 번(180도 회전)은 손을 바꾸지 않는다.
         struck = row.get("struck_side")
+        if struck is not None and (flip_x != flip_y):
+            struck = -struck
         plays.append({
             "f": [round(float(v), 3) for v in point],
             "near": near_first,
