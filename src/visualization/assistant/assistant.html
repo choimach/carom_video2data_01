@@ -109,6 +109,8 @@
   .plate .said b { color: var(--ink); font-weight: 500; }
   .plate svg { width: 100%; height: auto; display: block; }
   .side .plate { max-width: none; }
+  .side #aim { display: grid; gap: 8px; }
+  svg.strength { width: 100%; height: 34px; touch-action: none; cursor: pointer; }
   .plate .cap {
     font: 700 11px/1 "Gothic A1", sans-serif; letter-spacing: .06em; color: var(--faint);
   }
@@ -812,6 +814,73 @@
   }
 
 
+  // 스트로크 강도 — 겨냥 그림 아래에 눈금자로. 강도 1이 수구가 장축(2844 mm)
+  // 만큼 굴러가는 세기이고 n이면 그 n 배다 (src/physics/strength.py).
+  //
+  // 프로가 실제로 치는 범위를 띠로 깔아 둔다: 1,335개 플레이를 이 자로 읽으면
+  // 사분위가 3.2 / 4.4 / 5.6이다. 숫자만 적어 두면 "4.5가 센 건가 약한 건가"를
+  // 알 수 없는데, 띠 위에 있으면 한눈에 보인다.
+  const STRENGTH_LOW = 1, STRENGTH_HIGH = 7.5;
+  const PRO_BAND = [3.2, 5.6], PRO_MID = 4.4;
+
+  function strengthPlate(row) {
+    const now = SIM.strengthOf(row.hit.speed);
+    const at = (v) => (v - STRENGTH_LOW) / (STRENGTH_HIGH - STRENGTH_LOW) * 100;
+    const ticks = [1, 2, 3, 4, 5, 6, 7].map((v) =>
+      `<line x1="${at(v)}" y1="9" x2="${at(v)}" y2="15" stroke="var(--faint)" stroke-width="0.4"/>
+       <text x="${at(v)}" y="24" font-size="6" fill="var(--faint)" text-anchor="middle">${v}</text>`
+    ).join("");
+    return `<div class="plate">
+      <span class="cap">스트로크 강도 — 끌어서 바꿔 보세요</span>
+      <svg class="strength" viewBox="0 0 100 28" preserveAspectRatio="none" role="img"
+           aria-label="강도 ${now.toFixed(1)}">
+        <rect x="${at(PRO_BAND[0])}" y="5" width="${at(PRO_BAND[1]) - at(PRO_BAND[0])}" height="8"
+              fill="var(--cloth)" opacity=".18"/>
+        <line x1="${at(PRO_MID)}" y1="4" x2="${at(PRO_MID)}" y2="14"
+              stroke="var(--cloth)" stroke-width="0.6" opacity=".6"/>
+        <line x1="0" y1="9" x2="100" y2="9" stroke="var(--line)" stroke-width="1.4"/>
+        ${ticks}
+        <circle class="strength-knob" cx="${at(now)}" cy="9" r="3.4"
+                fill="var(--cloth)" stroke="#fff" stroke-width="1" style="cursor:grab"/>
+      </svg>
+      <span class="said">강도 <b>${now.toFixed(1)}</b> — 수구가 장축
+        ${now.toFixed(1)}개만큼 굴러가는 세기<br>
+        <span style="color:var(--faint)">띠는 프로가 실제로 치는 범위 (3.2~5.6, 가운데 4.4)</span></span>
+    </div>`;
+  }
+
+  // 눈금자를 끌면 그 세기로 다시 친다 — 당점 점과 같은 방식이다.
+  function armStrengthDrag() {
+    const svg = document.querySelector("svg.strength");
+    const row = chosenRow();
+    if (!svg || !row) return;
+    const knob = svg.querySelector(".strength-knob");
+    const place = (event) => {
+      const box = svg.getBoundingClientRect();
+      const share = Math.min(1, Math.max(0, (event.clientX - box.left) / box.width));
+      let value = STRENGTH_LOW + share * (STRENGTH_HIGH - STRENGTH_LOW);
+      value = Math.round(value * 2) / 2;          // 반 칸 눈금
+      row.hit.speed = SIM.speedFor(value);
+      row.hit.byHand = true;
+      replay(row);
+      knob.setAttribute("cx", String((value - STRENGTH_LOW) / (STRENGTH_HIGH - STRENGTH_LOW) * 100));
+    };
+    svg.onpointerdown = (event) => {
+      event.preventDefault();
+      svg.setPointerCapture(event.pointerId);
+      stopPlaying();
+      const move = (e) => place(e);
+      const done = () => {
+        svg.removeEventListener("pointermove", move);
+        svg.removeEventListener("pointerup", done);
+        render();
+      };
+      svg.addEventListener("pointermove", move);
+      svg.addEventListener("pointerup", done);
+      place(event);
+    };
+  }
+
   // 당점을 손으로 옮긴다. 옮기면 그 자리로 다시 쳐서 궤적을 새로 그린다 —
   // 조언판이 고른 당점이 아니라 **선수가 주는 당점**으로 공이 어디로 가는지
   // 보는 것이, 이 화면이 실제로 쓰이는 방식이다.
@@ -1090,7 +1159,7 @@
       detail.classList.add("on");
       const strength = SIM.strengthOf(row.hit.speed).toFixed(1);
       const side = asTip(row.hit.side, row.hit.vertical || 0);
-      document.getElementById("aim").innerHTML = aimPlate(row);
+      document.getElementById("aim").innerHTML = aimPlate(row) + strengthPlate(row);
       detail.innerHTML = `<b>${label(row)}</b> — ${NOTES[row.route] || ""}<br><br>
         그려진 선은 <b>이 배치에서</b> 시뮬레이터가 찾은 득점 궤적입니다.
         <b>두께 ${asThickness(row.hit.thickness)}</b>로 ${NAMES[row.first]}의
@@ -1114,6 +1183,7 @@
     }
     paintVerdicts();
     armTipDrag();
+    armStrengthDrag();
     // 긴 설명은 한 줄로. 근거를 자세히 쓴 것은 오른쪽 칸(detail)에 있다 —
     // 화면 하나에 다 담으려면 아래쪽이 길면 안 된다.
     document.getElementById("footer").innerHTML =
