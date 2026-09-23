@@ -147,28 +147,88 @@ function search(layout, cue) {
   return hits;
 }
 
+// 같은 공략이 되는 각도의 진짜 폭 — 조언판의 trueRoom()과 같아야 한다.
+//
+// 0.25도 눈금으로 세면 통의 **95%가 같은 값에 묶인다**. 실제 창은 중앙값
+// 0.15도에 가장 넓은 것이 3.15도이므로 21배 차이가 실재하는데 눈금이 못 보고
+// 있었다. 그래서 가장자리를 이분법으로 찾는다.
+function sameLine(layout, cue, hit, deg) {
+  const rad = deg * Math.PI / 180;
+  const aim = [Math.cos(rad), Math.sin(rad)];
+  const shot = SIM.play(layout, cue, [aim[0] * hit.speed, aim[1] * hit.speed],
+                        hit.side, hit.up || 0);
+  shot.cue = cue;
+  const judged = SIM.judge(shot);
+  if (!judged.scored || judged.first !== hit.first || kissed(shot)) return false;
+  const to = layout[judged.first], from = layout[cue];
+  const across = aim[0] * (to[1] - from[1]) - aim[1] * (to[0] - from[0]);
+  const face = across > 0 ? 'left' : 'right';
+  if (face !== hit.face) return false;
+  const { route } = nameRoute(shot, judged, aim, face);
+  return route === hit.route;
+}
+
+function trueRoom(layout, cue, hit) {
+  let room = 0;
+  for (const dir of [1, -1]) {
+    let good = 0, bad = null;
+    for (const span of [0.05, 0.1, 0.2, 0.4, 0.8, 1.6, 3.2]) {
+      if (sameLine(layout, cue, hit, hit.deg + dir * span)) good = span; else { bad = span; break; }
+    }
+    if (bad === null) { room += good; continue; }
+    for (let i = 0; i < 8; i++) {
+      const middle = (good + bad) / 2;
+      if (sameLine(layout, cue, hit, hit.deg + dir * middle)) good = middle; else bad = middle;
+    }
+    room += good;
+  }
+  return Math.round(room * 1000) / 1000;
+}
+
 // 한 배치의 답은 수백 줄이지만, 선수가 고르는 단위는 "어느 공의 어느 면으로
-// 무슨 유형" 하나다. 그 단위로 묶고, 묶음마다 가장 여유 있는 줄로 대표한다.
-function bucket(hits) {
+// 무슨 유형" 하나다. 그 단위로 묶고, 묶음마다 **실제 줄 하나**로 대표한다.
+//
+// 한때 항목마다 중앙값을 따로 잡아 대표를 만들었다. 당점은 극좌표 한 점인데
+// 좌우와 상하를 따로 잡은 탓에, 통 35,742개 중 6,305개(18%)가 아무도 치지
+// 않는 당점을 달고 있었다 — 한 줄의 좌우에 다른 줄의 상하를 붙인 값이다.
+// 조언판은 실제 줄 하나를 쓰므로, 모델이 배우는 것과 화면이 내놓는 것이
+// 서로 다른 물건이었다. 지금은 조언판 finish()와 같은 규칙을 쓴다.
+function bucket(hits, layout, cue) {
   const by = new Map();
   for (const hit of hits) {
     const key = `${hit.route}|${hit.first}|${hit.face}`;
     if (!by.has(key)) by.set(key, []);
     by.get(key).push(hit);
   }
+  // 굵은 눈금으로 각 줄의 여유를 재서 대표를 고른다 — 조언판 finish()와 같다.
+  const at = new Map();
+  const slot = (h, deg) => `${h.speed}:${h.side}:${Math.round(deg / FINE) * FINE}`;
+  for (const h of hits) at.set(slot(h, h.deg), h);
+  for (const h of hits) {
+    let room = FINE;
+    for (const dir of [FINE, -FINE]) {
+      let d = h.deg + dir;
+      while (at.has(slot(h, (d + 360) % 360))) { room += FINE; d += dir; }
+    }
+    h.rough = Math.round(room * 100) / 100;
+  }
+  const tipOf = (h) => `${Math.round((h.side || 0) * 100)}:${Math.round((h.up || 0) * 100)}`;
+  const perTip = new Map();
+  for (const h of hits) {
+    const t = `${h.route}|${h.first}|${h.face}@${tipOf(h)}`;
+    perTip.set(t, (perTip.get(t) || 0) + 1);
+  }
+
   const out = [];
   for (const [key, list] of by) {
-    // 각도가 이어진 폭이 곧 조준 여유다. 같은 묶음 안에서 가장 굵은 줄을 고른다.
-    const degrees = [...new Set(list.map((h) => Math.round(h.deg / FINE) * FINE))].sort((a, b) => a - b);
-    let widest = FINE, run = FINE;
-    for (let i = 1; i < degrees.length; i++) {
-      run = (degrees[i] - degrees[i - 1] <= FINE + 1e-9) ? run + FINE : FINE;
-      if (run > widest) widest = run;
+    let best = list[0];
+    for (const h of list) {
+      if (h.rough > best.rough
+          || (h.rough === best.rough
+              && perTip.get(`${key}@${tipOf(h)}`) > perTip.get(`${key}@${tipOf(best)}`))) {
+        best = h;
+      }
     }
-    const middle = (field) => {
-      const s = list.map((h) => h[field]).sort((a, b) => a - b);
-      return s[Math.floor(s.length / 2)];
-    };
     const [route, first, face] = key.split('|');
     const tagged = {};
     for (const h of list) for (const t of (h.tags || [])) tagged[t] = (tagged[t] || 0) + 1;
@@ -176,13 +236,16 @@ function bucket(hits) {
       key, route, first, face,
       tags: Object.keys(tagged).length ? tagged : null,
       lines: list.length,
-      room: Math.round(widest * 100) / 100,
-      thickness: Math.round(middle('thickness') * 1000) / 1000,
-      strength: Math.round(middle('strength') * 10) / 10,
-      rails: middle('rails'),
-      pushed: Math.round(middle('pushed')),
-      side: Math.round(middle('side') * 100) / 100,
-      up: Math.round(middle('up') * 100) / 100,
+      rough: best.rough,
+      // 대표를 고른 **다음**에 그 줄만 정밀하게 잰다.
+      room: trueRoom(layout, cue, best),
+      thickness: Math.round(best.thickness * 1000) / 1000,
+      strength: Math.round(best.strength * 10) / 10,
+      rails: best.rails,
+      pushed: Math.round(best.pushed),
+      side: Math.round(best.side * 100) / 100,
+      up: Math.round(best.up * 100) / 100,
+      deg: best.deg,
     });
   }
   return out.sort((a, b) => b.room - a.room);
@@ -223,7 +286,7 @@ function main() {
     const layout = {};
     for (const c of ORDER) layout[c] = row.layout_mm[c].map(Number);
     const hits = search(layout, row.cue);
-    const buckets = bucket(hits);
+    const buckets = bucket(hits, layout, row.cue);
     // 프로가 실제로 친 것. struck_side 양수가 왼쪽 면 — app_data.py와 같은 규약.
     const chose = `${row.route}|${row.first_object_ball}|${row.struck_side > 0 ? 'left' : 'right'}`;
     const record = {

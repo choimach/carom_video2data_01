@@ -652,6 +652,49 @@
     return finish(hits, counters, "전방위 탐색");
   }
 
+  // 같은 공략이 되는 각도의 진짜 폭.
+  //
+  // 0.25도 눈금으로 세면 **통의 95%가 같은 값에 묶인다** (프로 배치 20개,
+  // 통 410개). 실제 창은 중앙값 0.15도에 가장 넓은 것이 3.15도이므로 21배
+  // 차이가 실재하는데 눈금이 못 보고 있었다 — `여유` 가중치는 사실상 잡음에
+  // 붙어 있었다. 0.05도로 내려도 74%가 묶인다.
+  //
+  // 그래서 칸을 세지 않고 **가장자리를 이분법으로 찾는다.** 배로 늘려 가장
+  // 자리를 가둔 뒤 여덟 번 반으로 접으면 서른 번 남짓에 0.006도까지 나오고,
+  // 값이 연속이라 묶이지 않는다. 한 번 치는 데 0.6 ms이므로 통 서른 개에
+  // 0.5초쯤이다.
+  function sameLine(hit, deg) {
+    const rad = deg * Math.PI / 180;
+    const aim = [Math.cos(rad), Math.sin(rad)];
+    const shot = SIM.play(layout, cue, [aim[0] * hit.speed, aim[1] * hit.speed],
+                          hit.side, hit.vertical || 0);
+    const judged = SIM.judge(shot);
+    if (!judged.scored || judged.first !== hit.judged.first || kissed(shot, judged)) return false;
+    const to = layout[judged.first], from = layout[cue];
+    const across = aim[0] * (to[1] - from[1]) - aim[1] * (to[0] - from[0]);
+    const face = across > 0 ? "left" : "right";
+    if (face !== hit.face) return false;
+    const { route } = nameRoute(shot, judged, aim, face);
+    return route === hit.route;
+  }
+
+  function trueRoom(hit) {
+    let room = 0;
+    for (const dir of [1, -1]) {
+      let good = 0, bad = null;
+      for (const span of [0.05, 0.1, 0.2, 0.4, 0.8, 1.6, 3.2]) {
+        if (sameLine(hit, hit.deg + dir * span)) good = span; else { bad = span; break; }
+      }
+      if (bad === null) { room += good; continue; }
+      for (let i = 0; i < 8; i++) {
+        const middle = (good + bad) / 2;
+        if (sameLine(hit, hit.deg + dir * middle)) good = middle; else bad = middle;
+      }
+      room += good;
+    }
+    return Math.round(room * 1000) / 1000;
+  }
+
   function finish(hits, counters, how) {
     const key = (h, deg) => `${h.speed}:${h.side}:${Math.round(deg / FINE) * FINE}`;
     const byKey = new Map();
@@ -706,7 +749,14 @@
       const kept = best.get(id);
       if (!kept || beats(hit, kept)) best.set(id, hit);
     }
-    for (const [id, hit] of best) hit.lines = lines.get(id);
+    // 대표를 고른 **다음**에 그 줄만 정밀하게 잰다. 굵은 눈금은 대표를 고르는
+    // 데는 충분하고(줄이 이어지는지만 보면 된다), 순위에 들어갈 값은 정밀해야
+    // 한다. 수백 줄 전부를 정밀하게 재면 탐색이 몇 배 느려진다.
+    for (const [id, hit] of best) {
+      hit.lines = lines.get(id);
+      hit.rough = hit.room;        // 굵은 눈금 값 — 대표를 고른 근거
+      hit.room = trueRoom(hit);
+    }
     return { best, kisses: counters.kisses, how };
   }
 
