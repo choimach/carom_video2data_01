@@ -164,7 +164,27 @@ def tips_of(ball):
 # side on it is measured - 1297 bounces off these tables - and kept as it was;
 # what spin adds is put on top, because the measured curve already contains the
 # widening a rolling ball gets and no model of side will produce that.
-RAIL_FRICTION = 0.18
+# 2026-09-24에 영상에 대고 다시 맞췄다. 프로의 실제 겨냥·강도로 다시 치고,
+# **첫 쿠션 자리로 당점을 맞춘 뒤 둘째 쿠션이 얼마나 빗나가는지** 잰다
+# (`tools/check_after_cushion.js`). 고르기가 빠지므로 물리만 남는다.
+#
+#   쿠션마찰 · 미끄럼남김    2쿠션    3쿠션   2팁 회전이득
+#   0.18 · 0.0 (옛것)      261mm   389mm     13.2도
+#   0.08 · 0.3 (지금)      198mm   233mm      9.8도
+#   영상이 말하는 값                          10.8도
+#
+# 안 본 경기로 잰 값이다 (경기 단위로 반씩 갈랐다). 두 자가 서로 반대로 당기는
+# 구간이 있어 — 마찰을 더 낮추면 쿠션 자리는 더 맞지만 회전 이득이 5.8도까지
+# 떨어진다 — 둘 다 받아들일 만한 자리를 골랐다.
+#
+# 미끄럼 남김은 1.0이 쿠션 자리에는 가장 좋았지만(175mm) 분리각 시험을 깬다 —
+# 1.0은 "공이 쿠션을 완전히 미끄러지며 떠난다"는 뜻이라 물리적으로도 과하다.
+# 0.3이면 3쿠션 이득을 거의 다 가져오면서(233mm) 시험이 통과한다.
+#
+# ⚠️ 셋째 자(사람다운 오차에서의 득점률)는 물리를 바꾸는 비교에 **쓸 수 없다**.
+# 후보 줄들이 옛 물리로 찾은 것이라, 물리가 바뀌면 그 줄이 아예 득점하지 않아
+# 무조건 무너진다. 탐색을 다시 돌린 뒤에야 쓸 수 있다.
+RAIL_FRICTION = 0.08
 # How much side survives the compression. Swept against 20 tracked plays, with
 # the tip position fitted per play: 0.55 lands the cue ball 93 mm from where the
 # camera saw it a second in, against 105 mm at 0.75.
@@ -183,7 +203,7 @@ LITTLE_SPIN = 0.15
 # it made the table eat shots. Refitted against position, cushion count and
 # travel together, every one of them prefers zero: the ball leaves the rail
 # rolling, which is also what the geometry says.
-RAIL_KEEPS_SLIDE = 0.0
+RAIL_KEEPS_SLIDE = 0.3
 REBOUND_IN = np.array([0.0, 6.7, 17.8, 27.2, 38.0, 46.4, 56.0, 66.1, 79.3, 90.0])
 REBOUND_OUT = np.array([0.0, 16.7, 33.7, 41.8, 50.1, 55.4, 63.0, 70.6, 80.1, 90.0])
 REBOUND_SPEED = np.array([0.817, 0.817, 0.844, 0.829, 0.824, 0.818, 0.808, 0.835, 0.912, 0.912])

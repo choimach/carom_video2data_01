@@ -17,6 +17,12 @@ function turn(incidence, strength, side) {
   const shot = SIM.play(layout, cue, [Math.cos(rad) * v, Math.sin(rad) * v], side, 0);
   const cs = shot.events.filter((e) => e.kind === 'cushion');
   if (cs.length < 2) return null;
+  // ⚠️ 공을 먼저 맞았거나 엉뚱한 쿠션이면 읽지 않는다. 이 두 줄이 없어서
+  // 2026-09-24에 "회전이 1팁에서 포화한다"와 "회전이 아예 없다"를 두 번
+  // 잘못 읽었다. 측정틀을 먼저 의심할 것.
+  const balls = shot.events.filter((e) => e.kind === 'ball');
+  if (balls.length && balls[0].at < cs[1].at) return null;
+  if (Math.abs(cs[0].p[1]) > 80) return null;
   const a = layout[cue], b = cs[0].p, c = cs[1].p;
   const inDir = [b[0] - a[0], b[1] - a[1]];
   const outDir = [c[0] - b[0], c[1] - b[1]];
