@@ -1,0 +1,40 @@
+206251655|LIWC2026|[LIWC2026_L32] H.J. KIM vs S. SIDHOM (�ѱ��� �߰�)
+206244355|LIWC2026|[LIWC2026_L32] E. MERCKX vs G. HOFMAN (�ѱ��� �߰�)
+206232633|LIWC2026|[LIWC2026_L32] P.V. BAO vs B. KARAKURT (�ѱ��� �߰�)
+206220585|LIWC2026|[LIWC2026_L32] M. ZANETTI vs J.H. HEO (�ѱ��� �߰�)
+206206473|LIWC2026|[LIWC2026_L32] F. CAUDRON vs W.Y. CHOI (�ѱ��� �߰�)
+206196981|LIWC2026|[LIWC2026_L32] M.W. CHO vs M.J. CHA (�ѱ��� �߰�)
+206154865|LIWC2026|[LIWC2026_Q] H.J. KIM vs N.C. LONG (�ѱ��� �߰�)
+206144479|LIWC2026|[LIWC2026_Q] S. JIMENEZ vs S.Y. PARK (�ѱ��� �߰�)
+206131187|LIWC2026|[LIWC2026_Q] G. SALMAN vs D.H. KIM (�ѱ��� �߰�)
+206119299|LIWC2026|[LIWC2026_Q] J.I. KANG vs J. Maria MAS (�ѱ��� �߰�)
+206107841|LIWC2026|[LIWC2026_Q] Y.S. JEONG vs K. KOKKORIS (�ѱ��� �߰�)
+206068499|LIWC2026|[LIWC2026_PQ] M. RAHMET vs K. PRASSAS (�ѱ��� �߰�)
+206058489|LIWC2026|[LIWC2026_PQ] L. STAMM vs A. SAEIJS (�ѱ��� �߰�)
+206046099|LIWC2026|[LIWC2026_PQ] D. SELEVENTAS vs I. ESEN (�ѱ��� �߰�)
+206030491|LIWC2026|[LIWC2026_PQ] M. PEKER vs Y.S. JEONG (�ѱ��� �߰�)
+206023017|LIWC2026|[LIWC2026_PQ] M. AYMAN vs N. CHRISTOFO.
+205981899|LIWC2026|[LIWC2026_PPQ] F. GUNAYDIN vs S.Y. PARK
+205974791|LIWC2026|[LIWC2026_PPQ] M. MORALES vs N. DURIEZ
+205962123|LIWC2026|[LIWC2026_PPQ] R. GROOT vs D. KRISTIAN.
+205950619|LIWC2026|[LIWC2026_PPQ] C. CRESPO vs A. CERKEZ
+205940149|LIWC2026|[LIWC2026_PPQ] J.H. SON vs H.E. KIM
+205929419|LIWC2026|[LIWC2026_PPQ] F. ORLANDO vs K. PRASSAS
+205888007|LIWC2026|[LIWC2026_PPPQ] A. MATIAKIS vs T. KLOMPEN.
+205883707|LIWC2026|[LIWC2026_PPPQ] B. IBRAIMOV vs K. WITTENS
+205873339|LIWC2026|[LIWC2026_PPPQ] S. FAKHOURY vs T. BOLLANSEE
+205861881|LIWC2026|[LIWC2026_PPPQ] C. YILDIZ vs C. LATORRE
+205850925|LIWC2026|[LIWC2026_PPPQ] A. CERKEZ vs R. BULUT
+205841409|LIWC2026|[LIWC2026_PPPQ] V. FRAZAO vs N. CHRISTOFO.
+205529455|UNKNOWN|���� ��� ������ 7��Ʈ �ϳ�ī��(������) vs �޿½�(�ּ���)[������������ PBA ������ 26-27 2R]
+205529389|UNKNOWN|6��Ʈ �ϳ�ī��(�谡��) vs �޿½�(�輼��)[������������ PBA ������ 26-27 2R]
+205529349|UNKNOWN|5��Ʈ �ϳ�ī��(��Ŭ��) vs �޿½�(����)[������������ PBA ������ 26-27 2R]
+205529325|UNKNOWN|4��Ʈ �ϳ�ī��(������ #�ѽ���) vs �޿½�(������ ������)[������������ PBA ������ 26-27 2R]
+205529315|UNKNOWN|3��Ʈ �ϳ�ī��(Q.���쿺) vs �޿½�(�������)[������������ PBA ������ 26-27 2R]
+205529243|UNKNOWN|2��Ʈ �ϳ�ī��(�谡�� ������) vs �޿½�(�迹�� ���Ѽ�)[������������ PBA ������ 26-27 2R]
+205529199|UNKNOWN|1��Ʈ �ϳ�ī��(��Ŭ�� Q.���쿺) vs �޿½�(������ �ּ���)[������������ PBA ������ 26-27 2R]
+205359611|UNKNOWN|7��Ʈ �극��Ŀ��(�̽���) vs ���̿�����Ʈ(ü��Ʈ)[������������ PBA ������ 26-27 2R]
+205358863|UNKNOWN|6��Ʈ �극��Ŀ��(����) vs ���̿�����Ʈ(�̷̹�)[������������ PBA ������ 26-27 2R]
+205358403|UNKNOWN|5��Ʈ �극��Ŀ��(���׽�) vs ���̿�����Ʈ(�Ӽ���)[������������ PBA ������ 26-27 2R]
+205358145|UNKNOWN|4��Ʈ �극��Ŀ��(������ Ȳ����) vs ���̿�����Ʈ(���溹 ������)[������������ PBA ������ 26-27 2R]
+205358099|UNKNOWN|3��Ʈ �극��Ŀ��(������) vs ���̿�����Ʈ(���ݽ�)[������������ PBA ������ 26-27 2R]
