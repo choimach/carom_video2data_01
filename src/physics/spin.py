@@ -209,6 +209,10 @@ LITTLE_SPIN = 0.15
 # it made the table eat shots. Refitted against position, cushion count and
 # travel together, every one of them prefers zero: the ball leaves the rail
 # rolling, which is also what the geometry says.
+# ⚠️ 0.3은 **물리적 설명이 없는 경험값**이다. 한때 "쿠션 코가 공 중심보다
+# 위에서 닿아 전진 회전을 준다"로 설명했다가 물렀다 (2026-09-25) — 그 효과는
+# 공을 **구르게** 하므로 0에 가까워야 하는데, 영상에 맞춘 값은 반대쪽이다.
+# 설명이 붙기 전까지는 맞춘 값으로만 다룬다. `ref/terms.md`의 "쿠션의 성질".
 RAIL_KEEPS_SLIDE = 0.3
 REBOUND_IN = np.array([0.0, 6.7, 17.8, 27.2, 38.0, 46.4, 56.0, 66.1, 79.3, 90.0])
 REBOUND_OUT = np.array([0.0, 16.7, 33.7, 41.8, 50.1, 55.4, 63.0, 70.6, 80.1, 90.0])
