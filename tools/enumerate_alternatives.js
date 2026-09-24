@@ -123,7 +123,10 @@ function search(layout, cue) {
       shot,
       route, tags, first: judged.first, face,
       thickness: Math.max(0, Math.min(1, 1 - Math.abs(across) / SIM.DIAMETER)),
-      side, up, deg, strength: SIM.strengthOf(speed),
+      // speed까지 들고 간다. 한때 strength만 남겼는데, 나중에 같은 줄을 다시
+      // 치려는 trueRoom()이 hit.speed를 찾다가 undefined를 받아 **여유가 전부
+      // 0으로** 나왔다 — 여섯 시간짜리 열거를 한 번 통째로 버렸다.
+      side, up, deg, speed, strength: SIM.strengthOf(speed),
       rails: judged.rails.length, pushed,
     });
     return true;
@@ -277,7 +280,7 @@ function main() {
     && ORDER.every((c) => r.layout_mm[c]));
   console.log(`대상 ${usable.length}개 (배치·유형·면이 다 있는 플레이)\n`);
 
-  let counted = 0, began = Date.now();
+  let counted = 0, zeroed = 0, began = Date.now();
   for (const row of usable) {
     const id = `${row.match}:${row.inning}:${row.shot}`;
     if (done.has(id)) continue;
@@ -303,6 +306,15 @@ function main() {
           ? Math.round(SIM.strengthOf(row.speed_ms * 1000) * 10) / 10 : null,
       },
     };
+    // 첫 열 판이 전부 여유 0이면 무엇인가 망가진 것이다. 여섯 시간을 돌리고
+    // 나서 알아차리지 않도록 여기서 멈춘다 — 실제로 한 번 그렇게 버렸다.
+    if (counted < 10 && buckets.length && buckets.every((b) => b.room === 0)) {
+      zeroed++;
+      if (zeroed >= 10) {
+        console.error('\n열 판 내리 여유가 전부 0입니다. 재 보고 고친 뒤 다시 돌리세요.');
+        process.exit(1);
+      }
+    }
     if (!only) fs.appendFileSync(out, JSON.stringify(record) + '\n');
     else console.log(`  ${record.reached ? '찾음 ' : '놓침 '} ${record.chose}  갈래 ${record.found.length}개`);
     counted++;
