@@ -139,7 +139,7 @@ def main(argv=None):
     # events가 프레임으로 들고 있다). 그것을 여기서 옮겨 적지 않으면, 읽는 쪽은
     # 32점으로 솎인 길에서 쿠션 자리를 되짚어야 하고 대개 놓친다.
     # 선수가 정한 궤적 안의 차례 (2026-09-21)에서 2번과 5번이 바로 이 값이다.
-    events = {}
+    events, spin = {}, {}
     for name in sorted(glob.glob(os.path.join(ROOT, "data", "dataset", "*.json"))):
         if name.endswith("index.json"):
             continue
@@ -149,8 +149,13 @@ def main(argv=None):
         except (json.JSONDecodeError, OSError):
             continue
         for play in (body["plays"] if isinstance(body, dict) and "plays" in body else body):
-            events[(match, play.get("inning"), play.get("shot_number"))] = \
-                play.get("events") or []
+            at = (match, play.get("inning"), play.get("shot_number"))
+            events[at] = play.get("events") or []
+            # 첫 쿠션에서 거울 반사로부터 몇 도 틀어졌나. 회전이 얼마나 걸렸는지를
+            # 재는 유일한 값이고, 반사 표를 **회전이 적은 것만 골라** 다시 재려면
+            # 이것이 있어야 한다 (2026-09-25). 부호는 거울 뒤집기에서 바뀌지만
+            # 쓰는 쪽은 크기만 보므로 그대로 옮긴다.
+            spin[at] = play.get("spin_x")
 
     plays, missing = [], 0
     for row, point in zip(rows, scaled):
@@ -211,6 +216,13 @@ def main(argv=None):
             "thick": (None if row.get("thickness") is None
                       else round(float(row["thickness"]), 3)),
             "match": row["match"].replace("soop_", ""),
+            # 판을 경기별 JSON과 다시 이을 수 있게 남긴다. 이것이 없어서
+            # 2026-09-25에 "회전이 적은 것만 골라 반사 표를 재기"가 막혔다.
+            "inning": row["inning"],
+            "shot": row["shot"],
+            # 첫 쿠션의 거울 대비 틀어짐(도). 크기만 쓴다.
+            "spin": (None if spin.get((row["match"], row["inning"], row["shot"])) is None
+                     else round(abs(float(spin[(row["match"], row["inning"], row["shot"])])), 2)),
         })
 
     out = {"mean": [round(float(v), 4) for v in middle],
