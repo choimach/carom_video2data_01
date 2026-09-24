@@ -54,6 +54,41 @@ def opening(path):
     return round(degrees, 1), round(travelled * 15.0)
 
 
+def curve_depth(turned, hit, first_rail):
+    """1적구 충돌에서 1쿠션까지, 수구가 직선에서 얼마나 벗어났나 (mm).
+
+    **상하 당점에 가장 민감한 관측이다.** 시뮬레이터로 재 보면 좌우 당점을
+    −3팁에서 +3팁까지 바꿔도 이 깊이는 5 mm밖에 안 움직이는데, 상하 당점을
+    같은 폭으로 바꾸면 **236 mm** 움직인다 (2026-09-25). 천 위에서 공을 휘게
+    하는 것은 좌우 회전이 아니라 **충돌 뒤 미끄럼이 구름으로 바뀌는 과정**이고,
+    그것을 정하는 것이 상하 당점이기 때문이다.
+
+    ⚠️ 솎기 전의 원본 경로에서 잰다. 32점으로 솎은 경로에는 이 구간에 점이
+    네 개뿐이라 곡선이 잡히지 않는다.
+
+    ⚠️ 깊이는 |당점|만 준다 — U자라서 끌어치기와 밀어치기가 둘 다 휜다.
+    부호는 `rise`(분리각)가 주는데 그쪽은 약하다. 둘을 같이 써야 한다.
+    """
+    if hit is None or first_rail is None:
+        return None
+    way = np.asarray([p for p in turned if np.isfinite(p).all()], dtype=float)
+    if len(way) < 8:
+        return None
+    start = int(np.argmin(np.linalg.norm(way - np.asarray(hit, float), axis=1)))
+    stop = int(np.argmin(np.linalg.norm(way - np.asarray(first_rail, float), axis=1)))
+    if stop - start < 5:
+        return None
+    seg = way[start:stop + 1]
+    span = seg[-1] - seg[0]
+    length = float(np.hypot(*span))
+    if length < 200:
+        return None
+    unit = span / length
+    rel = seg - seg[0]
+    off = np.abs(rel[:, 0] * unit[1] - rel[:, 1] * unit[0])
+    return [int(round(float(off.max()))), int(round(length))]
+
+
 def thin(path):
     seen = [p for p in path if np.isfinite(p).all()]
     if len(seen) <= POINTS:
@@ -211,6 +246,10 @@ def main(argv=None):
             # 돌려 두었으므로, 프레임 번호로 그 위에서 집어내면 된다.
             "rails": rail_points(original, marks, flip_x, flip_y),
             "hit": ball_point(original, marks, flip_x, flip_y),
+            # 충돌→1쿠션 구간의 곡선 깊이와 그 구간 길이 [깊이, 길이] (mm).
+            # 상하 당점에 대한 가장 강한 관측이다 — curve_depth()의 설명 참조.
+            "curve": curve_depth(turned, ball_point(original, marks, flip_x, flip_y),
+                                 (rail_points(original, marks, flip_x, flip_y) or [None])[0]),
             "aim": opening(turned)[0],
             "speed": opening(turned)[1],
             # 두께는 절반쯤의 플레이에만 있다 (적구가 떠나는 각을 읽을 만큼
