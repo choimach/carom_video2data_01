@@ -139,7 +139,7 @@ def main(argv=None):
     # events가 프레임으로 들고 있다). 그것을 여기서 옮겨 적지 않으면, 읽는 쪽은
     # 32점으로 솎인 길에서 쿠션 자리를 되짚어야 하고 대개 놓친다.
     # 선수가 정한 궤적 안의 차례 (2026-09-21)에서 2번과 5번이 바로 이 값이다.
-    events, spin = {}, {}
+    events, spin, rise = {}, {}, {}
     for name in sorted(glob.glob(os.path.join(ROOT, "data", "dataset", "*.json"))):
         if name.endswith("index.json"):
             continue
@@ -156,6 +156,10 @@ def main(argv=None):
             # 이것이 있어야 한다 (2026-09-25). 부호는 거울 뒤집기에서 바뀌지만
             # 쓰는 쪽은 크기만 보므로 그대로 옮긴다.
             spin[at] = play.get("spin_x")
+            # 밀어치기/끌어치기. 파이프라인이 재 놓고도 아무 데도 안 쓰던 값이고
+            # (`follow_draw`의 주석: UNVALIDATED), ④ 당점에 대한 영상의 유일한
+            # 증거다. 2026-09-25에 실어 나르기 시작했다.
+            rise[at] = play.get("spin_y")
 
     plays, missing = [], 0
     for row, point in zip(rows, scaled):
@@ -223,6 +227,10 @@ def main(argv=None):
             # 첫 쿠션의 거울 대비 틀어짐(도). 크기만 쓴다.
             "spin": (None if spin.get((row["match"], row["inning"], row["shot"])) is None
                      else round(abs(float(spin[(row["match"], row["inning"], row["shot"])])), 2)),
+            # 밀어치기(+) / 끌어치기(−). 거울 뒤집기는 위아래를 바꾸지 않으므로
+            # 부호를 그대로 옮긴다.
+            "rise": (None if rise.get((row["match"], row["inning"], row["shot"])) is None
+                     else round(float(rise[(row["match"], row["inning"], row["shot"])]), 3)),
         })
 
     out = {"mean": [round(float(v), 4) for v in middle],
