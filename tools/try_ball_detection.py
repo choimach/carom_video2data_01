@@ -62,7 +62,7 @@ def run(name, frames=240):
         print(f"  {name[:34]:<34}  프레임을 못 읽음")
         return
     bar = "".join(f"{got[c] / seen:>6.0%}" for c in BALLS)
-    learned = "팔레트O" if detector._palette else "팔레트X"
+    learned = "팔레트O" if getattr(detector, "_palette", None) else "팔레트X"
     print(f"  {name[:34]:<34}{bar}{three / seen:>7.0%}   {learned}  ({seen}장)")
 
 

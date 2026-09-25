@@ -40,7 +40,6 @@ palette exists and for frames showing fewer than three balls; it is the only
 place absolute numbers survive.
 """
 
-import itertools
 import math
 
 import cv2
@@ -82,6 +81,21 @@ CLOTH_CHROMA_GAP = 20.0
 # Frames of three clean candidates to learn the palette from. Thirty is about
 # half a second of play and every match reaches it in the first rally.
 PALETTE_FRAMES = 30
+# Lightness says whether a pixel is a ball at all; it must not say *which*
+# ball. Both halves of that are measured, on soop_206317783_LIWC2026:
+#
+#   ignoring lightness      white 90%  yellow 99%  red 100%   <- greys join white
+#   weighting it 0.5 in     white 98%  yellow 96%  red  92%   <- shadows change colour
+#
+# The white ball is nearly neutral, so without lightness every dark grey on the
+# table - a shadow, the cue shaft, a sleeve - is "nearest to white" and swells
+# the blob past the area test. But fold lightness into the same distance and a
+# ball crossing a shadow stops being that ball.
+#
+# So the colour is chosen on chromaticity alone, and lightness is a separate
+# gate: a pixel must be within this of the lightness that colour was learned
+# at. Wide enough for a shadow (about 50), far short of a sleeve (130-190).
+LIGHTNESS_TOLERANCE = 80.0
 
 
 class BallDetector:
@@ -98,7 +112,7 @@ class BallDetector:
         self._roi = None  # (x, y, w, h) bounding box of the table within the frame
         self._frame_shape = None
         self._cloth_mask = None  # pulled further in, for measuring the cloth
-        self._palette = None  # {colour: (a, b)} once learned
+        self._palette = None  # {colour: (a, b, L)} once learned
         self._samples = []  # (colour, a, b) triples while learning
 
     def _prepare(self, frame):
@@ -265,31 +279,51 @@ class BallDetector:
         rest = sorted((c for c in three if c is not white), key=lambda c: c["angle"])
         return {"white": white, "red": rest[0], "yellow": rest[1]}
 
-    def _name_by_palette(self, candidates):
-        """Match blobs to the learned palette, one colour to one blob."""
+    def _by_palette(self, lab, cloth):
+        """One mask per learned colour, then the best ball in each.
+
+        ⚠️ The first version of this pooled every non-cloth pixel into one mask
+        and named whatever blobs came out. That works where the detector was
+        broken - barely a ball is found, so nothing touches - and **costs 29
+        points where it was working**: on a healthy broadcast two balls close
+        together, or a ball against the cue shaft, merge into one blob that
+        then fails the area and aspect tests. Measured on
+        soop_206317783_LIWC2026, the same 240 frames: 99% -> 70%, and the
+        colour tests rejected nothing. It was never a colour problem.
+
+        Splitting by colour first is what the old hardcoded version did, and it
+        is why it held up. The only thing that changes here is where the
+        colours come from.
+        """
+        light = lab[:, :, 0].astype(np.float32)
+        chroma = lab[:, :, 1:].astype(np.float32) - 128.0
+        far = np.linalg.norm(lab.astype(np.float32) - cloth, axis=2) > CLOTH_GAP
         names = list(self._palette)
-        best, best_cost = None, None
-        for chosen in itertools.permutations(range(len(candidates)), min(len(names), len(candidates))):
-            for subset in itertools.permutations(names, len(chosen)):
-                cost = sum(
-                    math.hypot(candidates[i]["a"] - self._palette[name][0],
-                               candidates[i]["b"] - self._palette[name][1])
-                    for i, name in zip(chosen, subset)
-                )
-                if best_cost is None or cost < best_cost:
-                    best_cost = cost
-                    best = {name: candidates[i] for i, name in zip(chosen, subset)}
-        return best or {}
+        gaps = np.stack([
+            np.linalg.norm(chroma - np.array(self._palette[name][:2], np.float32), axis=2)
+            for name in names
+        ])
+        nearest = np.argmin(gaps, axis=0)
+        out = {}
+        for index, name in enumerate(names):
+            lit = np.abs(light - self._palette[name][2]) < LIGHTNESS_TOLERANCE
+            mask = ((nearest == index) & far & lit).astype(np.uint8) * 255
+            blob = self._best_blob(mask)
+            if blob is None:
+                continue
+            cx, cy, radius, solidity = blob
+            out[name] = {"px": (cx, cy), "radius_px": radius, "solidity": solidity}
+        return out
 
     def _learn(self, named):
         """Remember one frame's colours; freeze the palette once there are enough."""
         for colour, blob in named.items():
-            self._samples.append((colour, blob["a"], blob["b"]))
+            self._samples.append((colour, blob["a"], blob["b"], blob["L"]))
         if len(self._samples) < PALETTE_FRAMES * 3:
             return
         palette = {}
         for colour in ("red", "yellow", "white"):
-            got = [(a, b) for name, a, b in self._samples if name == colour]
+            got = [(a, b, L) for name, a, b, L in self._samples if name == colour]
             if len(got) < PALETTE_FRAMES // 2:
                 self._samples = []  # too ragged to trust; start the count over
                 return
@@ -314,15 +348,17 @@ class BallDetector:
         lab = cv2.cvtColor(crop, cv2.COLOR_BGR2LAB)
         cloth = self._cloth_colour(lab)
         if cloth is not None:
-            found = self._candidates(lab, cloth)
             if self._palette is not None:
-                named = self._name_by_palette(found)
-            elif len(found) >= 3:
-                # More than three means something else on the cloth passed the
-                # shape tests; the three that look most like balls are the balls.
-                three = sorted(found, key=lambda c: -c["score"])[:3]
-                named = self._name_by_order(three)
-                self._learn(named)
+                named = self._by_palette(lab, cloth)
+            else:
+                # Learning. Only frames showing three clean, separate blobs
+                # teach the palette - which is most of them, and the ones where
+                # balls touch would teach the wrong colour anyway.
+                found = self._candidates(lab, cloth)
+                if len(found) >= 3:
+                    three = sorted(found, key=lambda c: -c["score"])[:3]
+                    named = self._name_by_order(three)
+                    self._learn(named)
 
         if not named:
             # Before the palette exists, and on frames showing fewer than three
