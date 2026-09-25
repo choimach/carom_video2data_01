@@ -48,7 +48,26 @@ def _draw_diamond(img, x, y, half=7):
     cv2.fillPoly(img, [pts], DIAMOND_BGR)
 
 
-def render_table(balls_mm=None, hide_rails=()):
+# Ball colours measured off two real broadcasts on 2026-09-25, from the eight
+# matches where the detector found 570 plays and one usable one. Both sets are
+# outside the absolute HSV windows the detector used to rely on:
+#
+#   T3WC yellow is H14 (window 18-32) and its white is S101 (ceiling 60)
+#   AKR  red is S85 (floor 110) and its yellow S53 (floor 120)
+#
+# which is exactly the pattern the scans showed - T3WC found only red, AKR only
+# white. Rendering with them keeps that failure from coming back.
+PRODUCTIONS = {
+    # a dark broadcast with an orange yellow and a cream white
+    "T3WC2026": {"red": (39, 40, 157), "yellow": (16, 105, 206),
+                 "white": (124, 203, 205)},
+    # a pale broadcast whose yellow is nearly white and whose white is neutral
+    "AKR2025": {"red": (142, 124, 186), "yellow": (185, 228, 234),
+                "white": (255, 253, 246)},
+}
+
+
+def render_table(balls_mm=None, hide_rails=(), palette=None):
     """Render an overhead table. balls_mm maps colour -> (x, y) in table mm."""
     img = np.full((1080, 1920, 3), FLOOR_BGR, np.uint8)
     x0, y0, w, h = _nose_rect()
@@ -84,7 +103,7 @@ def render_table(balls_mm=None, hide_rails=()):
     for colour, (mx, my) in (balls_mm or {}).items():
         px, py = _to_px(mx, my)
         cv2.circle(img, (int(round(px)), int(round(py))), int(round(61.5 / MM_PER_PX / 2)),
-                   BALL_BGR[colour], -1)
+                   (palette or BALL_BGR)[colour], -1)
     return img
 
 
@@ -397,3 +416,31 @@ def test_rail_offset_survives_a_half_hidden_opposite_rail():
     # And what matters downstream: the same pixel lands in the same place.
     middle = _to_px(TABLE_LENGTH_MM / 2, TABLE_WIDTH_MM / 2)
     assert np.allclose(calibration.to_table(middle), full.to_table(middle), atol=10.0)
+
+
+@pytest.mark.parametrize("production", sorted(PRODUCTIONS))
+def test_detector_names_balls_from_broadcasts_that_broke_it(calibration, production):
+    """The two productions whose colours no absolute window can separate.
+
+    T3WC's white sits where AKR's yellow sits (+104 vs +101 degrees in Lab), so
+    this passes only because the balls are named by their order within the
+    frame rather than by fixed thresholds.
+    """
+    frame = render_table(BALLS, palette=PRODUCTIONS[production])
+    detections = BallDetector(calibration).detect(frame)
+    assert set(detections) == {"red", "yellow", "white"}, production
+    for colour, (mx, my) in BALLS.items():
+        got = detections[colour]["mm"]
+        assert np.allclose(got, (mx, my), atol=12.0), f"{production} {colour}: {got}"
+
+
+def test_a_nearly_grey_ball_is_not_mistaken_for_the_cloth(calibration):
+    """A neutral ball has no hue direction, so it must not be judged by one.
+
+    The first fix threw AKR's white ball away for pointing 26 degrees from the
+    cloth - meaningless at chroma 2 - and 43 good frames became 6. The test the
+    detector settled on is distance in (a, b), which a grey ball passes easily.
+    """
+    grey = dict(PRODUCTIONS["AKR2025"], white=(250, 250, 250))
+    detections = BallDetector(calibration).detect(render_table(BALLS, palette=grey))
+    assert "white" in detections
