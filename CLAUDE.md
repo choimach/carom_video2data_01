@@ -64,6 +64,7 @@ bash tools/state.sh        # 돌고 있는 것 · 단계별 개수 · 채점표 
 | 가상 테이블에서 준 판단 | `data/table_feedback.json` |
 | 몇 판이 필요한가 | `tools/learning_curve.py` — 추정표와 실측 |
 | 왜 이웃 찾기가 막혔나 | `HANDOFF.md`의 "차원의 문제였다" — **자료도 특징도 답이 아니다** |
+| 남들은 어떻게 풀었나 | `ref/prior_art.md` — 당구 쪽엔 선례가 없다. **체스 국면 검색**이 우리 자리를 지나갔다 |
 
 ★**내가 만든 서랍에 없다고 "기록에 없다"고 말하지 말 것.** 대화 원본이
 `~/.claude/projects/-mnt-d-Data-Billiard-carom-video2data-01/*.jsonl`에 남아 있다.
