@@ -116,14 +116,15 @@ def main():
 # 많을수록 잘 들어간다"를 배운다 — 실제로 쿠션 수의 AUC가 0.454로 뒤집혀 나온다.
 OUTCOME_IN_NAME = ("대회전", "되돌아오기", "횡단")
 
-AXES = ("여유", "rough", "줄수", "두께", "강도", "쿠션수", "회전",
-        "이웃득점률", "이웃프로수")
+# ★조언판이 후보마다 실제로 가진 값만 쓴다 (`choice.js`의 features 참고).
+# 열거기에만 있는 `rough`는 뺐다 — 무게가 둘째로 컸지만(−0.18), 조언판에서
+# 계산할 수 없는 값으로 맞추면 파일과 화면이 조용히 어긋난다.
+AXES = ("여유", "줄수", "두께", "강도", "쿠션수", "회전", "이웃득점률", "이웃프로수")
 
 
 def features(branch):
     return np.array([
         math.log1p(branch.get("room") or 0.0),
-        math.log1p(branch.get("rough") or 0.0),
         math.log1p(branch.get("lines") or 0.0),
         float(branch.get("thickness") or 0.0),
         float(branch.get("strength") or 0.0) / 10.0,
@@ -185,6 +186,22 @@ def fit_model():
     print("\n  맞춘 확률의 퍼짐: "
           f"10% {np.percentile(guess,10):.0%} · 50% {np.percentile(guess,50):.0%}"
           f" · 90% {np.percentile(guess,90):.0%}")
+
+    out = os.path.join(ROOT, "data", "probability_weights.json")
+    json.dump({
+        "note": "들어갔는가를 맞춘 무게. tools/score_probability.py가 만든다. "
+                "표준화한 축에 대한 값이라 mean/spread도 같이 쓴다. "
+                "손으로 베끼지 말 것 — build_assistant.py가 넣는다.",
+        "names": list(AXES),
+        "mean": [float(v) for v in mean],
+        "spread": [float(v) for v in spread],
+        "weights": [round(float(v), 4) for v in w[:-1]],
+        "bias": round(float(w[-1]), 4),
+        "auc": round(float(auc(guess, y > 0.5)), 4),
+        "plays": int(len(y)),
+        "scored": round(float(y.mean()), 4),
+    }, open(out, "w", encoding="utf-8"), ensure_ascii=False, indent=1)
+    print(f"\n  → {os.path.relpath(out, ROOT)}")
 
 
 if __name__ == "__main__":

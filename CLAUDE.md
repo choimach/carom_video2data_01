@@ -156,6 +156,7 @@ url정보만 남기고 지우면 된다."*
 | `src/physics/strength.py` 표 | `sim.js`의 `STRENGTH` | `tests/test_strength.py` |
 | `src/physics/route.py` | `route.js` | `tests/test_route_js.py` |
 | `tools/learn_choices.py`의 `features()` | `choice.js` | `tests/test_choice_js.py` |
+| `tools/score_probability.py`의 `features()` | `assistant.html`의 `chanceOf()` | `tests/test_chance_js.py` |
 
 **물리 상수를 고치면 강도 표를 다시 재야 한다** (`strength.measure()`). 같은
 이름이 다른 세기를 가리키게 된다.

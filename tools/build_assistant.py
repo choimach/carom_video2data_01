@@ -27,6 +27,9 @@ PLACEHOLDER = "__DATA__"
 # 돌리고도 화면이 그대로인 채로 "좋아졌다"고 말하게 된다.
 WEIGHTS_MARK = "__WEIGHTS__"
 WEIGHTS_FILE = ROOT / "data" / "choice_weights.json"
+# 같은 이유로 득점 확률의 무게도 베끼지 않는다 (tools/score_probability.py).
+CHANCE_MARK = "__CHANCE__"
+CHANCE_FILE = ROOT / "data" / "probability_weights.json"
 
 
 def build(data_path, out_dir):
@@ -42,6 +45,16 @@ def build(data_path, out_dir):
         template = template.replace(WEIGHTS_MARK, json.dumps(learned["weights"]))
         print(f"배운 가중치 {len(learned['weights'])}개 "
               f"({learned.get('rounds', '?')}판으로 맞춘 것)")
+
+    if CHANCE_MARK in template:
+        if not CHANCE_FILE.exists():
+            raise SystemExit(f"{CHANCE_FILE}가 없습니다 — tools/score_probability.py를 먼저 돌리세요")
+        chance = json.loads(CHANCE_FILE.read_text(encoding="utf-8"))
+        template = template.replace(CHANCE_MARK, json.dumps(
+            {k: chance[k] for k in ("names", "mean", "spread", "weights", "bias",
+                                    "auc", "plays", "scored")}))
+        print(f"득점 확률 가중치 {len(chance['weights'])}개 "
+              f"(AUC {chance.get('auc')}, {chance.get('plays')}판)")
 
     out_dir.mkdir(parents=True, exist_ok=True)
     page = out_dir / "carom_assistant.html"
