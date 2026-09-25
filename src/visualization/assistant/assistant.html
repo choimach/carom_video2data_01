@@ -99,6 +99,8 @@
   .choice .say button { padding: 3px 9px; font-size: 11.5px; border-radius: 6px; }
   .choice .say button[data-say="good"][aria-pressed="true"] {
     background: var(--good); border-color: var(--good); color: #fff; }
+  .choice .say button[data-say="thin"][aria-pressed="true"] {
+    background: var(--faint); border-color: var(--faint); color: var(--surface); }
   .choice .say button[data-say="bad"][aria-pressed="true"] {
     background: var(--warn); border-color: var(--warn); color: #fff; }
   .choice .thin { color: var(--warn); }
@@ -1442,7 +1444,11 @@
       // 화면에 안 들어가고, 보지도 않은 후보에 표를 누르게 된다.
       const say = document.createElement("span");
       say.className = "say";
-      for (const [kind, text] of [["good", "맞다"], ["bad", "아니다"]]) {
+      // 가운데 칸이 필요하다. 2026-09-25에 선수가 두 번 같은 말을 적었다 —
+      // "ok. 하지만 가능성 낮음", "ok. 3번의 가능성은 아주낮음". **가능은 하지만
+      // 프로가 고를 리 없다**는 것은 맞다도 아니다도 아니고, 순위에 대한 말이라
+      // 오히려 ①번에 가장 쓸모 있는 신호다. 둘로만 받으면 그 말이 버려진다.
+      for (const [kind, text] of [["good", "맞다"], ["thin", "낮음"], ["bad", "아니다"]]) {
         const mark = document.createElement("button");
         mark.type = "button";
         mark.dataset.say = kind;
@@ -1727,7 +1733,8 @@
       lines.push("", "판단:");
       result.routes.forEach((row, index) => {
         if (!verdicts[row.key]) return;
-        lines.push(`  ${index + 1}. ${label(row)} — ${verdicts[row.key] === "good" ? "맞다" : "아니다"}`);
+        const said = { good: "맞다", thin: "가능하지만 프로가 고를 리 없다", bad: "아니다" };
+        lines.push(`  ${index + 1}. ${label(row)} — ${said[verdicts[row.key]] || "아니다"}`);
       });
     }
     if (played) {
