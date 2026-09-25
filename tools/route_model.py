@@ -88,6 +88,56 @@ def player_features(row):
     ], dtype=float)
 
 
+def polar_features(row):
+    """같은 배치를 겹침 없이 여섯 개로 — 극좌표.
+
+    2026-09-25에 `player_features`의 열두 축을 재 보니 여섯 개가 **나머지에서
+    그대로 계산된다** (차이 0.000):
+
+      축 3 (적구 사이 거리)  = 축 1·2·5·6에서 코사인법칙
+      축 4 (벌어진 각)       = 축 6 − 축 5
+      축 9~12 (적구의 쿠션거리) = 수구 자리 + 각 공의 거리·방향
+
+    배치는 공 셋 × 좌표 둘 = **여섯 자유도**뿐이고, 캐노니컬로 뒤집기를 없앴으니
+    딱 여섯이다. 중복은 이웃 거리에서 **같은 사실을 두 번 세게** 만든다 —
+    표준화하고 유클리드 거리를 재면 그 방향의 무게가 말없이 2배가 된다.
+
+    ⚠️ PCA로는 안 보인다 (95%에 10개가 필요하다고 나온다). 중복이 코사인법칙
+    이라 비선형이고 PCA는 선형 구조만 본다. 그래서 여태 드러나지 않았다.
+
+    ⚠️⚠️ **그런데 이것을 쓰면 순위가 나빠진다. 쓰지 않는다.**
+    (`tools/test_polar_features.py`, 2026-09-25, 프로 2,095판 · 경기 단위 10겹)
+
+        열두 축 (지금)     1등 33.7% · 3등 안 60.6%
+        극좌표 여섯 축      1등 31.8% · 3등 안 57.7%
+        올린 판 471 · 내린 판 667 · 5.8 표준편차 → 열두 축이 낫다
+
+    이웃은 **가까워진다** (아무 두 판 대비 최근접 거리 0.230 → 0.167). 그런데
+    순위는 나빠진다. **"중복"이 곧 가중치였고, 그 가중치가 옳았다** — 적구가
+    벌어진 정도와 공이 쿠션에 붙은 정도를 두 번 세는 것이, 수구의 절대 좌표와
+    같은 무게로 한 번씩 세는 것보다 낫다. 선수가 실제로 보는 것이 그쪽이다.
+
+    2026-09-23의 NCA와 같은 결론이다: **이웃을 가깝게 만드는 것과 좋은 답을
+    내는 것은 다른 일이다.** 남겨 두는 것은 다시 이 생각을 할 사람을 위해서다.
+    """
+    cue = np.array(row["layout_mm"][row["cue"]], dtype=float)
+    others = [np.array(xy, dtype=float)
+              for colour, xy in row["layout_mm"].items() if colour != row["cue"]]
+    near, far = sorted(others, key=lambda xy: float(np.linalg.norm(xy - cue)))
+    to_near, to_far = near - cue, far - cue
+    heading = np.degrees(np.arctan2(to_near[1], to_near[0]))
+    opening = np.degrees(np.arctan2(
+        to_near[0] * to_far[1] - to_near[1] * to_far[0],
+        float(np.dot(to_near, to_far))))
+    return np.array([
+        # 수구가 어디 서 있나 (캐노니컬이라 가까운 쿠션까지의 거리가 곧 자리다)
+        min(cue[0], TABLE_LENGTH_MM - cue[0]), min(cue[1], TABLE_WIDTH_MM - cue[1]),
+        # 두 적구를 수구에서 본 극좌표
+        float(np.linalg.norm(to_near)), heading,
+        float(np.linalg.norm(to_far)), opening,
+    ], dtype=float)
+
+
 def scaled(rows, builder):
     """Features, each standardised on the training set's own spread."""
     table = np.array([builder(r) for r in rows])
