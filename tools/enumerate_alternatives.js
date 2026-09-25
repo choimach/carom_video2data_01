@@ -260,9 +260,16 @@ function main() {
   // 고치려는 유형만 따로 재 볼 때 쓴다. 전체를 돌리며 기다리면 그 유형이
   // 표본에 몇 개 안 들어와서 무엇이 나아졌는지 보이지 않는다.
   const only = args.includes('--route') ? args[args.indexOf('--route') + 1] : null;
+  // 16코어인데 한 코어만 쓰고 여섯 시간을 기다린 적이 있다 (2026-09-25).
+  // `--shard i/n`이면 n분의 1만 맡고, 자기 몫을 `alternatives.partI.jsonl`에
+  // 적는다. `tools/enumerate_all.sh`가 코어 수만큼 띄우고 합친다.
+  const shardArg = args.includes('--shard') ? args[args.indexOf('--shard') + 1] : null;
+  const shard = shardArg ? shardArg.split('/').map(Number) : null;
   const model = JSON.parse(fs.readFileSync(path.join(ROOT, 'data', 'model.json'), 'utf8'));
   const rows = Array.isArray(model) ? model : (model.plays || model.rows);
-  const out = path.join(ROOT, 'data', 'alternatives.jsonl');
+  const out = shard
+    ? path.join(ROOT, 'data', `alternatives.part${shard[0]}.jsonl`)
+    : path.join(ROOT, 'data', 'alternatives.jsonl');
 
   const done = new Set();
   // 유형만 재 볼 때는 장부에 쓰지 않으므로, 이미 한 것도 다시 본다.
@@ -278,10 +285,14 @@ function main() {
     .filter((r) => r.route && r.first_object_ball
     && r.struck_side !== null && r.struck_side !== undefined && r.layout_mm
     && ORDER.every((c) => r.layout_mm[c]));
-  console.log(`대상 ${usable.length}개 (배치·유형·면이 다 있는 플레이)\n`);
+  console.log(`대상 ${usable.length}개 (배치·유형·면이 다 있는 플레이)`
+    + (shard ? ` · 이 조각은 ${shard[0]}/${shard[1]}` : '') + '\n');
 
   let counted = 0, zeroed = 0, began = Date.now();
+  let seat = -1;
   for (const row of usable) {
+    seat++;
+    if (shard && seat % shard[1] !== shard[0]) continue;
     const id = `${row.match}:${row.inning}:${row.shot}`;
     if (done.has(id)) continue;
     if (counted >= limit) break;
