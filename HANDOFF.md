@@ -165,6 +165,24 @@ six-second segments that can be fetched one at a time."* 스크리닝은 조각�
 
 ## 지금 돌고 있는 것
 
+**정상 경기 하나를 받는 중** — `soop_206317783_LIWC2026` (8.84 GB), 로그는
+`scratchpad/dl.log`. **검증용이다.** 공 검출기를 상대 방식으로 갈아엎었는데
+(`cd263fd`), 망가졌던 경기 셋에서만 확인했고 **멀쩡하던 46경기가 나빠지지
+않았는지는 확인 못 했다 — 그 영상들을 지웠기 때문이다.**
+
+이 경기는 고치기 전 **셋 다 99%**였다. 받으면:
+
+```bash
+~/.venvs/carom/bin/python tools/try_ball_detection.py soop_206317783_LIWC2026
+```
+
+* 95% 이상이면 회귀 없음 → 죽은 8경기 중 지워진 5개를 회수한다 (~50 GB)
+* 떨어지면 **되돌리고** 왜 떨어졌는지 먼저 잰다. 46경기를 걸고 할 도박이 아니다
+
+끝나면 이 절을 지우고 영상도 지운다 (`retire_videos.py --delete`).
+
+
+
 **새 후보 스크리닝** — `data/_screen_run.log`. catalogue에 경기 영상 후보가
 3,363개 남아 있다. 끝나면 `bash tools/keep_up.sh` → `retire_videos.py --delete`.
 
