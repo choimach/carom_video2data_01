@@ -138,6 +138,54 @@ def polar_features(row):
     ], dtype=float)
 
 
+def corner_features(row):
+    """공 셋을 삼각형으로 보고, 그 중심에서 가장 가까운 **코너**까지를 잰다.
+
+    선수의 발상 (2026-09-25): *"세개의 공을 삼각형으로 나타내고 그중 삼각형의
+    중심과 제일 가까운 코너를 찾아 그 코너로부터 중심까지 거리를 정하면 변수를
+    많이 줄일수있지 않을까?"*
+
+    줄이기는 아니다 (배치는 여섯 자유도이고 `polar_features`의 실패가 그
+    이야기다). 새로운 것은 **코너**다 — 열두 축은 각 공에서 가까운 장쿠션과
+    단쿠션까지를 따로 재고, 코너는 한 번도 보지 않는다. 캐롬에서 코너는 실제로
+    특별하다 (되돌아오기는 전부 코너 샷이었다). 그래서 **더하는** 실험으로 쟀다.
+
+    ⚠️ **가릴 수 없다. 넣지 않는다.**
+    (`tools/test_corner_features.py`, 2026-09-25, 프로 2,095판 · 경기 단위 10겹)
+
+        열두 축 (지금)      1등 33.7% · 3등 안 60.6% · 자리 중앙값 2.0
+        코너 넷을 더해서     1등 32.8% · 3등 안 59.3% · 자리 중앙값 2.0
+        코너 넷만           1등 29.8% · 3등 안 55.5% · 자리 중앙값 3.0
+
+        올린 판 386 · 내린 판 399 · 0.5 표준편차 → 가릴 수 없다
+
+    두 가지를 배웠다. ① 코너까지의 거리는 열두 축에 **이미 들어 있다** — 각
+    공의 장·단 쿠션 거리 넷이면 코너까지가 피타고라스로 나온다. 비선형이라
+    새 축처럼 보였을 뿐이다. ② 그래도 **넷만으로 29.8%가 나온다** (열두 축이
+    33.7%). 삼각형 하나가 배치의 많은 부분을 담는다는 뜻이고, 선생님 직관은
+    그 점에서 옳았다. 다만 나머지 4점이 순위에서는 크다.
+
+    측정되지 않은 이득에 복잡도를 남기지 않는다. 남겨 두는 것은 다시 이 생각을
+    할 사람을 위해서다.
+    """
+    cue = np.array(row["layout_mm"][row["cue"]], dtype=float)
+    others = [np.array(xy, dtype=float)
+              for colour, xy in row["layout_mm"].items() if colour != row["cue"]]
+    near, far = sorted(others, key=lambda xy: float(np.linalg.norm(xy - cue)))
+    middle = (cue + near + far) / 3.0
+    corners = np.array([[0.0, 0.0], [TABLE_LENGTH_MM, 0.0],
+                        [0.0, TABLE_WIDTH_MM], [TABLE_LENGTH_MM, TABLE_WIDTH_MM]])
+    gaps = np.linalg.norm(corners - middle, axis=1)
+    corner = corners[int(np.argmin(gaps))]
+    to_corner = corner - middle
+    a, b = near - cue, far - cue
+    area = abs(float(a[0] * b[1] - a[1] * b[0])) / 2.0
+    span = float(np.linalg.norm(to_corner)) + 1e-9
+    toward = float(np.dot(cue - middle, to_corner)) / span
+    return np.array([float(np.min(gaps)), area, toward,
+                     float(np.linalg.norm(cue - corner))], dtype=float)
+
+
 def scaled(rows, builder):
     """Features, each standardised on the training set's own spread."""
     table = np.array([builder(r) for r in rows])
