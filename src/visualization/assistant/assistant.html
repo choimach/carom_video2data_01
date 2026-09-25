@@ -849,7 +849,11 @@
     // "프로가 이것을 고를 확률"이다 — 지금까지는 순서로만 쓰고 버리고 있었다.
     const heat = routes.reduce((sum, r) => sum + r.score, 0) || 1;
     for (const row of routes) row.share = row.score / heat;
-    return { routes: routes.slice(0, 12), total: pros.total, tried: lines.size, kisses, how };
+    // 열두 개에서 자르지 않는다. 화면에는 셋만 보이지만 **복사되는 기록**은
+    // 전부 담아야 한다 — 2026-09-25에 선수가 "횡단이 낫다"고 했는데 그 횡단이
+    // 13등이라 기록에서 잘려 나갔고, 하마터면 "탐색이 못 찾았다"로 읽힐 뻔했다.
+    // 찾아 놓고 낮게 매긴 것과 아예 못 찾은 것은 고칠 자리가 전혀 다르다.
+    return { routes, total: pros.total, tried: lines.size, kisses, how };
   }
 
   function render() {
