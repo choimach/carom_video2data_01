@@ -339,11 +339,21 @@
       for (let i = 0; i < point.length; i++) { const d = play.f[i] - point[i]; sum += d * d; }
       return { play, gap: Math.sqrt(sum) };
     }).sort((a, b) => a.gap - b.gap).slice(0, K);
-    const weight = new Map(), rate = new Map(), thick = new Map();
+    const weight = new Map(), rate = new Map(), thick = new Map(), tip = new Map();
     for (const item of near) {
       const key = `${item.play.route}|${item.play.near}|${item.play.face}`;
       weight.set(key, (weight.get(key) || 0) + 1);
       rate.set(key, (rate.get(key) || 0) + (item.play.scored ? 1 : 0));
+      // 이웃이 **실제로 준 당점**. 2026-09-25에 생겼다 — 합동 맞추기로 영상에서
+      // 되찾은 값이다 (`tools/fit_tip.js`). `tip_ok`가 거짓인 것은 맞추기가
+      // ±3팁 끝에 걸린 판이라, 그 값은 당점이 아니라 모형 오차다. 버린다.
+      // 두께와 같은 이유로 좁은 키와 유형만의 키에 함께 넣어 둔다.
+      if (item.play.tip && item.play.tip_ok) {
+        for (const at of [key, item.play.route]) {
+          if (!tip.has(at)) tip.set(at, []);
+          tip.get(at).push(item.play.tip);
+        }
+      }
       // 이웃이 실제로 쓴 두께. 절반쯤의 플레이에만 두께가 있으므로, 유형·면·
       // 원근까지 나눈 키로만 모으면 키당 두세 개밖에 안 남아 대부분 버려진다.
       // 그래서 좁은 키와 유형만의 키에 함께 넣어 두고, 쓸 때 좁은 쪽부터 본다.
@@ -354,7 +364,22 @@
         }
       }
     }
-    return { weight, rate, thick, total: near.length, near };
+    return { weight, rate, thick, tip, total: near.length, near };
+  }
+
+  // 이웃이 준 당점의 가운데. 좌우와 상하를 따로 중앙값 내지 않는다 — 당점은
+  // 극좌표 한 점이라 쪼개면 아무도 치지 않는 점이 나온다 (2026-09-23에 학습
+  // 자료의 18%가 그런 점이었다). 대신 **가장 가운데 있는 실제 당점 하나**를
+  // 고른다: 나머지 전부와의 거리 합이 가장 작은 것.
+  function middleTip(list) {
+    if (!list || list.length < 2) return null;
+    let best = null;
+    for (const one of list) {
+      let sum = 0;
+      for (const other of list) sum += Math.hypot(one[0] - other[0], one[1] - other[1]);
+      if (!best || sum < best.sum) best = { sum, tip: one };
+    }
+    return best.tip;
   }
 
   // 마지막 기댈 곳: 전체 플레이에서 유형별로 모은 두께. 이웃이 두께를 가진
@@ -738,6 +763,15 @@
     //  2) 그래도 같으면 도는 쪽으로 회전을 준 줄. 프로의 73%가 그렇게 친다
     //     (tools/check_side_vs_circuit.py). 경향이지 규칙이 아니라서 순위에는
     //     넣지 않지만, 아무것도 가릴 수 없을 때 배열 순서보다는 낫다.
+    // ⚠️ 여기에 "이웃 프로가 실제로 준 당점에 가까운 쪽"을 넣었다가 뺐다
+    // (2026-09-25). 프로 배치 86판에서 가까워진 판 10 · 멀어진 판 11 ·
+    // 안 바뀐 판 65로 **0.2 표준편차**였다. 여유를 1도나 양보하게 해도
+    // 당점 차이가 1.95 → 1.76팁에 그치고 28 대 28이었다.
+    //
+    // 선택 규칙의 문제가 아니다. 격자 탓도 아니다 — 2팁 반지름에서 이웃한
+    // 시계 방향 사이가 0.52팁인데 차이는 1.8팁이다. **우리 시뮬레이터는 같은
+    // 공략을 프로와 다른 당점으로 만들어 낸다.** 2쿠션이 155 mm 어긋나는 것의
+    // 당점 쪽 표현이고, 고칠 자리는 물리다.
     const beats = (a, b) => {
       if (a.room !== b.room) return a.room > b.room;
       const wa = perTip.get(`${idOf(a)}@${tipOf(a)}`), wb = perTip.get(`${idOf(b)}@${tipOf(b)}`);
@@ -793,6 +827,9 @@
       }
       routes.push({
         route: hit.route, key, hit, chosen, first, scored,
+        // 닮은 배치에서 프로가 실제로 준 당점. 화면에 같이 보여 주고, 대표 줄을
+        // 고를 때 동점을 가르는 데 쓴다 (`finish()`).
+        proTip: middleTip(pros.tip.get(proKey)) || middleTip(pros.tip.get(hit.route)),
         proRate: chosen ? Math.round((scored / chosen) * 100) : null,
         // ★2026-09-23 아침에 이웃 프로 수를 뺐다가 같은 날 되돌렸다. 뺀 근거는
         // "닮은 배치에서 프로가 어느 길을 고를지 맞히는 비율이 우연과 다르지
@@ -1422,7 +1459,9 @@
         <b>두께 ${asThickness(row.hit.thickness)}</b>로 ${NAMES[row.first]}의
         ${row.hit.face === "left" ? "왼쪽" : "오른쪽"} 면을, <b>강도 ${strength}</b>
         (수구가 장축 ${strength}개만큼 굴러가는 세기),
-        당점 <b>${side}</b>. 쿠션 <b>${row.hit.judged.rails.length}개</b>,
+        당점 <b>${side}</b>${row.proTip
+          ? ` (닮은 배치의 프로는 <b>${asTip(row.proTip[0], row.proTip[1])}</b>)` : ""}.
+        쿠션 <b>${row.hit.judged.rails.length}개</b>,
         1적구 <b>${Math.round(row.hit.pushed)} mm</b> 이동.
         시뮬레이터가 회전을 공의 상태로 들고 있으므로 당점을 팁으로 말합니다.
         영상 플레이 150개와 대조하면 1초 뒤 위치가 <b>253 mm</b> 어긋나고,
