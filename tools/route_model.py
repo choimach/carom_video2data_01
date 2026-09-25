@@ -186,6 +186,13 @@ def corner_features(row):
                      float(np.linalg.norm(cue - corner))], dtype=float)
 
 
+# ⚠️ 다섯 번째 부정 결과는 여기 없다 — `tools/test_outcome_signature.py`.
+# 배치를 "어떤 샷들이 얼마나 열려 있나"(48차원 여유 벡터)로 보고 이웃을 찾으면
+# 순위가 **8.5 표준편차 나빠진다.** 이웃의 표가 여유의 메아리가 되어, 모형이
+# 이웃을 믿지 않게 되기 때문이다 (이웃프로수 무게 0.92 → 0.34). 이웃은 프로
+# 자료가 들어오는 유일한 통로이므로 그 통로가 막힌다. (2026-09-25)
+
+
 def scaled(rows, builder):
     """Features, each standardised on the training set's own spread."""
     table = np.array([builder(r) for r in rows])
