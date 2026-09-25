@@ -193,6 +193,7 @@
       <span style="flex:1 1 100%; height:0"></span>
       <button id="play" type="button" disabled>재생</button>
       <button id="clear" type="button">다시 놓기</button>
+      <button id="again" type="button" disabled title="고른 공략을 친 뒤의 자리에서 이어 칩니다">계속치기</button>
       <button id="dice" type="button">무작위 배치</button>
       <input id="seed" type="text" inputmode="numeric" placeholder="씨앗" title="지난 판의 씨앗을 넣고 엔터">
       <button id="run" class="run" type="button">실행</button>
@@ -1417,6 +1418,7 @@
       .forEach((b) => { b.disabled = !ready; });
     document.getElementById("run").disabled = !ready;
     document.getElementById("play").disabled = !chosenRow();
+    document.getElementById("again").disabled = !(chosenRow() || {}).hit?.shot?.rest;
     document.getElementById("play").textContent = playing ? "재생 중…" : "재생";
     document.querySelectorAll("[data-cue]").forEach((b) => {
       b.setAttribute("aria-pressed", String(b.dataset.cue === cue));
@@ -1709,6 +1711,54 @@
     document.getElementById("run").click();
   };
   document.getElementById("dice").onclick = () => deal((Math.random() * 4294967296) >>> 0);
+
+  // ★계속치기 (선수, 2026-09-26): *"'무작위 배치' 버튼 왼쪽에 '계속치기' 버튼을
+  // 만들어줘. 그러면 이번의 친공들의 최종 배치가 다음 판으로 넘어갈수 있게..."*
+  //
+  // 왜 중요한가. 같은 날 그가 말한 것: *"프로들은 이를 이용해서 키스를 떼고,
+  // 다음번 공략을 쉽게 만들고, 또한 실패했을 경우 상대 선수의 공략을 어렵게
+  // 만들 수 있어."* 그리고 자료가 그것을 받친다 — 프로가 자기에게 남긴 배치는
+  // 상대가 남긴 배치보다 이웃으로 잰 '쉬움'이 7.5 표준편차만큼 높다.
+  //
+  // 득점하면 같은 선수가 **같은 수구로** 이어 치므로 `cue`는 그대로 둔다.
+  document.getElementById("again").onclick = () => {
+    const row = chosenRow();
+    const rest = row && row.hit && row.hit.shot && row.hit.shot.rest;
+    if (!rest) return;
+    stopPlaying();
+    const margin = SIM.RADIUS + 1;
+    const put = {};
+    for (const colour of ORDER) {
+      const at = rest[colour];
+      if (!at) return;
+      put[colour] = [Math.min(L - margin, Math.max(margin, at[0])),
+                     Math.min(W - margin, Math.max(margin, at[1]))];
+    }
+    // 시뮬이 공을 겹쳐 세워 두는 일이 있다. 캐롬에서 붙은 공은 실제로 있는
+    // 배치지만 **겹친** 배치는 없으므로, 딱 지름만큼만 벌려 준다.
+    for (const a of ORDER) for (const b of ORDER) {
+      if (a >= b) continue;
+      const dx = put[b][0] - put[a][0], dy = put[b][1] - put[a][1];
+      const gap = Math.hypot(dx, dy);
+      if (gap >= SIM.DIAMETER || gap === 0) continue;
+      const push = (SIM.DIAMETER - gap) / 2, ux = dx / gap, uy = dy / gap;
+      put[a][0] -= ux * push; put[a][1] -= uy * push;
+      put[b][0] += ux * push; put[b][1] += uy * push;
+      for (const c of [a, b]) {
+        put[c][0] = Math.min(L - margin, Math.max(margin, put[c][0]));
+        put[c][1] = Math.min(W - margin, Math.max(margin, put[c][1]));
+      }
+    }
+    layout = put;
+    result = null; picked = null; verdicts = {}; played = null;
+    // 더 이상 씨앗으로 되살릴 수 있는 판이 아니다 — 칸을 비워 헷갈리지 않게.
+    dealt = null;
+    try { history.replaceState(null, "", " "); } catch (e) {}
+    const box = document.getElementById("seed");
+    if (box) box.value = "";
+    render();
+    document.getElementById("run").click();
+  };
 
   // 지난 판을 다시 여는 칸. 주소의 `#seed=`도 받지만 조언판이 iframe 안에서
   // 열리면 `#` 뒤가 넘어오지 않으므로, 칸이 믿을 수 있는 쪽이다.
