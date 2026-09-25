@@ -57,6 +57,12 @@
   button[aria-pressed="true"] { background: var(--ink); color: var(--ground); border-color: var(--ink); }
   button.run { background: var(--cloth); border-color: var(--cloth); color: #fff; font-weight: 700; }
   button.run:disabled { background: var(--sunk); border-color: var(--line); color: var(--faint); }
+  /* 지난 판을 다시 열 자리. 주소의 #seed=에 기댈 수 없다 — 조언판은 iframe
+     안에서 열리고 그때 주소의 # 뒤가 넘어오지 않는다 (2026-09-25). */
+  #seed { font: 500 12px/1 "IBM Plex Mono", monospace; width: 92px; padding: 7px 8px;
+          border-radius: 8px; border: 1px solid var(--line);
+          background: var(--surface); color: var(--ink); }
+  #seed::placeholder { color: var(--faint); }
   .swatch { width: 12px; height: 12px; border-radius: 50%; display: inline-block;
             border: 1px solid rgba(0,0,0,.35); margin-right: 6px; vertical-align: -1px; }
   :focus-visible { outline: 2px solid var(--warn); outline-offset: 2px; }
@@ -186,6 +192,7 @@
       <button id="play" type="button" disabled>재생</button>
       <button id="clear" type="button">다시 놓기</button>
       <button id="dice" type="button">무작위 배치</button>
+      <input id="seed" type="text" inputmode="numeric" placeholder="씨앗" title="지난 판의 씨앗을 넣고 엔터">
       <button id="run" class="run" type="button">실행</button>
     </div>
   </div>
@@ -282,6 +289,12 @@
     layout = put;
     cue = next() < 0.5 ? "white" : "yellow";   // 수구도 뽑는다
     dealt = seed >>> 0;
+    // 씨앗을 주소에 적어 둔다. 같은 판을 다시 보려면 주소만 있으면 된다 —
+    // 2026-09-25에 선수가 "씨앗 3064837733 다시 돌려볼게" 했는데 되돌릴 방법이
+    // 없어 공을 손으로 놓아야 했다.
+    try { history.replaceState(null, "", `#seed=${dealt}`); } catch (e) {}
+    const box = document.getElementById("seed");
+    if (box) box.value = String(dealt);
     // 조건은 푼다 — 무작위 배치에서 1적구나 면을 고정해 두면 그것도 치우침이다.
     wantFirst = "any"; wantFace = "any";
   }
@@ -371,15 +384,18 @@
   // 극좌표 한 점이라 쪼개면 아무도 치지 않는 점이 나온다 (2026-09-23에 학습
   // 자료의 18%가 그런 점이었다). 대신 **가장 가운데 있는 실제 당점 하나**를
   // 고른다: 나머지 전부와의 거리 합이 가장 작은 것.
+  // 몇 명에게서 나온 값인지 함께 돌려준다. 한 명짜리도 감추지 않는다 —
+  // 감추면 "프로 자료가 없다"와 "한 명뿐이다"가 구별되지 않는다. 대신 화면에
+  // 사람 수를 같이 적어 선수가 무게를 스스로 재게 한다.
   function middleTip(list) {
-    if (!list || list.length < 2) return null;
+    if (!list || !list.length) return null;
     let best = null;
     for (const one of list) {
       let sum = 0;
       for (const other of list) sum += Math.hypot(one[0] - other[0], one[1] - other[1]);
       if (!best || sum < best.sum) best = { sum, tip: one };
     }
-    return best.tip;
+    return { tip: best.tip, n: list.length };
   }
 
   // 마지막 기댈 곳: 전체 플레이에서 유형별로 모은 두께. 이웃이 두께를 가진
@@ -1464,7 +1480,8 @@
         ${row.hit.face === "left" ? "왼쪽" : "오른쪽"} 면을, <b>강도 ${strength}</b>
         (수구가 장축 ${strength}개만큼 굴러가는 세기),
         당점 <b>${side}</b>${row.proTip
-          ? ` (닮은 배치의 프로는 <b>${asTip(row.proTip[0], row.proTip[1])}</b>)` : ""}.
+          ? ` — 가까운 프로 ${row.proTip.n}명은 <b>${asTip(row.proTip.tip[0], row.proTip.tip[1])}</b>을 줬습니다`
+          : ""}.
         쿠션 <b>${row.hit.judged.rails.length}개</b>,
         1적구 <b>${Math.round(row.hit.pushed)} mm</b> 이동.
         시뮬레이터가 회전을 공의 상태로 들고 있으므로 당점을 팁으로 말합니다.
@@ -1614,14 +1631,28 @@
     layout = {}; result = null; picked = null; cue = "white";
     verdicts = {}; played = null; dealt = null; render();
   };
-  document.getElementById("dice").onclick = () => {
+  const deal = (seed) => {
     stopPlaying();
     result = null; picked = null; verdicts = {}; played = null;
-    dealRandom((Math.random() * 4294967296) >>> 0);
+    dealRandom(seed);
     render();
     // 깔았으면 바로 푼다 — 단추를 두 번 누르게 할 이유가 없다.
     document.getElementById("run").click();
   };
+  document.getElementById("dice").onclick = () => deal((Math.random() * 4294967296) >>> 0);
+
+  // 지난 판을 다시 여는 칸. 주소의 `#seed=`도 받지만 조언판이 iframe 안에서
+  // 열리면 `#` 뒤가 넘어오지 않으므로, 칸이 믿을 수 있는 쪽이다.
+  const seedBox = document.getElementById("seed");
+  seedBox.onkeydown = (event) => {
+    if (event.key !== "Enter") return;
+    const want = Number(String(seedBox.value).replace(/\D/g, ""));
+    if (want > 0) deal(want >>> 0);
+  };
+  (() => {
+    const found = /(?:^|[#&?])seed=(\d+)/.exec(location.hash + location.search);
+    if (found) setTimeout(() => deal(Number(found[1]) >>> 0), 0);
+  })();
   document.getElementById("run").onclick = () => {
     const button = document.getElementById("run");
     button.disabled = true;
@@ -1670,7 +1701,10 @@
     for (const colour of ORDER) lines.push(`  ${NAMES[colour]} ${at(colour)}${colour === cue ? "  ← 수구" : ""}`);
     lines.push(`조건: 1적구 ${wantFirst === "any" ? "자동" : NAMES[wantFirst]} · 면 ${
       wantFace === "any" ? "자동" : (wantFace === "left" ? "왼쪽" : "오른쪽")}`);
-    if (dealt !== null) lines.push(`이 배치는 무작위로 깔린 것입니다 (씨앗 ${dealt})`);
+    if (dealt !== null) {
+      lines.push(`이 배치는 무작위로 깔린 것입니다 (씨앗 ${dealt})`);
+      lines.push(`  같은 판 다시 보기: ${location.origin}${location.pathname}#seed=${dealt}`);
+    }
     if (result && result.routes.length) {
       lines.push(`후보 ${result.routes.length}가지 (키스 제외 ${result.kisses}개):`);
       result.routes.forEach((row, index) => {
