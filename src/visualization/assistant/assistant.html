@@ -1650,6 +1650,18 @@
   comment.oninput = () => { try { localStorage.setItem(COMMENT_KEY, comment.value); } catch (e) {} };
 
   document.getElementById("copy").onclick = async () => {
+    // 담을 것이 없으면 복사하지 않는다. 2026-09-25에 선수가 새로고침한 뒤
+    // (테이블이 비워진 상태에서) 의견을 쓰고 복사를 눌렀는데, 후보가 없는
+    // 빈 기록이 나가고 **쓰신 의견만 지워졌다.** 담을 것이 없을 때는 아무것도
+    // 지우지 않는다.
+    if (!result || !result.routes.length) {
+      const said0 = document.getElementById("copied");
+      said0.textContent = placed().length === 3
+        ? "먼저 실행을 누르세요 — 아직 계산한 것이 없습니다"
+        : "공을 세 개 놓고 실행을 누르세요";
+      setTimeout(() => { said0.textContent = ""; }, 4000);
+      return;
+    }
     // 배치까지 함께 담는다. 좌표가 있어야 같은 화면을 그대로 다시 만들어 볼 수 있다.
     const lines = [];
     const at = (colour) => layout[colour]
