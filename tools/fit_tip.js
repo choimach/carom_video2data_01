@@ -27,7 +27,12 @@
 // 32%는 어떤 물리적 당점으로도 설명이 안 되는 판이고, 거기서 나온 당점은
 // 맞추기가 모형 오차를 떠넘긴 쓰레기통이다. 68%의 당점만 쓴다.
 //
-//   node tools/fit_tip.js [판 수]
+//   node tools/fit_tip.js [판 수]        # 채점만 한다
+//   node tools/fit_tip.js --export       # 전부 맞춰 data/tips.json에 적는다
+//
+// `--export`가 적은 것을 `tools/app_data.py`가 읽어 각 플레이에 `tip`(좌우·상하
+// 팁)과 `tip_ok`(믿을 만한가)로 붙인다. 따로 파일에 두는 이유: app-data를 다시
+// 만들어도 살아남고, 이 비싼 계산이 파이썬 경로에 들어가지 않는다.
 
 const fs = require('fs');
 const path = require('path');
@@ -80,14 +85,22 @@ function observe(layout, cue, first, aim, side, up) {
   return { one: one.p, two: two ? two.p : null, curve, rise };
 }
 
+const EXPORT = process.argv.includes('--export');
 const data = JSON.parse(fs.readFileSync(path.join(ROOT, 'build', 'app-data.json'), 'utf8'));
-// 검증에 2쿠션이 필요하므로 쿠션이 둘 이상인 판만 쓴다.
+// 채점에는 2쿠션이 필요하지만(검증용), 내보낼 때는 1쿠션만 있어도 맞출 수 있다.
 const plays = data.plays.filter((p) => p.aim !== null && p.speed && p.hit
-  && p.rails && p.rails.length >= 2 && p.curve && p.rise !== null && p.rise !== undefined);
-const N = Number(process.argv[2] || 250);
-const step = Math.max(1, Math.floor(plays.length / N));
-const pick = [];
-for (let i = 0; i < plays.length && pick.length < N; i += step) pick.push(plays[i]);
+  && p.rails && p.rails.length >= (EXPORT ? 1 : 2)
+  && p.curve && p.rise !== null && p.rise !== undefined);
+let pick;
+if (EXPORT) {
+  pick = plays;
+} else {
+  const N = Number(process.argv[2] || 250);
+  const step = Math.max(1, Math.floor(plays.length / N));
+  pick = [];
+  for (let i = 0; i < plays.length && pick.length < N; i += step) pick.push(plays[i]);
+}
+console.log(`맞출 판 ${pick.length}개${EXPORT ? ' (전부)' : ''}`);
 
 // 잔차를 견줄 수 있게 각자의 보통 크기로 나눈다.
 const SCALE = { one: 40, curve: 20, rise: 0.15 };
@@ -98,7 +111,15 @@ for (let s = -3; s <= 3.0001; s += 0.25) {
 
 const joint = [], alone = [];
 const tips = [];
+const out = {};
+let done = 0;
+const began = Date.now();
 for (const play of pick) {
+  if (EXPORT && ++done % 100 === 0) {
+    const each = (Date.now() - began) / done / 1000;
+    process.stdout.write(`  ${done}/${pick.length} · 판당 ${each.toFixed(2)}초`
+      + ` · 남은 시간 ${Math.round((pick.length - done) * each / 60)}분\n`);
+  }
   const layout = { white: play.cue, yellow: play.balls[0], red: play.balls[1] };
   const rad = play.aim * Math.PI / 180;
   const aim = [Math.cos(rad) * play.speed, Math.sin(rad) * play.speed];
@@ -117,12 +138,34 @@ for (const play of pick) {
       + ((got.rise - play.rise) / SCALE.rise) ** 2;
     if (!best || cost < best.cost) best = { cost, two: got.two, side, up, oneOff };
   }
+  if (EXPORT) {
+    if (!best) continue;
+    const edge = Math.abs(best.side) >= 2.99 || Math.abs(best.up) >= 2.99;
+    out[`${play.match}:${play.inning}:${play.shot}`] = {
+      // 좌우·상하 팁. 믿을 만한가는 **격자 끝에 걸렸는지**로 정한다 — 끝에
+      // 걸린 판은 어떤 물리적 당점으로도 설명되지 않아, 맞추기가 모형 오차를
+      // 당점으로 떠넘긴 것이다 (2026-09-25에 그렇게 갈렸다).
+      tip: [best.side, best.up],
+      ok: !edge && best.oneOff <= 60,
+      one: Math.round(best.oneOff),
+    };
+    continue;
+  }
   if (!best || !only || !best.two || !only.two) continue;
   if (only.off > 60) continue;                     // 1쿠션도 못 맞춘 판은 뺀다
   joint.push(gap(best.two, play.rails[1]));
   alone.push(gap(only.two, play.rails[1]));
   tips.push({ side: best.side, up: best.up, oneOff: best.oneOff,
               edge: Math.abs(best.side) >= 2.99 || Math.abs(best.up) >= 2.99 });
+}
+
+if (EXPORT) {
+  const where = path.join(ROOT, 'data', 'tips.json');
+  fs.writeFileSync(where, JSON.stringify(out));
+  const ok = Object.values(out).filter((r) => r.ok).length;
+  console.log(`\n맞춘 판 ${Object.keys(out).length}개 · 믿을 만한 것 ${ok}개`
+    + ` (${(ok / Object.keys(out).length * 100).toFixed(0)}%) -> ${where}`);
+  process.exit(0);
 }
 
 console.log(`맞출 수 있었던 판 ${joint.length} / ${pick.length}\n`);

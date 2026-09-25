@@ -196,6 +196,20 @@ def main(argv=None):
             # 증거다. 2026-09-25에 실어 나르기 시작했다.
             rise[at] = play.get("spin_y")
 
+    # 합동 맞추기로 되찾은 당점. `tools/fit_tip.js --export`가 적어 둔다.
+    # 여기서 계산하지 않는 이유: 판당 625번을 쳐야 하는 일이라 파이썬 경로에
+    # 넣으면 조언판을 다시 만들 때마다 십수 분이 든다.
+    #
+    # ④(당점)에 대한 **첫 실측 자료**다. 그전에는 팁이 아예 없어서, 조언판이
+    # 이웃 프로의 당점을 옮겨 올 수 없었다.
+    tips = {}
+    tip_file = os.path.join(ROOT, "data", "tips.json")
+    if os.path.exists(tip_file):
+        try:
+            tips = json.load(open(tip_file, encoding="utf-8"))
+        except (json.JSONDecodeError, OSError):
+            tips = {}
+
     plays, missing = [], 0
     for row, point in zip(rows, scaled):
         bundle = paths.get(row["match"])
@@ -246,6 +260,15 @@ def main(argv=None):
             # 돌려 두었으므로, 프레임 번호로 그 위에서 집어내면 된다.
             "rails": rail_points(original, marks, flip_x, flip_y),
             "hit": ball_point(original, marks, flip_x, flip_y),
+            # 되찾은 당점 [좌우, 상하] (팁)과 믿을 만한가.
+            # `tip_ok`가 거짓이면 맞추기가 ±3팁 끝에 걸린 것이다 — 어떤 물리적
+            # 당점으로도 설명되지 않는 판이라 그 값은 모형 오차의 쓰레기통이다.
+            # 2026-09-25 실측: 안쪽 판은 2쿠션 오차가 91→83 mm(3.0 표준편차)로
+            # 나아지는데, 끝에 걸린 판은 153→135 mm(0.4 표준편차)로 무의미하다.
+            "tip": (tips.get(f"{row['match'].replace('soop_', '')}:{row['inning']}:{row['shot']}")
+                    or {}).get("tip"),
+            "tip_ok": (tips.get(f"{row['match'].replace('soop_', '')}:{row['inning']}:{row['shot']}")
+                       or {}).get("ok"),
             # 충돌→1쿠션 구간의 곡선 깊이와 그 구간 길이 [깊이, 길이] (mm).
             # 상하 당점에 대한 가장 강한 관측이다 — curve_depth()의 설명 참조.
             "curve": curve_depth(turned, ball_point(original, marks, flip_x, flip_y),
