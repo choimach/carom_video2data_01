@@ -22,6 +22,9 @@ const ROOT = path.dirname(__dirname);
 const SIM = eval(fs.readFileSync(path.join(ROOT, 'build', 'sim.js'), 'utf8') + '\nSIM;');
 
 const ORDER = ['white', 'yellow', 'red'];
+// 몇 판마다 파일에 쏟나. ⚠️ 조각이 열 개면 노출은 그 열 배다 — 20으로 뒀다가
+// 25분치(200판)를 통째로 잃었다. 다섯이면 조각 여섯에서 30판이 최대 손실이다.
+const FLUSH_EVERY = 5;
 const SHORT = new Set(['left', 'right']);
 const FINE = 0.25;
 // 세기는 강도로 말한다: 강도 1이 수구가 장축만큼 굴러가는 세기, n이면 그 n 배.
@@ -309,13 +312,47 @@ function main() {
 
   const done = new Set();
   // 유형만 재 볼 때는 장부에 쓰지 않으므로, 이미 한 것도 다시 본다.
-  if (!only && fs.existsSync(out)) {
-    for (const line of fs.readFileSync(out, 'utf8').split('\n')) {
+  //
+  // ★자기 조각 파일뿐 아니라 **합쳐 둔 장부**도 읽는다 (2026-09-26). 옛 코드는
+  // 자기 것만 읽었고 `enumerate_all.sh`는 시작할 때 조각을 지웠으므로, 중간에
+  // 죽으면 **늘 처음부터** 다시 해야 했다. 그날 조각 열넷이 EIO로 넘어졌을 때
+  // 1,236판을 그렇게 버릴 뻔했다.
+  const readIds = (ledger, into) => {
+    if (!fs.existsSync(ledger)) return;
+    for (const line of fs.readFileSync(ledger, 'utf8').split('\n')) {
       if (!line.trim()) continue;
-      try { done.add(JSON.parse(line).id); } catch (e) { /* 끊긴 줄은 버린다 */ }
+      try { into.add(JSON.parse(line).id); } catch (e) { /* 끊긴 줄은 버린다 */ }
     }
-  }
-  console.log(`이미 한 것 ${done.size}개`);
+  };
+  // 합쳐 둔 장부는 한 번의 실행 동안 바뀌지 않는다. 조각 나누기를 여기에만
+  // 기대야 조각 하나를 다시 띄워도 몫이 그대로다 (아래 seat 참고).
+  const merged = new Set();
+  if (!only) readIds(path.join(ROOT, 'data', 'alternatives.jsonl'), merged);
+  for (const id of merged) done.add(id);
+  if (!only) readIds(out, done);
+  // ★멈춘 배치 (2026-09-26). 조각 하나가 배치 하나에서 한 시간 넘게 로그 없이
+  // 서 있었다. `enumerate_all.sh`의 감시가 그런 조각을 죽이고 그 id를 여기에
+  // 적은 뒤 다시 띄운다 — 적지 않으면 같은 배치에서 또 멈춘다.
+  const skipFile = path.join(ROOT, 'data', 'alternatives.skip.txt');
+  const skipped = new Set(fs.existsSync(skipFile)
+    ? fs.readFileSync(skipFile, 'utf8').split('\n').map((l) => l.trim()).filter(Boolean) : []);
+  for (const id of skipped) done.add(id);
+  console.log(`이미 한 것 ${done.size}개 (건너뛸 멈춘 배치 ${skipped.size}개)`);
+  // 감시가 보는 맥박. 배치를 **시작할 때** 그 id를 적는다.
+  const statusArg = args.includes('--status') ? args[args.indexOf('--status') + 1] : null;
+  const beat = (id) => { if (statusArg) fs.writeFileSync(statusArg, `${id}\n`); };
+
+  // 쓰기를 모아서 한다 — 위 appendFileSync 주석 참고.
+  const pending = [];
+  const flush = () => {
+    if (!pending.length) return;
+    fs.appendFileSync(out, pending.join('\n') + '\n');
+    pending.length = 0;
+  };
+  process.on('exit', flush);
+  // ⚠️ SIGTERM 처리기를 달지 말 것. 탐색은 동기 고리라 처리기가 불리지 않고,
+  // 달기만 해도 기본 동작(종료)이 꺼져서 감시가 죽이지 못하게 된다. 죽으면
+  // 모아 둔 다섯 판을 잃고, 그건 다시 띄울 때 다시 한다.
 
   const usable = rows.filter((r) => (!only || r.route === only))
     .filter((r) => r.route && r.first_object_ball
@@ -324,14 +361,21 @@ function main() {
   console.log(`대상 ${usable.length}개 (배치·유형·면이 다 있는 플레이)`
     + (shard ? ` · 이 조각은 ${shard[0]}/${shard[1]}` : '') + '\n');
 
+  // ★조각은 **남은 것**을 나눠 갖는다 (2026-09-26). 전체를 나누면 이미 한
+  // 판이 몰린 조각은 일찍 놀고 나머지가 끝까지 끈다. 남은 것의 기준은 합쳐 둔
+  // 장부뿐이다 — 자기 part까지 빼면 다시 띄울 때마다 몫이 밀려 겹친다.
+  const idOf = (row) => `${row.match}:${row.inning}:${row.shot}`;
+  const mine = usable.filter((row) => !merged.has(idOf(row)))
+    .filter((row, seat) => !shard || seat % shard[1] === shard[0]);
+  const todo = mine.filter((row) => !done.has(idOf(row))).length;
+  console.log(`이 조각의 몫 ${mine.length}개 · 남은 것 ${todo}개`);
+
   let counted = 0, zeroed = 0, began = Date.now();
-  let seat = -1;
-  for (const row of usable) {
-    seat++;
-    if (shard && seat % shard[1] !== shard[0]) continue;
-    const id = `${row.match}:${row.inning}:${row.shot}`;
+  for (const row of mine) {
+    const id = idOf(row);
     if (done.has(id)) continue;
     if (counted >= limit) break;
+    beat(id);
 
     const layout = {};
     for (const c of ORDER) layout[c] = row.layout_mm[c].map(Number);
@@ -362,15 +406,25 @@ function main() {
         process.exit(1);
       }
     }
-    if (!only) fs.appendFileSync(out, JSON.stringify(record) + '\n');
+    // ⚠️ 판마다 파일을 열고 닫지 않는다. 2026-09-26에 조각 14개로 돌렸다가
+    // **EIO: i/o error**로 전부 죽었다 — `/mnt/d`는 WSL2가 윈도우 드라이브를
+    // 마운트한 것이고, 열네 프로세스가 각자 2,675번씩 열고 닫으면 버티지
+    // 못한다. 1,236판까지 하고 넘어졌고 합치기도 못 해서 통째로 버렸다.
+    //
+    // 모아서 가끔 쓴다. 중간에 죽어도 마지막 묶음만 잃는다.
+    if (!only) {
+      pending.push(JSON.stringify(record));
+      if (pending.length >= FLUSH_EVERY) flush();
+    }
     else console.log(`  ${record.reached ? '찾음 ' : '놓침 '} ${record.chose}  갈래 ${record.found.length}개`);
     counted++;
     if (counted % 10 === 0) {
       const each = (Date.now() - began) / counted / 1000;
-      const left = (usable.length - done.size - counted) * each / 60;
+      const left = (todo - counted) * each / 60;
       process.stdout.write(`  ${counted}개 · 배치당 ${each.toFixed(1)}초 · 남은 시간 ${left.toFixed(0)}분\n`);
     }
   }
+  beat('끝');
   console.log(`\n${counted}개 새로 담았습니다 -> ${out}`);
 }
 
