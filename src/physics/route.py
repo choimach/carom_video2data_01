@@ -77,7 +77,7 @@ def _crossing_run(rails):
     return run
 
 
-def _subtype(rails, english=None):
+def _subtype(rails, english=None, reached_second=False):
     """최상위 이름과 나란히 붙는 꼬리표들. 이름 자체는 아니다.
 
     ⚠️ 풀리지 않은 것: 그가 말한 더블쿠션은 **장-장-단**인데 (두 장쿠션 사이를
@@ -89,6 +89,14 @@ def _subtype(rails, english=None):
     if len(rails) >= 3 and _crossing_run(rails) == 2 \
             and (rails[2] in SHORT_RAILS) != (rails[0] in SHORT_RAILS):
         tags.append(DOUBLE)
+
+    # 대회전 — 2적구 전에 쿠션을 다섯 번 넘게 맞으면 테이블을 크게 돈 것이다.
+    # 이름이 아니라 꼬리표다 (위 name 쪽 주석 참고). 선수 (2026-09-26):
+    # "대회전에는 유형이 같이붙어 — 옆돌리기 대회전, 뒤돌리기 대회전 등."
+    # ⚠️ **2적구에 닿은 샷에만** 붙인다. 빗나간 뒤 계속 구른 쿠션은 "무언가로
+    # 가는 길"이 아니다 — 옛 이름 규칙이 지키던 조건이고 꼬리표에도 그대로다.
+    if reached_second and len(rails) >= LONG_AROUND_CUSHIONS:
+        tags.append(LONG_AROUND)
 
     # 리버스 — "역회전으로 1쿠션을 맞히고 두 번째 쿠션부터는 제회전으로 진행".
     # 쿠션 차례로는 갈리지 않고 **회전으로만** 갈리는 유일한 것이라, 시뮬레이터가
@@ -189,9 +197,13 @@ def classify(events, layout_mm=None, cue_ball=None, thickness=None, turn_deg=Non
         # 대회전·옆돌리기 대회전처럼 **테이블을 크게 도는** 것들이라, 오가는 것과
         # 기하가 다르다. ⚠️ 이 순서는 내 판단이고 확인받은 적이 없다.
 
-        if len(between) >= LONG_AROUND_CUSHIONS:
-            return {**result, "route": LONG_AROUND,
-                    "why": f"{len(between)} cushions before the second ball"}
+        # ★대회전은 **최상위 이름이 아니다** — 더블과 같다. 선수가 확정해 줬다
+        # (2026-09-26): "그래서 대회전에는 유형이 같이붙어 — 옆돌리기 대회전,
+        # 뒤돌리기 대회전 등." ref/taxonomy.md의 예시도 그렇다.
+        #
+        # 옛 코드는 여기서 route를 LONG_AROUND로 바꿔 **계열 규칙에 닿기 전에
+        # 이름을 가로챘다.** 그래서 바탕 계열이 사라지고, "뒤돌리기라면 1쿠션은
+        # 장쿠션" 같은 조건도 같이 사라졌다. 선수가 화면에서 짚은 것이 그것이다.
 
         # Back to the rail it came off: 장-단-장 on one and the same long rail,
         # or 단-장-단 on one and the same short rail, is 되돌아오기 - the
@@ -203,7 +215,7 @@ def classify(events, layout_mm=None, cue_ball=None, thickness=None, turn_deg=Non
 
 
     named = {**result, **_turn(between, struck_side, circuit)}
-    tags = _subtype(between, english_at_rail) or []
+    tags = _subtype(between, english_at_rail, bool(result.get("reached_second"))) or []
     if _standing(named.get("route"), english_at_rail):
         tags = [*tags, STANDING]
     return {**named, "tags": tags} if tags else named

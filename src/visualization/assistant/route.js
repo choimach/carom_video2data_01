@@ -43,9 +43,20 @@ const ROUTE = (() => {
       // 하위구분이 맞아." 그래서 여기서 이름을 가로채지 않고 계열 규칙에
       // 맡긴다. 하위 구분은 subtypeOf()가 따로 돌려준다.
 
-      // 횡단을 대회전보다 먼저 본다: "3회 **이상**"이므로 다섯 번 오간 것도
-      // 횡단이다. ⚠️ 이 순서는 내 판단이고 확인받은 적이 없다.
-      if (between.length >= LONG_AROUND_CUSHIONS) return "대회전";
+      // ★대회전은 **최상위 이름이 아니다** — 더블과 같다. 선수가 확정해 줬다
+      // (2026-09-26): *"그래서 대회전에는 유형이 같이붙어 — 옆돌리기 대회전,
+      // 뒤돌리기 대회전 등."* `ref/taxonomy.md`의 예시도 그렇다.
+      //
+      // 옛 코드는 여기서 `if (between.length >= 5) return "대회전";`으로 **계열
+      // 규칙에 닿기 전에 이름을 가로챘다.** 그래서 바탕이 뒤돌리기였는지
+      // 옆돌리기였는지가 사라지고, "뒤돌리기라면 1쿠션은 장쿠션" 같은 조건도
+      // 같이 사라졌다. 선수가 화면을 보고 짚은 것이 그것이다 (씨앗 596883888):
+      // *"이 그림은 대회전 뒤돌리기인데 1쿠션이 장쿠션이 아닌 단쿠션을 보여주고
+      // 있어, 당점이 반대방향이야."* 1쿠션이 틀리면 거기 필요한 회전도 반대다.
+      //
+      // 덤: `tools/score_probability.py`가 대회전을 빼야 했던 오염도 풀린다 —
+      // 2적구 전 쿠션 수로 이름을 붙이면 **실패한 판이 그 이름을 가질 수 없어**
+      // 자료에 100% 득점으로 잡힌다. 바탕 이름은 실패한 판도 담는다.
 
       // 떠나온 쿠션으로 되돌아온다: 장-단-장이 같은 장쿠션이거나, 단-장-단이
       // 같은 단쿠션이면 되돌아오기. 그가 말로 준 것을 그대로 옮겼다 (2026-09-19).
@@ -76,10 +87,19 @@ const ROUTE = (() => {
   // (두 장쿠션 사이를 두 번 오간 뒤 단쿠션), ref/taxonomy.md의 빗겨치기 행은
   // 패턴이 **단-단-장**이다. 계열 규칙으로 장쿠션이 먼저면 빗겨치기가 아니라
   // 뒤돌리기 쪽이다. 둘 중 무엇이 더블인지 아직 정해지지 않았다.
-  function subtypeOf(between, english) {
+  function subtypeOf(between, english, reachedSecond) {
     const tags = [];
     if (between && between.length >= 3 && crossingRun(between) === 2
         && SHORT.has(between[2]) !== SHORT.has(between[0])) tags.push("더블");
+
+    // 대회전 — 2적구 전에 쿠션을 다섯 번 넘게 맞으면 테이블을 크게 돈 것이다.
+    // 이름이 아니라 꼬리표다 (위 name()의 주석 참고).
+    //
+    // ⚠️ **2적구에 닿은 샷에만** 붙인다. 빗나간 뒤 계속 구른 쿠션은 "무언가로
+    // 가는 길"이 아니다 — 옛 이름 규칙이 지키던 조건이고 꼬리표에도 그대로다.
+    if (reachedSecond && between && between.length >= LONG_AROUND_CUSHIONS) {
+      tags.push("대회전");
+    }
 
     // 리버스 — "역회전으로 1쿠션을 맞히고 두 번째 쿠션부터는 제회전으로 진행"
     // (japong.com). 쿠션 차례로는 갈리지 않고 **회전으로만** 갈리는 유일한
@@ -151,7 +171,7 @@ const ROUTE = (() => {
       before, between, reachedSecond: !!second, face,
       circuitRight: circuitIsRight(shot.paths[cue] || [], length, width),
     });
-    const tags = subtypeOf(between, english) || [];
+    const tags = subtypeOf(between, english, !!second) || [];
     if (standing(route, english)) tags.push("세워치기");
     return { route, tags: tags.length ? tags : null };
   }

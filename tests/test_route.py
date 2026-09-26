@@ -37,11 +37,12 @@ def test_two_cushions_first_is_a_bank():
 
 
 def test_five_cushions_is_the_long_way_round():
+    """쿠션 다섯이면 대회전 **꼬리표**가 붙는다 — 이름은 계열이 갖는다."""
     shot = events((10, "ball", "red"), (20, "cushion", "left"),
                   (30, "cushion", "top"), (40, "cushion", "right"),
                   (50, "cushion", "bottom"), (60, "cushion", "left"),
                   (70, "ball", "yellow"))
-    assert classify(shot)["route"] == LONG_AROUND
+    assert LONG_AROUND in (classify(shot).get("tags") or [])
 
 
 def test_long_rail_to_long_rail_is_crossing():
@@ -111,13 +112,35 @@ def test_a_shot_that_never_reached_a_second_ball_is_not_a_grand_tour():
                   (30, "cushion", "top"), (40, "cushion", "right"),
                   (50, "cushion", "bottom"), (60, "cushion", "left"))
     verdict = classify(shot)
-    assert verdict["route"] != LONG_AROUND
+    assert LONG_AROUND not in (verdict.get("tags") or [])
     assert verdict["reached_second"] is False
 
 
-def test_the_count_still_names_a_grand_tour_when_the_second_ball_was_reached():
+def test_a_grand_tour_keeps_the_family_it_came_from():
+    """대회전은 이름이 아니라 꼬리표다 — 선수가 확정했다 (2026-09-26).
+
+    *"그래서 대회전에는 유형이 같이붙어 — 옆돌리기 대회전, 뒤돌리기 대회전 등."*
+
+    옛 계약은 `route == "대회전"`이었고, 그래서 바탕 계열이 사라졌다. 그러면
+    "뒤돌리기라면 1쿠션은 장쿠션" 같은 조건도 같이 사라진다 — 선수가 화면에서
+    짚은 것이 그것이다 (씨앗 596883888).
+    """
     shot = events((10, "ball", "red"), (20, "cushion", "left"),
                   (30, "cushion", "top"), (40, "cushion", "right"),
                   (50, "cushion", "bottom"), (60, "cushion", "left"),
                   (70, "ball", "yellow"))
-    assert classify(shot)["route"] == LONG_AROUND
+    verdict = classify(shot, struck_side=40.0, circuit=1.0)
+    assert verdict["route"] != LONG_AROUND, "대회전이 계열을 가로채면 안 된다"
+    assert verdict["route"] not in ("미분류", None)
+    assert LONG_AROUND in (verdict.get("tags") or []), verdict
+
+
+def test_a_grand_tour_without_geometry_cannot_be_named():
+    """계열을 모르면 이름도 없다 — 쿠션 수만으로 이름을 짓지 않는다."""
+    shot = events((10, "ball", "red"), (20, "cushion", "left"),
+                  (30, "cushion", "top"), (40, "cushion", "right"),
+                  (50, "cushion", "bottom"), (60, "cushion", "left"),
+                  (70, "ball", "yellow"))
+    verdict = classify(shot)
+    assert verdict["route"] != LONG_AROUND
+    assert LONG_AROUND in (verdict.get("tags") or []), verdict
