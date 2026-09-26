@@ -26,8 +26,9 @@ N=${1:-$(( $(nproc) - 2 ))}
 # ★메모리 (2026-09-26). 이 WSL은 **15 GB**뿐이다. 힙 한도 2000 MB로 조각 14개를
 # 띄웠더니 조각마다 1.4 GB까지 불어 OOM이 조각을 죽였다. 쓰는 양이 아니라 GC가
 # 게을러서다 — 한도 500이면 최대 360 MB로 똑같이 돈다. 한도를 낮추고, 조각 수도
-# 남은 메모리로 한 번 더 자른다.
-HEAP=${HEAP:-600}
+# 남은 메모리로 한 번 더 자른다. 600으로 내렸더니 **정말로 590 MB가 사는** 배치가
+# 있어 힙 OOM(134)이 났다 — 1000으로 둔다.
+HEAP=${HEAP:-1000}
 FIT=$(( $(awk '/MemAvailable/ {print $2}' /proc/meminfo) / 1024 / (HEAP + 200) ))
 [ "$N" -gt "$FIT" ] && { echo "메모리가 모자라 조각을 $N → $FIT개로 줄입니다"; N=$FIT; }
 [ "$N" -lt 1 ] && N=1
@@ -71,7 +72,7 @@ rm -f "$WORK"/data/alternatives.part*.jsonl
   > "$WORK/data/_skip.tmp" && mv "$WORK/data/_skip.tmp" "$WORK/data/alternatives.skip.txt"
 say "작업 폴더 $WORK · 장부 $(wc -l < "$WORK/data/alternatives.jsonl")판 · 조각 ${N}개 (코어 $(nproc)개)"
 
-declare -A PID TRIES FINISHED
+declare -A PID TRIES FINISHED CRASHED
 launch() {
   local i=$1
   : > "$WORK/data/_status$i"
@@ -111,7 +112,15 @@ while :; do
       say "조각 $i: 여유가 전부 0이라 멈췄다. 전부 세운다."
       for j in "${!PID[@]}"; do kill "${PID[$j]}" 2>/dev/null; done
       exit 1
+    elif [ -n "$(head -1 "$WORK/data/_status$i")" ] \
+         && [ "${CRASHED[$i]:-}" = "$(head -1 "$WORK/data/_status$i")" ]; then
+      # 같은 배치에서 두 번 죽었다 — 조각을 버리지 말고 그 배치만 버린다.
+      stuck=$(head -1 "$WORK/data/_status$i")
+      say "조각 $i: 배치 '$stuck'에서 두 번 죽었다 (코드 $code) — 건너뛰고 다시 띄운다"
+      echo "$stuck" >> "$WORK/data/alternatives.skip.txt"
+      launch "$i"; left=$((left + 1))
     elif [ "${TRIES[$i]}" -lt "$RETRIES" ]; then
+      CRASHED[$i]=$(head -1 "$WORK/data/_status$i")
       TRIES[$i]=$(( TRIES[$i] + 1 ))
       say "조각 $i가 코드 $code로 죽었다 — 다시 띄운다 (${TRIES[$i]}/$RETRIES)"
       tail -3 "$WORK/data/_part$i.log" | sed 's/^/    /'
