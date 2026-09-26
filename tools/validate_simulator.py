@@ -34,6 +34,9 @@ BALLS = ("white", "yellow", "red")
 # overrun the first event: 41 mm at a 5-frame baseline, 35 at 12, 24 at 24.
 OPENING_SKIP = 4
 OPENING_SPAN = 24
+# 이보다 짧으면 방향이라고 부를 수 없다. 두 점으로는 잡음이 각을
+# 통째로 정한다. 3프레임이면 60fps에서 50 ms다.
+MIN_OPENING_FRAMES = 3
 
 
 def opening(shot, positions, fps):
@@ -56,9 +59,31 @@ def opening(shot, positions, fps):
         if float(np.hypot(*(ahead - here))) / (OPENING_SKIP + 4) * fps < 300.0:
             continue
 
-        room = shot.start_frame + first_event - 2 - (frame + OPENING_SKIP)
-        span = int(np.clip(room, 4, OPENING_SPAN))
-        direction, speed = _travel(cue, frame + OPENING_SKIP, frame + OPENING_SKIP + span)
+        # ★2026-09-26에 여기가 범인으로 드러났다. 옛 코드는
+        #
+        #     room = ... - (frame + OPENING_SKIP)
+        #     span = int(np.clip(room, 4, OPENING_SPAN))
+        #
+        # 였고, **room이 4보다 작아도 4로 올렸다.** 그런데 실제로 쓸 수 있는
+        # 창은 대개 1~6 프레임뿐이다 — `start_frame`은 검출이 "움직였다"고
+        # 알아차린 때라 수구가 이미 1,500~5,200 mm/s로 구르고 있고, 첫 사건은
+        # 그로부터 1~42 프레임 뒤다. 거기서 OPENING_SKIP(4)까지 건너뛰면
+        # **재기도 전에 충돌을 지나간다.** 그러면 잰 것은 충돌 **후** 방향이고
+        # 어디든 가리킨다.
+        #
+        # 그 대가 (12경기, 368판):
+        #   시뮬이 아무 공도 못 맞힘 180판(49%) · 빗나간 판의 수직거리 중앙값
+        #   161 mm(공 2.6개) · 78판은 1적구가 겨냥선 **뒤에** 있었다
+        #   빗나간 판의 59%가 room<4, 44%가 room<0
+        #
+        # 그러므로 **건너뛰기도 창에 맞춰 줄인다.** 큐가 아직 공에 닿아 있는
+        # 앞 몇 프레임은 버리고 싶지만, 버릴 것이 없으면 버리지 않는다.
+        available = shot.start_frame + first_event - 2 - frame
+        if available < MIN_OPENING_FRAMES:
+            continue
+        skip = int(min(OPENING_SKIP, max(0, available - MIN_OPENING_FRAMES)))
+        span = int(np.clip(available - skip, MIN_OPENING_FRAMES, OPENING_SPAN))
+        direction, speed = _travel(cue, frame + skip, frame + skip + span)
         if direction is None:
             continue
         layout = {}

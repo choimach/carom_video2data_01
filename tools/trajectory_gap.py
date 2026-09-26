@@ -67,6 +67,15 @@ def collect(limit_files=None):
                 mine = played.paths[cue]
                 if min(len(seen), len(mine)) < 30:
                     continue
+                # ★1적구를 **같은 공으로** 맞힌 판만 쓴다 (2026-09-26). 안 쓰면
+                # 1적구를 빗나간 채 쿠션만 때린 판이 섞이고, 그 각도 오차는
+                # 물리가 아니라 겨냥 읽기 오차다. 옛 겨냥 읽기에서는 절반이
+                # 그랬다 (368판 중 180판이 아무 공도 못 맞혔다).
+                first_ball = (shot.verdict or {}).get("first_ball")
+                mine_first = next((detail for _f, kind, detail in played.events
+                                   if kind == "ball"), None)
+                if not first_ball or mine_first != first_ball:
+                    continue
                 first_real = next((e for e in (shot.verdict or {}).get("events") or []
                                    if e.kind == "cushion"), None)
                 first_sim = played.cushions[0] if played.cushions else None
