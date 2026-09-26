@@ -544,33 +544,34 @@ overlap까지만 잰다.** 시뮬 공이 먼저 멈추면 `len(mine) < len(seen)
 ⚠️ 옛 열거 결과는 `data/alternatives.jsonl.keep`에 있다 (10.8 MB). 새 열거가
    망가지면 그것으로 되돌린다.
 
-## 지금 돌고 있는 것 (2026-09-25 밤)
+## 지금 돌고 있는 것 (2026-09-26)
 
-**① 죽었던 3경기 다시 스캔** — 새 검출기로. 로그 `scratchpad/rescan_*.log`.
-옛 스캔은 `data/_scans_old/`에 두고 `data/scans/*.npz.bak`으로 밀어 뒀다.
-경기당 30분쯤, 셋을 동시에 돌린다 (코어 16개).
+**1) `bash tools/keep_up.sh --no-collect`** — 로그 `scratchpad/keepup.log`.
+회수한 5경기 스캔이 끝나 새 판을 모델에 넣는 중이다.
 
-**② 지워졌던 5경기 받기** — 46.6 GB, 순서대로. 로그 `scratchpad/get5.log`.
-`188292657` · `188321085` · `188333555` · `188440707` (T3WC2026) ·
-`163243601` (AKR2025). 받는 대로 스캔한다.
-
-**끝나면 할 것:**
+**끝나면 이어서:**
 
 ```bash
-~/.venvs/carom/bin/python tools/check_ball_detection.py --bad   # 검출률
-~/.venvs/carom/bin/python tools/export_all.py                   # 판으로
-bash tools/keep_up.sh --no-collect                              # 모델까지
+bash tools/enumerate_all.sh 14          # 열거 (아래 ⚠️ 읽을 것)
+~/.venvs/carom/bin/python tools/learn_choices.py        # 순위 재적합
+~/.venvs/carom/bin/python tools/score_probability.py    # 득점확률 재적합
+~/.venvs/carom/bin/python tools/build_assistant.py
+node --check build/sim.js && node --check build/route.js && node --check build/choice.js
 ```
 
-★**판수로 채점한다.** 검출률은 대리 지표다. 옛 8경기는 570판을 찾아 1판을
-썼다. 경기당 쓸 수 있는 판이 40개를 넘으면 성공이다 (정상 경기는 48).
+⚠️ **열거를 꼭 다시 해야 한다.** 두 가지가 바뀌었다:
+  · 속도 격자 4개 → 8개 (`STRENGTHS`, 프로 구간을 촘촘히). **탐색이 두 배 느려진다.**
+  · 대회전이 이름에서 꼬리표로 → 후보 통(`유형|1적구|면`)이 통째로 달라진다.
 
-⚠️ **지워졌던 5경기가 진짜 시험대다.** 지금 문턱들(`CLOTH_GAP` 40 ·
-`CLOTH_CHROMA_GAP` 20 · `LIGHTNESS_TOLERANCE` 80)은 `206317783_LIWC2026`
-하나를 보면서 골랐다. 그 5경기는 고르는 데 안 썼다. 거기서 무너지면
-과적합이다 — 문턱을 다시 만지지 말고 **먼저 그 사실을 적을 것.**
+옛 결과는 `data/alternatives.jsonl.oldgrid`에 있다 (옛 격자 + 옛 이름, `rest` 포함).
 
-**새 후보 스크리닝** — `data/_screen_run.log`. 싸다 (HLS 조각 14개면 80 MB).
+### 검출기 고친 값이 다 나왔다
+
+| | 전 | 후 |
+|---|---|---|
+| 셋 다 잡히는 비율 중앙값 | 91% | **92%** |
+| 최소 | **0%** | **66%** |
+| 5% 밑 (통째로 버려짐) | **8경기** | **0경기** |
 
 ## 공 검출기를 갈아엎었다 — 검증까지 끝났다 (2026-09-25)
 
