@@ -156,7 +156,8 @@ bash tools/keep_up.sh --no-collect
 
 파이썬은 항상 `~/.venvs/carom/bin/python`. 각 단계는 이미 한 것을 건너뛰므로
 언제 다시 돌려도 안전하다. `data/`와 `build/`는 git에 안 올라간다 —
-`labels.json`, `table_feedback.json`, **`videos.json`** 만 `git add -f`로 추적.
+`labels.json`, `table_feedback.json`, **`videos.json`**, 배운 가중치 둘(`choice_weights.json`,
+`probability_weights.json` — 다시 맞추지 않고도 조언판을 빌드할 수 있게) 만 `git add -f`로 추적.
 
 **스캔이 끝난 영상은 지운다.** 경기당 7~15 GB이고 스캔 결과는 1 MB도 안 되므로
 들고 있을 이유가 없다. 선수가 처음부터 정한 방식이다: *"완료된 경기 video는

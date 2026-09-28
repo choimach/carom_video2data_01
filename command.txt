@@ -1,4 +1,5 @@
-cd /mnt/d/Data/Billiard/carom_codex
+cd /mnt/d/Data/Billiard/carom_video2data_01
+D:\Data\Billiard\
 
 D:\Data\Billiard\carom_01
 
