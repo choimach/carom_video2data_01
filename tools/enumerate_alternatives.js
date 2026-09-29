@@ -153,6 +153,12 @@ function search(layout, cue) {
       // 0으로** 나왔다 — 여섯 시간짜리 열거를 한 번 통째로 버렸다.
       side, up, deg, speed, strength: SIM.strengthOf(speed),
       rails: judged.rails.length, pushed,
+      // ★첫 쿠션 세 자리와 그 레일 (2026-09-30). ①을 이름이 아니라 길로 재려고 —
+      // 1적구 앞의 쿠션도 들어간다 (app-data의 `rails`와 같은 정의).
+      cush: shot.events.filter((e) => e.kind === 'cushion').slice(0, 3)
+        .map((e) => [Math.round(e.p[0]), Math.round(e.p[1])]),
+      path: shot.events.filter((e) => e.kind === 'cushion').slice(0, 3)
+        .map((e) => e.detail).join('-'),
     });
     return true;
   };
@@ -222,9 +228,15 @@ function trueRoom(layout, cue, hit) {
 // 조언판은 실제 줄 하나를 쓰므로, 모델이 배우는 것과 화면이 내놓는 것이
 // 서로 다른 물건이었다. 지금은 조언판 finish()와 같은 규칙을 쓴다.
 function bucket(hits, layout, cue) {
+  // ★이름 안에서도 길(첫 3쿠션 레일)마다 따로 묶는다 (2026-09-30). 이름 하나에 길이
+  // 여러 갈래라 (뒤돌리기 80%를 덮는 데 12갈래, `tools/ceiling_path.py`) 이름마다
+  // 하나만 남기면 나머지 갈래를 버린다. 기록의 `key`는 이름 세 칸 그대로 둔다 —
+  // learn_choices가 `key === chose`로 프로의 후보를 찾는다. 같은 이름이 여럿이면
+  // 그중 프로의 것은 쿠션 자리(mm)로 가린다.
+  const groupOf = (h) => `${h.route}|${h.first}|${h.face}|${h.path}`;
   const by = new Map();
   for (const hit of hits) {
-    const key = `${hit.route}|${hit.first}|${hit.face}`;
+    const key = groupOf(hit);
     if (!by.has(key)) by.set(key, []);
     by.get(key).push(hit);
   }
@@ -243,7 +255,7 @@ function bucket(hits, layout, cue) {
   const tipOf = (h) => `${Math.round((h.side || 0) * 100)}:${Math.round((h.up || 0) * 100)}`;
   const perTip = new Map();
   for (const h of hits) {
-    const t = `${h.route}|${h.first}|${h.face}@${tipOf(h)}`;
+    const t = `${groupOf(h)}@${tipOf(h)}`;
     perTip.set(t, (perTip.get(t) || 0) + 1);
   }
 
@@ -257,11 +269,11 @@ function bucket(hits, layout, cue) {
         best = h;
       }
     }
-    const [route, first, face] = key.split('|');
+    const [route, first, face, path] = key.split('|');
     const tagged = {};
     for (const h of list) for (const t of (h.tags || [])) tagged[t] = (tagged[t] || 0) + 1;
     out.push({
-      key, route, first, face,
+      key: `${route}|${first}|${face}`, path, cush: best.cush, route, first, face,
       tags: Object.keys(tagged).length ? tagged : null,
       lines: list.length,
       rough: best.rough,
