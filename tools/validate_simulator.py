@@ -37,6 +37,13 @@ OPENING_SPAN = 24
 # 이보다 짧으면 방향이라고 부를 수 없다. 두 점으로는 잡음이 각을
 # 통째로 정한다. 3프레임이면 60fps에서 50 ms다.
 MIN_OPENING_FRAMES = 3
+# ★창의 평균 속도는 출발 속도가 아니다 (2026-09-29). 창 안에 미끄러짐 구간의 강한
+# 감속이 들어 있어 낮게 읽히고, 시뮬은 그 낮은 속도에서 **다시** 미끄러지며 깎는다
+# — 출발 직후 시뮬 속도가 실제의 0.72배, 첫 쿠션을 나갈 때 0.69배였다
+# (`tools/speed_probe.py`, `tools/cushion_drift.py`). 그래서 시뮬 자신으로 되푼다:
+# 창 끝에서 시뮬 수구가 실제와 같은 거리를 가 있도록 출발 속도를 맞춘다.
+# False면 옛 읽기 (견주기용).
+OPENING_SOLVE = True
 
 
 def opening(shot, positions, fps):
@@ -92,8 +99,43 @@ def opening(shot, positions, fps):
             if not np.isfinite(point).all():
                 return None
             layout[colour] = tuple(float(v) for v in point)
-        return layout, shot.cue_ball, tuple(direction * speed * fps), frame
+        speed = speed * fps
+        if OPENING_SOLVE:
+            speed = _solve_speed(layout, shot.cue_ball, direction, speed, cue, frame,
+                                 frame + skip + span, fps)
+        return layout, shot.cue_ball, tuple(direction * speed), frame
     return None
+
+
+def _solve_speed(layout, cue_ball, direction, guess, cue, frame, last, fps):
+    """창 끝에서 시뮬 수구가 실제와 같은 거리를 가 있게 하는 출발 속도 (mm/s).
+
+    거리는 속도에 대해 단조라 이분법이면 된다. 시뮬은 창 길이만큼만 돌린다.
+    """
+    window = cue[frame:last + 1]
+    seen = np.flatnonzero(np.isfinite(window).all(axis=1))
+    if len(seen) == 0 or seen[-1] == 0:
+        return guess
+    n = int(seen[-1])
+    target = float(np.hypot(*(window[n] - cue[frame])))
+
+    def gone(speed):
+        path = simulate(layout, cue_ball, tuple(direction * speed), fps=fps,
+                        max_seconds=(n + 2) / fps).paths[cue_ball]
+        if len(path) <= n:
+            return float(np.hypot(*(np.asarray(path[-1]) - path[0])))
+        return float(np.hypot(*(np.asarray(path[n]) - path[0])))
+
+    low, high = 0.7 * guess, 2.5 * guess
+    if gone(high) < target:
+        return high
+    for _ in range(14):
+        middle = 0.5 * (low + high)
+        if gone(middle) < target:
+            low = middle
+        else:
+            high = middle
+    return 0.5 * (low + high)
 
 
 def travelled(path):

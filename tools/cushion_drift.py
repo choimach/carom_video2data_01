@@ -32,7 +32,18 @@ import numpy as np
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
 
-from src.physics.simulator import simulate  # noqa: E402
+from src.physics.simulator import simulate_with_spin  # noqa: E402
+
+# ★조언판(`sim.js`)과 같은 `spin.py` 모형으로 친다 (2026-09-29). 옛 `simulate()`는
+# 상하 당점이 없어 1적구 충돌 뒤 수구 속도가 실제의 0.83배였다. 상단 0·1·2팁을
+# 견주니 2팁이 충돌 앞뒤 속도를 가장 잘 맞췄다 (1.04배 · 0.94배, 앞 6경기).
+# 판마다 맞춘 값이 아니라 **고정값**이다 — 당점은 영상에 안 찍힌다.
+TOP_TIPS = 2.0
+
+
+def simulate(layout, cue, velocity, fps=60.0, side_degrees=0.0):
+    return simulate_with_spin(layout, cue, velocity, tips_side=0.0,
+                              tips_vertical=TOP_TIPS, fps=fps)
 from src.pipeline import analyse, load_scan  # noqa: E402
 from tools.trajectory_gap import signed_turn  # noqa: E402
 from tools.validate_simulator import opening  # noqa: E402
