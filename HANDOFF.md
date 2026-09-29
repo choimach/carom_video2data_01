@@ -10,18 +10,22 @@
 
 `bash tools/state.sh`가 이 파일의 아래 절을 함께 보여준다.
 
-## ⏳ 돌고 있다: 열거 전체 재실행 (2026-09-29 22:24 시작, 조각 9개, ~5시간)
+## 열거 재실행 끝 (2026-09-30 02:46) — 쿠션 미끄럼 0.1 물리
 
-`RAIL_KEEPS_SLIDE` 0.3 → 0.1과 강도 표 재측정 뒤라 옛 열거는 옛 물리다.
-옛 장부는 `data/alternatives.jsonl.slide03` (작업 폴더에도 같은 이름).
-보기: `tail ~/.cache/carom_enum/run.log`. 끝나면 스크립트가 `data/alternatives.jsonl`로 가져온다.
+2,659판 (건너뛴 배치 3개, 힙 OOM 134가 네 번 — 스크립트가 다시 띄웠다) · 여유 전부 0인 판 0.
+옛 장부는 `data/alternatives.jsonl.slide03`.
 
-끝나면 할 일 (차례로):
-1. 값 확인 — 판 수 ~2,661, 여유 0이 아닌지
-2. `tools/learn_choices.py` · `tools/score_probability.py` 재적합 → 가중치 둘 `git add -f`
-3. `tools/build_assistant.py` → `node --check build/sim.js`
-4. `test_next_layout.py` · `rest_error.py` 다시 (옛: 1등 39.0%, 끝 자리 696 mm)
-5. 이 절을 지운다
+| | 옛 (0.3) | 새 (0.1) |
+|---|---|---|
+| 같은 1적구로 닿음 (reached) | 88.4% | 88.8% |
+| 순위 1등 · 3등 안 | 39.0% · 66.2% | 39.4% · 65.8% |
+| 득점 확률 AUC | 0.632 | 0.633 |
+| `rest_error` 프로 줄 끝 자리 | 696 mm | 702 mm |
+| `test_next_layout` | 0.8 SD | 0.6 SD — 가릴 수 없다 |
+
+순위·확률은 움직이지 않았다 — 물리 수정은 **궤적 그림**을 고친 것이지 선택을 고친 것이 아니다.
+★포지션을 재려면 `rest_error`가 아니라 **프로 샷 다시 치기**가 필요하다: `opening()`(되풀기)으로
+프로의 겨냥·속도를 읽고 `spin.py`로 쳐서 다음 샷 시작 배치와 견준다. 그 도구가 아직 없다.
 
 ## ★못 찾은 판은 탐색 구멍이 아니라 대부분 **통 경계**다 (2026-09-26, 1,609판)
 
