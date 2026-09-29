@@ -203,6 +203,9 @@ node --check build/sim.js
 
 - 원본은 `src/visualization/assistant/`. **스크래치패드에서 작업하지 말 것** —
   세션과 함께 사라지고, 실제로 며칠간 저장소 밖에 있었다.
+- **화면은 `bash tools/screenshot_assistant.sh out.png`로 본다** — 무작위 배치 하나를 실행해 찍고
+  콘솔 오류를 찍는다. sudo 없이 된다 (빠진 라이브러리를 `apt-get download`로 받아 쓴다).
+  `!` 명령으로는 sudo 비밀번호를 넣을 수 없다.
 - **게시 전에 항상 `node --check`.** 페이지는 스크립트 한 덩어리라 괄호 하나가
   전체를 조용히 죽인다. 정의 없이 호출되던 `kissed()` 하나 때문에 모든 배치가
   "득점하는 선을 찾지 못했습니다"로 나온 적이 있다.
