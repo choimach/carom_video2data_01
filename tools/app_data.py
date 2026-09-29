@@ -243,9 +243,13 @@ def main(argv=None):
         # 면은 원본 프레임의 값을 그대로 쓰고 있었다 — 거울이 한 번 걸린 판에서
         # 왼쪽 면이 오른쪽 면으로 저장된 것이다. 절반쯤이 그랬고, 그래서 면이
         # 동전 던지기로 나왔다. 거울 두 번(180도 회전)은 손을 바꾸지 않는다.
+        #
+        # ⚠️ 2026-09-30: 그런데 `model_dataset.py`가 **이미** 거울 한 번이면 뒤집어서
+        # 넘긴다 (`flips_side`). 2026-09-23(4b45234)에 여기서 한 번 더 뒤집어, 거울 한 번인
+        # 판의 면이 도로 원본 틀로 돌아가 있었다. 옆/뒤돌리기 규칙("맞힌 면 = 도는 방향")에
+        # 대 보니 거울 0·2번 판은 10~12%, 1번 판은 88%로 정확히 갈렸다
+        # (`tools/ceiling_path.py`). 조언판의 이웃 투표가 절반의 판에서 틀린 면을 셌다.
         struck = row.get("struck_side")
-        if struck is not None and (flip_x != flip_y):
-            struck = -struck
         plays.append({
             "f": [round(float(v), 3) for v in point],
             "near": near_first,

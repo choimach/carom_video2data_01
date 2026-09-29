@@ -132,7 +132,9 @@ def build():
             "first_object_ball": play.get("first_object_ball"),
             "thickness": play.get("thickness"),
             "speed_ms": play.get("cue_speed_ms"),
-            "english": None if english is None or not flips_side else -english,
+            # ⚠️ 2026-09-30까지 `or not flips_side`로 적혀 있어, 거울이 없거나
+            # 180도 돈 판 1,336개의 회전이 **전부 None**이었다.
+            "english": None if english is None else (-english if flips_side else english),
             "struck_side": None if struck is None else (-struck if flips_side else struck),
         })
     return rows, dropped
