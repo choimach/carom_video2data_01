@@ -21,7 +21,10 @@
 set -uo pipefail
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
 WORK=${ENUM_WORK:-$HOME/.cache/carom_enum}
-N=${1:-$(( $(nproc) - 2 ))}
+# ★기계를 다 쓰지 않는다 (2026-09-30, 선수): *"가능하면 16코어는 쓰지맙시다. 같이
+# 돌고 있던 다른 프로그램이 죽어버려서 안 좋음."* 이 기계는 이 일만 하는 곳이 아니다.
+# 기본은 코어의 절반, 그리고 아래에서 메모리를 RESERVE_MB만큼 남겨 둔다.
+N=${1:-$(( $(nproc) / 2 ))}
 [ "$N" -lt 1 ] && N=1
 # ★메모리 (2026-09-26). 이 WSL은 **15 GB**뿐이다. 힙 한도 2000 MB로 조각 14개를
 # 띄웠더니 조각마다 1.4 GB까지 불어 OOM이 조각을 죽였다. 쓰는 양이 아니라 GC가
@@ -29,7 +32,8 @@ N=${1:-$(( $(nproc) - 2 ))}
 # 남은 메모리로 한 번 더 자른다. 600으로 내렸더니 **정말로 590 MB가 사는** 배치가
 # 있어 힙 OOM(134)이 났다 — 1000으로 둔다.
 HEAP=${HEAP:-1000}
-FIT=$(( $(awk '/MemAvailable/ {print $2}' /proc/meminfo) / 1024 / (HEAP + 200) ))
+RESERVE_MB=${RESERVE_MB:-4096}   # 다른 프로그램 몫 — 2026-09-30에 그것이 죽었다
+FIT=$(( ( $(awk '/MemAvailable/ {print $2}' /proc/meminfo) / 1024 - RESERVE_MB ) / (HEAP + 200) ))
 [ "$N" -gt "$FIT" ] && { echo "메모리가 모자라 조각을 $N → $FIT개로 줄입니다"; N=$FIT; }
 [ "$N" -lt 1 ] && N=1
 STALL=${STALL:-900}        # 배치 평균이 50~100초다. 15분이면 멈춘 것이다.
