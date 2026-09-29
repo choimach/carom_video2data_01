@@ -49,7 +49,10 @@ from tools.trajectory_gap import signed_turn  # noqa: E402
 from tools.validate_simulator import opening  # noqa: E402
 
 K = 5
-NEAR, FAR = 3, 8          # 접촉 흐림을 피해 접촉 3~8프레임 앞뒤로 방향·속도를 잰다
+# 접촉 흐림을 피해 접촉 NEAR~FAR 프레임 앞뒤로 방향·속도를 잰다. 3~8·6~12·9~16을
+# 견줘 반발 치우침은 셋 다 −0.17~−0.22로 같았고, 6~12가 흩어짐이 가장 작았다
+# (±0.35 → ±0.10, 2026-09-29).
+NEAR, FAR = 6, 12
 
 
 def around(path, at):
@@ -117,6 +120,8 @@ def collect(limit_files=None):
                         "bend": signed_turn(r[0], r[1]) - signed_turn(s[0], s[1]),
                         # 반발: 속도비의 로그 차 (+면 시뮬이 덜 잃는다)
                         "bounce": float(np.log(s[3] / s[2]) - np.log(r[3] / r[2])),
+                        "bounce_real": float(np.log(r[3] / r[2])),
+                        "bounce_sim": float(np.log(s[3] / s[2])),
                         "leg": None,
                         # 나가는 속도 자체 (+면 시뮬이 빠르다)
                         "speed": float(np.log(s[3] / r[3])),
@@ -149,13 +154,14 @@ def main(argv):
     print(f"1적구를 같게 맞힌 판 {shots}개 — 수구의 쿠션 k번째에서\n")
     print("   k  이름 같음  갈라짐 |  자리 mm  |  시각 프레임 | 물려받은 각 | 나간 각 "
           "| ★쿠션이 더한 각 | 반발 log비 | 구간 감속 log비"
-          " | 나가는 속도 log비 | 감속도 차 mm/s² | 실제 감속도")
+          " | 나가는 속도 log비 | 감속도 차 mm/s² | 실제 감속도 | 실제 반발 | 시뮬 반발")
     for k in range(1, K + 1):
         same, split = reach[k]
         cells = []
         for key, digits in (("where", 0), ("when", 1), ("in", 1), ("out", 1),
                             ("bend", 1), ("bounce", 2), ("leg", 2),
-                            ("speed", 2), ("decel", 0), ("decel_real", 0)):
+                            ("speed", 2), ("decel", 0), ("decel_real", 0),
+                            ("bounce_real", 2), ("bounce_sim", 2)):
             got = mid_half([r.get(key) for r in rows[k]])
             if got is None:
                 cells.append("—")
