@@ -334,6 +334,14 @@
 
   // 선수 배치를 기준 사분면으로 돌리는 변환. 각도도 같은 변환을 받아야 한다:
   // 짧은 축 뒤집기는 각을 180−θ로, 긴 축 뒤집기는 −θ로 바꾼다.
+  // 쿠션 자리에서 가장 가까운 벽 이름 n개 — learn_choices.py의 rail_tokens()와 같다.
+  // 이름(시뮬의 detail)을 쓰지 않는다: 시뮬과 영상은 레일 이름 약속이 다르다.
+  function railTokens(points, n) {
+    if (!points || points.length < n) return null;
+    return points.slice(0, n).map(([x, y]) => [["L", x], ["R", L - x], ["B", y], ["T", W - y]]
+      .reduce((a, b) => (b[1] < a[1] ? b : a))[0]).join("-");
+  }
+
   function frameOf() {
     const at = layout[cue];
     const flipY = at[0] > L / 2, flipX = at[1] > W / 2;
@@ -359,10 +367,18 @@
       return { play, gap: Math.sqrt(sum) };
     }).sort((a, b) => a.gap - b.gap).slice(0, K);
     const weight = new Map(), rate = new Map(), thick = new Map(), tip = new Map();
+    const pathWeight = new Map(), pathRate = new Map();
     for (const item of near) {
       const key = `${item.play.route}|${item.play.near}|${item.play.face}`;
       weight.set(key, (weight.get(key) || 0) + 1);
       rate.set(key, (rate.get(key) || 0) + (item.play.scored ? 1 : 0));
+      // ★이웃의 **길**로도 센다 (2026-09-30, learn_choices.py의 "이웃길수").
+      const tokens = railTokens(item.play.rails, 2);
+      if (tokens) {
+        const pathKey = `${item.play.near}|${item.play.face}|${tokens}`;
+        pathWeight.set(pathKey, (pathWeight.get(pathKey) || 0) + 1);
+        pathRate.set(pathKey, (pathRate.get(pathKey) || 0) + (item.play.scored ? 1 : 0));
+      }
       // 이웃이 **실제로 준 당점**. 2026-09-25에 생겼다 — 합동 맞추기로 영상에서
       // 되찾은 값이다 (`tools/fit_tip.js`). `tip_ok`가 거짓인 것은 맞추기가
       // ±3팁 끝에 걸린 판이라, 그 값은 당점이 아니라 모형 오차다. 버린다.
@@ -383,7 +399,7 @@
         }
       }
     }
-    return { weight, rate, thick, tip, total: near.length, near };
+    return { weight, rate, thick, tip, pathWeight, pathRate, total: near.length, near };
   }
 
   // 이웃이 준 당점의 가운데. 좌우와 상하를 따로 중앙값 내지 않는다 — 당점은
@@ -842,9 +858,19 @@
       const first = hit.judged.first;
       const other = ORDER.find((c) => c !== cue && c !== first);
       const isNear = gapTo(first) <= gapTo(other);
-      const proKey = `${hit.route}|${isNear}|${hit.face}`;
+      // ★이웃 자료의 면은 **뒤집어 맞춘 틀**의 값이다. 거울이 한 번 걸리는 배치에서는
+      // 좌우가 바뀌므로 후보의 면도 같은 틀로 돌려야 한다 (2026-09-30까지 안 돌렸다).
+      const frame = frameOf();
+      const face = frame.flipX !== frame.flipY
+        ? (hit.face === "left" ? "right" : "left") : hit.face;
+      const proKey = `${hit.route}|${isNear}|${face}`;
       const chosen = pros.weight.get(proKey) || 0;
       const scored = pros.rate.get(proKey) || 0;
+      const cushions = hit.shot.events.filter((e) => e.kind === "cushion").map((e) => frame.turn(e.p));
+      const tokens = railTokens(cushions, 2);
+      const pathKey = tokens && `${isNear}|${face}|${tokens}`;
+      const chosenPath = (pathKey && pros.pathWeight.get(pathKey)) || 0;
+      const ratePath = (((pathKey && pros.pathRate.get(pathKey)) || 0) + 1) / (chosenPath + 2);
       // 몇 명이 골랐는지만 보고 몇 명이 넣었는지를 안 보던 것이 틀린 이유였다.
       // 같은 배치에서 셋이 고른 뱅크샷(하나 성공)이 셋이 고른 뒤돌리기(둘 성공)를
       // 이겼다. 성공률은 표본이 작아 0%와 100%가 흔하므로, 한 번의 성공과 한 번의
@@ -879,7 +905,7 @@
         // 다만 옛날처럼 곱하지 않는다. **배운 식 안의 특징 둘**로 들어가서,
         // 무게를 내가 정하지 않고 자료가 정한다 (이웃프로수 +1.18, 이웃득점률 +0.82).
         band, thickOff: off,
-        score: agree * learnedScore(hit, chosen, rate),
+        score: agree * learnedScore(hit, chosen, rate, chosenPath, ratePath),
         chance: chanceOf({ ...hit, chosen, rate }),
       });
     }
@@ -1430,11 +1456,11 @@
     return out;
   })();
 
-  const learnedScore = (hit, chosen, rate) => CHOICE.score({
+  const learnedScore = (hit, chosen, rate, chosen_path, rate_path) => CHOICE.score({
     room: hit.room, thickness: hit.thickness,
     strength: SIM.strengthOf(hit.speed), rails: hit.judged.rails.length,
     pushed: hit.pushed, lines: hit.lines, side: hit.side, up: hit.vertical,
-    chosen, rate, prior: ROUTE_PRIOR.get(hit.route),
+    chosen, rate, prior: ROUTE_PRIOR.get(hit.route), chosen_path, rate_path,
   }, CHOICE_WEIGHTS);
 
   const label = (row) =>

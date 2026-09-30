@@ -65,12 +65,17 @@ def features(branch, layout=None, cue=None):
         # 후보에서는 20%뿐이었다. 전방위 훑기가 쿠션 먼저 맞는 길을 잘 잡는
         # 대가다. 손으로 유형을 깎지 않고 가중치가 정하게 둔다.
         branch.get("prior", LOG_FLOOR),
+        # ★이웃 프로의 **길**(가까운공|면|첫 2쿠션 레일)로 센 표 (2026-09-30). 이름 표와
+        # 같이 쓴다. 이름 표만 쓸 때와 짝지어: 1등 후보가 프로 길의 300 mm 안으로 들어온
+        # 판 102 · 빠진 판 51 (4.1 표준편차), 프로 후보 자리 3.2 표준편차.
+        math.log1p(branch.get("chosen_path", 0)),
+        branch.get("rate_path", 0.5),
         1.0,                                 # 기준선
     ]
 
 
 NAMES = ["여유", "두께", "세기", "쿠션수", "1적구이동", "줄두께", "회전량", "상단당점",
-         "이웃프로수", "이웃득점률", "유형빈도", "기준"]
+         "이웃프로수", "이웃득점률", "유형빈도", "이웃길수", "이웃길득점률", "기준"]
 
 # 유형을 한 번도 못 본 경우의 바닥값. 2,000판쯤에서 "한 번 봤다"보다 낮다.
 LOG_FLOOR = math.log(1 / 2000.0)
@@ -105,7 +110,43 @@ def load(limit=None):
     return rounds
 
 
+# 이웃 투표의 열쇠 (2026-09-30 실험). "name" = 유형|가까운공|면 (지금까지),
+# "pathN" = 가까운공|면|첫 N쿠션 레일 — 이름을 거치지 않고 **길**로 센다.
+VOTES = "both"
+TABLE_L, TABLE_W = 2844.0, 1422.0
+
+
+def rail_tokens(points, n):
+    """쿠션 자리에서 가장 가까운 벽 이름 n개. 시뮬과 영상은 레일 이름 약속이 달라
+    (시뮬은 y≈1391이 bottom) 이름을 쓰지 않고 **자리**에서 다시 계산한다."""
+    out = []
+    for x, y in (points or [])[:n]:
+        out.append(min((("L", x), ("R", TABLE_L - x), ("B", y), ("T", TABLE_W - y)),
+                       key=lambda t: t[1])[0])
+    return "-".join(out) if len(out) == n else None
+
+
 def with_neighbours(rounds):
+    if VOTES == "both":
+        return _both(rounds)
+    return _with_neighbours(rounds)
+
+
+def _both(rounds):
+    """이름 투표와 길(첫 2쿠션) 투표를 둘 다 붙인다."""
+    global VOTES
+    VOTES = "path2"
+    _with_neighbours(rounds)
+    for one in rounds:
+        for b in one["found"]:
+            b["chosen_path"], b["rate_path"] = b.get("chosen", 0), b.get("rate", 0.5)
+    VOTES = "name"
+    out = _with_neighbours(rounds)
+    VOTES = "both"
+    return out
+
+
+def _with_neighbours(rounds):
     """판마다 후보에 "이웃 중 몇 명이 이 길을 골랐나"를 붙인다.
 
     열쇠를 공 색깔이 아니라 **가까운 공이냐 먼 공이냐**로 맞춰야 한다 — 이웃의
@@ -130,6 +171,16 @@ def with_neighbours(rounds):
         return f"{row['route']}|{gaps[first] == min(gaps.values())}|{'left' if side > 0 else 'right'}"
 
     picked = [bucket(r) for r in rows]
+    if VOTES.startswith("path"):
+        n = int(VOTES[4:])
+        rails = pro_rails()
+        def path_key(row, name_key):
+            if not name_key:
+                return None
+            _route, near, face = name_key.split("|")
+            tokens = rail_tokens(rails.get(f"{row['match']}:{row['inning']}:{row['shot']}"), n)
+            return None if tokens is None else f"{near}|{face}|{tokens}"
+        picked = [path_key(r, k) for r, k in zip(rows, picked)]
     out = []
     for one in rounds:
         i = seat.get(one["id"])
@@ -150,6 +201,9 @@ def with_neighbours(rounds):
                  for c, xy in at.items() if c != one["cue"]}
         for branch in one["found"]:
             key = f"{branch['route']}|{reach.get(branch['first']) == min(reach.values())}|{branch['face']}"
+            if VOTES.startswith("path"):
+                tokens = rail_tokens(branch.get("cush"), int(VOTES[4:]))
+                key = None if tokens is None else "|".join(key.split("|")[1:] + [tokens])
             branch["chosen"] = votes.get(key, 0)
             branch["rate"] = (wins.get(key, 0) + 1) / (branch["chosen"] + 2)
         out.append(one)
@@ -188,6 +242,26 @@ def path_gap(branch, rails):
         return None
     return float(np.mean([np.hypot(mine[k][0] - rails[k][0], mine[k][1] - rails[k][1])
                           for k in (0, 1)]))
+
+
+_RAILS = None
+
+
+def pro_branch(one):
+    """프로의 후보. 같은 이름(`key == chose`)이 여럿이면 첫 두 쿠션이 프로의 실제
+    쿠션 자리에 가장 가까운 것 — 2026-09-30부터 열거가 이름 안에서도 길마다 후보를 둔다.
+    다른 도구들이 `next(b for b ... if b["key"] == chose)`로 첫 번째를 집던 것을 바꾼다."""
+    global _RAILS
+    if _RAILS is None:
+        _RAILS = pro_rails()
+    same = [b for b in one["found"] if b["key"] == one["chose"]]
+    if len(same) < 2:
+        return same[0] if same else None
+    rails = _RAILS.get(one["id"], [])
+    gaps = [path_gap(b, rails) for b in same]
+    if all(g is None for g in gaps):
+        return same[0]
+    return min(zip(gaps, same), key=lambda t: np.inf if t[0] is None else t[0])[1]
 
 
 def as_arrays(rounds):
@@ -254,7 +328,12 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--limit", type=int, default=None)
     parser.add_argument("--folds", type=int, default=10, help="경기 단위 겹 수")
+    parser.add_argument("--votes", default="both", help="both | name | path1 | path2 | path3")
+    parser.add_argument("--dry", action="store_true", help="가중치를 쓰지 않는다")
+    parser.add_argument("--dump", default=None, help="판별 (1등 자리, 길 거리)를 JSON으로 — 두 식을 짝지어 견줄 때")
     args = parser.parse_args()
+    global VOTES
+    VOTES = args.votes
 
     rounds = load(args.limit)
     if len(rounds) < 30:
@@ -284,6 +363,7 @@ def main():
     places = {"아무렇게나": [], "손 식": [], "배운 식": []}
     # ★길로 채점 (2026-09-30): 1등 후보의 첫 두 쿠션이 프로의 것과 몇 mm인가.
     # 이름이 같아도 길이 다르면 틀린 것, 이름이 달라도 길이 같으면 맞은 것으로 센다.
+    per_play = {}
     gap_of = {"아무렇게나": [], "손 식": [], "배운 식": [], "프로 이름 중 가장 가까운 것": []}
     sizes = []
     for fold in range(folds):
@@ -305,11 +385,14 @@ def main():
                      "프로 이름 중 가장 가까운 것": chose}
             for name, i in picks.items():
                 gap_of[name].append(path_gap(found[i], pro))
+            per_play[one["id"]] = (places["배운 식"][-1], gap_of["배운 식"][-1])
 
     print(f"프로가 실제로 고른 길이 몇 번째에 오는가 ({len(sizes)}판, 전부 한 번씩 test)")
     for name in ("아무렇게나", "손 식", "배운 식"):
         report(name, places[name], sizes)
 
+    if args.dump:
+        json.dump(per_play, open(args.dump, "w"))
     print("\n1등 후보의 길이 프로의 길과 얼마나 가까운가 (첫 두 쿠션 자리 평균, mm)")
     for name, values in gap_of.items():
         v = np.array([x for x in values if x is not None], float)
@@ -336,6 +419,8 @@ def main():
             continue
         print(f"  {name:<10} {value:+7.2f}")
 
+    if args.dry:
+        return 0
     json.dump({"note": "프로가 같은 배치에서 무엇 대신 무엇을 골랐는지로 맞춘 가중치. "
                        "tools/learn_choices.py가 만든다.",
                "names": NAMES, "weights": [round(float(v), 4) for v in weight],

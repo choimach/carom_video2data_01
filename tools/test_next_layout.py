@@ -75,6 +75,7 @@ sys.path.insert(0, os.path.join(ROOT, "tools"))
 import learn_choices  # noqa: E402
 from learn_choices import (as_arrays, fit, load, where_it_landed,  # noqa: E402
                            with_neighbours, with_prior)
+from learn_choices import pro_branch  # noqa: E402
 from model_dataset import canonical  # noqa: E402
 from route_model import player_features  # noqa: E402
 
@@ -162,8 +163,9 @@ def main():
     # 먼저 맨눈으로: 프로가 고른 줄의 다음 배치가 버린 줄보다 쉬운가?
     mine, theirs = [], []
     for one in rounds:
+        pro = pro_branch(one)
         for branch in one["found"]:
-            (mine if branch["key"] == one["chose"] else theirs).append(branch["next_ease"])
+            (mine if branch is pro else theirs).append(branch["next_ease"])
     mine, theirs = np.array(mine), np.array(theirs)
     gap = mine.mean() - theirs.mean()
     spread = math.sqrt(mine.var() / len(mine) + theirs.var() / len(theirs))

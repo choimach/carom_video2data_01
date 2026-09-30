@@ -37,6 +37,7 @@ import numpy as np
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
 sys.path.insert(0, os.path.join(ROOT, "tools"))
+from learn_choices import pro_branch  # noqa: E402
 
 FOUND = os.path.join(ROOT, "data", "alternatives.jsonl")
 
@@ -70,7 +71,7 @@ def main():
             if not one.get("reached") or one.get("scored") is None:
                 continue
             chose = one["chose"]
-            branch = next((b for b in one["found"] if b["key"] == chose), None)
+            branch = pro_branch(one)
             if branch is None:
                 continue
             rows.append((branch, bool(one["scored"]), one))
@@ -153,7 +154,7 @@ def fit_model():
     for one in rounds:
         if one.get("scored") is None:
             continue
-        branch = next((b for b in one["found"] if b["key"] == one["chose"]), None)
+        branch = pro_branch(one)
         if branch is None or branch["route"] in OUTCOME_IN_NAME:
             continue
         rows.append((features(branch), 1.0 if one["scored"] else 0.0,
