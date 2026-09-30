@@ -794,7 +794,21 @@
     // (가중치 +2.40), 뜻은 "이 공략이 얼마나 너그러운가"다 — 프로가 고른 것과
     // 버린 것을 가르는 첫째가 바로 이것이었다.
     const best = new Map(), lines = new Map(), perTip = new Map();
-    const idOf = (h) => `${h.route}|${h.judged.first}|${h.face}`;
+    // ★이름만이 아니라 **길**로 묶는다 (2026-10) — tools/enumerate_alternatives.js의
+    // bucket()과 같다: 이름 + 첫 3쿠션 레일 + 첫 쿠션 자리 400 mm 칸. 이름으로만 묶으면
+    // 이름 하나에 여러 갈래인 길(뒤돌리기 80%를 덮는 데 12갈래) 중 하나만 남고,
+    // 같은 레일 순서라도 쿠션 자리가 몇 m씩 달라 대표 하나가 프로 길을 버린다.
+    // 400 mm 칸으로 탐색 구멍 58판 중 21판이 되살아났고 닿던 판은 하나도 안 잃었다.
+    const BIN_MM = 400;
+    const idOf = (h) => {
+      if (h.pathId === undefined) {
+        const cush = h.shot.events.filter((e) => e.kind === "cushion");
+        const bin = cush.length
+          ? `@${Math.floor(cush[0].p[0] / BIN_MM)},${Math.floor(cush[0].p[1] / BIN_MM)}` : "";
+        h.pathId = cush.slice(0, 3).map((e) => e.detail).join("-") + bin;
+      }
+      return `${h.route}|${h.judged.first}|${h.face}|${h.pathId}`;
+    };
     // 당점은 극좌표 한 점이다 — 좌우와 상하를 따로 세면 아무도 치지 않는 점이
     // 나온다. 여기서는 (좌우, 상하) 쌍째로 센다.
     const tipOf = (h) => `${Math.round((h.side || 0) * 100)}:${Math.round((h.vertical || 0) * 100)}`;

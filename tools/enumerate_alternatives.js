@@ -80,7 +80,10 @@ const ROUTE = require(path.join(ROOT, 'src', 'visualization', 'assistant', 'rout
 const nameRoute = (shot, judged, aim, face) =>
   ROUTE.of(shot, judged, face, shot.cue, SIM.L, SIM.W);   // {route, tags}
 
-function search(layout, cue) {
+// opts (실험, 2026-10 — 탐색 구멍 재기): window = 다듬기 창 (도, 기본 1),
+// refineAll = 첫 관문을 못 넘은 두께 사다리 방향도 다듬는다.
+function search(layout, cue, opts = {}) {
+  const WINDOW = opts.window || 1.0;
   const from = layout[cue];
   const jobs = [];
   for (const colour of ORDER) {
@@ -163,13 +166,16 @@ function search(layout, cue) {
     return true;
   };
 
-  for (const job of jobs) if (go(job[0], job[1], job[2], job[3], job[4] === 'sweep')) promising.push(job);
+  for (const job of jobs) {
+    const ok = go(job[0], job[1], job[2], job[3], job[4] === 'sweep');
+    if (ok || (opts.refineAll && job[4] !== 'sweep')) promising.push(job);
+  }
   const key4 = (j) => `${j[0]}:${j[1]}:${j[2]}:${j[3]}`;
   const seen = new Set(jobs.map(key4));
   const FEW_TIPS = [[0, 0], ...[12, 3, 6, 9].map((h) => atClock(h, 2))];
   for (const [deg, speed, , , born] of promising) {
     for (const [side, up] of (born === 'sweep' ? FEW_TIPS : TIP_POINTS)) {
-      for (let d = -1.0; d <= 1.0; d += FINE) {
+      for (let d = -WINDOW; d <= WINDOW; d += FINE) {
         const at = Math.round((((deg + d) % 360 + 360) % 360) / FINE) * FINE;
         const job = [at, speed, side, up];
         if (seen.has(key4(job))) continue;
@@ -227,13 +233,20 @@ function trueRoom(layout, cue, hit) {
 // 않는 당점을 달고 있었다 — 한 줄의 좌우에 다른 줄의 상하를 붙인 값이다.
 // 조언판은 실제 줄 하나를 쓰므로, 모델이 배우는 것과 화면이 내놓는 것이
 // 서로 다른 물건이었다. 지금은 조언판 finish()와 같은 규칙을 쓴다.
-function bucket(hits, layout, cue) {
+// binMM (2026-10, 기본 400): 같은 길 묶음 안에서도 첫 쿠션 자리를 binMM 칸으로 더 쪼갠다.
+// 같은 레일 순서라도 쿠션 자리가 몇 m씩 다르다 — 대표 하나만 남기면 프로 길이 버려진다.
+function bucket(hits, layout, cue, binMM = 400) {
   // ★이름 안에서도 길(첫 3쿠션 레일)마다 따로 묶는다 (2026-09-30). 이름 하나에 길이
   // 여러 갈래라 (뒤돌리기 80%를 덮는 데 12갈래, `tools/ceiling_path.py`) 이름마다
   // 하나만 남기면 나머지 갈래를 버린다. 기록의 `key`는 이름 세 칸 그대로 둔다 —
   // learn_choices가 `key === chose`로 프로의 후보를 찾는다. 같은 이름이 여럿이면
   // 그중 프로의 것은 쿠션 자리(mm)로 가린다.
-  const groupOf = (h) => `${h.route}|${h.first}|${h.face}|${h.path}`;
+  const binOf = (h) => {
+    if (!binMM || !h.cush || !h.cush.length) return '';
+    const [x, y] = h.cush[0];
+    return `@${Math.floor(x / binMM)},${Math.floor(y / binMM)}`;
+  };
+  const groupOf = (h) => `${h.route}|${h.first}|${h.face}|${h.path}${binOf(h)}`;
   const by = new Map();
   for (const hit of hits) {
     const key = groupOf(hit);
@@ -269,7 +282,8 @@ function bucket(hits, layout, cue) {
         best = h;
       }
     }
-    const [route, first, face, path] = key.split('|');
+    const [route, first, face, pathBin] = key.split('|');
+    const path = pathBin.split('@')[0];
     const tagged = {};
     for (const h of list) for (const t of (h.tags || [])) tagged[t] = (tagged[t] || 0) + 1;
     out.push({
