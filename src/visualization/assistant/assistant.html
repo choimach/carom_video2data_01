@@ -413,6 +413,15 @@
   // 몇 명에게서 나온 값인지 함께 돌려준다. 한 명짜리도 감추지 않는다 —
   // 감추면 "프로 자료가 없다"와 "한 명뿐이다"가 구별되지 않는다. 대신 화면에
   // 사람 수를 같이 적어 선수가 무게를 스스로 재게 한다.
+  // 이웃 프로의 당점은 **뒤집어 맞춘 틀**의 값이다 (tips.json은 정규화된 배치로 맞췄다).
+  // 거울이 한 번 걸리는 배치(수구가 대각 사분면)에서는 좌우가 반대이므로 되돌린다.
+  // 2026-10까지 안 돌려서, 화면의 "가까운 프로 n명은 ○시를 줬습니다"가 그런 배치에서
+  // 좌우가 뒤바뀌어 적혔다 — 선수: "좌우가 바뀌는 것 … 가장 흔한 문제야."
+  function inFrame(pro, frame) {
+    if (!pro || frame.flipX === frame.flipY) return pro;
+    return { ...pro, tip: [-pro.tip[0], pro.tip[1]] };
+  }
+
   function middleTip(list) {
     if (!list || !list.length) return null;
     let best = null;
@@ -503,6 +512,33 @@
   const TIP_AMOUNTS = [1, 3];
   const COARSE = 2, FINE = 0.25, CHUNK = 120;
   const pause = () => new Promise((go) => setTimeout(go, 0));
+  // 두께 사다리에서 가망 있던 방향을 다듬을 때 펼치는 당점. 조언판 시간의 84%가
+  // 이 다듬기다 (2026-10, tools/profile_app.js). 시험 도구가 바꿔 끼울 수 있게 let.
+  let REFINE_TIPS = TIP_POINTS;
+  // 득점 못 한 시도를 "가망"으로 칠 때, 1적구 뒤 셋째 쿠션부터 수구가 2적구에 가장
+  // 가까이 간 거리가 이보다 멀면 다듬지 않는다 (2026-10). 조언판 시간의 84%가 다듬기였고
+  // 가망 578개 중 대부분이 2적구 근처에도 안 가는 방향이었다. 프로 배치 240판을 짝지어:
+  //   관문 없음  14.2초 · 1등 300 mm 안 39% · 상위 3개 59%
+  //   300 mm      5.3초 ·               40% ·          58%   (+0.4 / −0.5 표준편차)
+  //   600 mm      7.3초 ·               40% ·          60%   (+1.0 / +0.9)
+  // null이면 끈다 (tools/check_app_ranking.js의 PRE로 견줄 때).
+  let GATE_MM = 300;
+  function nearMiss(shot, first) {
+    const other = ORDER.find((c) => c !== cue && c !== first);
+    if (!other || !layout[other]) return Infinity;
+    const hitAt = (shot.events.find((e) => e.kind === "ball") || {}).at;
+    if (hitAt === undefined) return Infinity;
+    const after = shot.events.filter((e) => e.kind === "cushion");
+    if (after.length < 3) return Infinity;
+    const from = Math.max(Math.round(after[2].at * 60), Math.round(hitAt * 60));
+    const path = shot.paths[cue] || [];
+    const [x, y] = layout[other];
+    let best = Infinity;
+    for (let i = Math.min(from, path.length - 1); i < path.length; i++) {
+      best = Math.min(best, Math.hypot(path[i][0] - x, path[i][1] - y));
+    }
+    return best;
+  }
 
   // 키스 — 계산한 줄이 실제로는 성립하지 않는 두 가지.
   //
@@ -538,7 +574,11 @@
       ? (balls.length > 0 && cushions >= 4
          && shot.events.some((e) => e.kind === "cushion" && e.at < balls[0].at))
       : (balls.length > 0 && cushions >= 2);
-    if (!judged.scored) return promising;
+    if (!judged.scored) {
+      if (promising && GATE_MM !== null && balls.length
+          && nearMiss(shot, balls[0].detail) > GATE_MM) return false;
+      return promising;
+    }
     if (kissed(shot, judged)) { counters.kisses++; return promising; }
     const target = layout[judged.first];
     const toBall = [target[0] - layout[cue][0], target[1] - layout[cue][1]];
@@ -668,7 +708,7 @@
     const FEW_TIPS = [[0, 0], ...[12, 3, 6, 9].map((h) => atClock(h, 2))];
     const around = [];
     for (const [deg, speed, , , born] of promising) {
-      for (const [side, up] of (born === "sweep" ? FEW_TIPS : TIP_POINTS)) {
+      for (const [side, up] of (born === "sweep" ? FEW_TIPS : REFINE_TIPS)) {
         for (let d = -1.0; d <= 1.0; d += FINE) {
           const at = Math.round((((deg + d) % 360 + 360) % 360) / FINE) * FINE;
           const job = [at, speed, side, up];
@@ -678,6 +718,9 @@
         }
       }
     }
+    // 마지막 탐색의 크기 — tools/profile_app.js가 읽는다.
+    solve.stats = { contact: contact.length, promising: promising.length,
+                    fromSweep: promising.filter((j) => j[4] === "sweep").length, around: around.length };
     for (let i = 0; i < around.length; i++) {
       tryAngle(around[i][0], around[i][1], around[i][2], hits, counters, around[i][3]);
       if (i % CHUNK === CHUNK - 1) { onProgress(0.45 + 0.25 * i / around.length); await pause(); }
@@ -922,7 +965,7 @@
         route: hit.route, key, hit, chosen, first, scored,
         // 닮은 배치에서 프로가 실제로 준 당점. 화면에 같이 보여 주고, 대표 줄을
         // 고를 때 동점을 가르는 데 쓴다 (`finish()`).
-        proTip: middleTip(pros.tip.get(proKey)) || middleTip(pros.tip.get(hit.route)),
+        proTip: inFrame(middleTip(pros.tip.get(proKey)) || middleTip(pros.tip.get(hit.route)), frame),
         proRate: chosen ? Math.round((scored / chosen) * 100) : null,
         // ★2026-09-23 아침에 이웃 프로 수를 뺐다가 같은 날 되돌렸다. 뺀 근거는
         // "닮은 배치에서 프로가 어느 길을 고를지 맞히는 비율이 우연과 다르지

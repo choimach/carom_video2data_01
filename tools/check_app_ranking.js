@@ -56,12 +56,14 @@ const median = (v) => { const s = [...v].sort((x, y) => x - y); return s[Math.fl
 (async () => {
   const browser = await chromium.launch({ executablePath: SHELL, env: { ...process.env, LD_LIBRARY_PATH: LIBS } });
   const errors = [];
-  const top1 = [], top3 = [], started = Date.now();
+  const top1 = [], top3 = [], started = Date.now(), perPlay = {}, english = {};
   let next = 0, done = 0;
   const worker = async () => {
   const page = await browser.newPage();
   page.on('pageerror', (e) => errors.push(e.message));
   await page.goto('file://' + path.join(ROOT, 'build', 'carom_assistant.html'));
+  // PRE: 페이지를 연 뒤 돌릴 JS — 변형을 시험할 때 (예: PRE='REFINE_TIPS = TIP_POINTS.slice(0, 5)').
+  if (process.env.PRE) await page.evaluate(process.env.PRE);
   while (next < plays.length) {
     const play = plays[next++];
     const got = await page.evaluate(async ({ play }) => {
@@ -74,20 +76,33 @@ const median = (v) => { const s = [...v].sort((x, y) => x - y); return s[Math.fl
         flipped: flips.flipX || flips.flipY,
         top: r.routes.slice(0, 3).map((row) => row.hit.shot.events
           .filter((e) => e.kind === 'cushion').slice(0, 2).map((e) => e.p)),
+        // 1등 줄의 회전이 도는 방향과 같은가 — 선수: "좌우가 바뀌는 것이 가장 흔한 문제".
+        // 프로는 73%가 도는 쪽으로 준다 (tools/check_side_vs_circuit.py).
+        english: r.routes.length ? (() => {
+          const h = r.routes[0].hit;
+          if (Math.abs(h.side || 0) < 0.3) return 'none';
+          return ((h.side > 0) === ROUTE.circuitIsRight(h.shot.paths[cue] || [], L, W)) ? 'running' : 'reverse';
+        })() : null,
       };
     }, { play });
     if (got.flipped) throw new Error(`${play.id}: 정규화된 배치인데 frameOf()가 뒤집는다 — 틀이 다르다`);
     const gaps = got.top.filter((c) => c.length >= 2).map((c) => gap(c, play.rails));
-    if (gaps.length) { top1.push(gaps[0]); top3.push(Math.min(...gaps)); }
+    if (got.english) english[got.english] = (english[got.english] || 0) + 1;
+    if (gaps.length) { top1.push(gaps[0]); top3.push(Math.min(...gaps)); perPlay[play.id] = [gaps[0], Math.min(...gaps)]; }
     done++;
     if (done % 20 === 0) console.log(`  ${done}/${plays.length} · 판당 ${((Date.now() - started) / 1000 / done).toFixed(1)}초`);
   }
   };
   await Promise.all(Array.from({ length: PAGES }, worker));
   await browser.close();
+  // DUMP: 판별 (1등, 상위 3개 최선) 거리를 JSON으로 — 두 변형을 짝지어 견줄 때.
+  if (process.env.DUMP) fs.writeFileSync(process.env.DUMP, JSON.stringify(perPlay));
   const within = (v, mm) => `${Math.round(100 * v.filter((x) => x <= mm).length / v.length)}%`;
   console.log(`조언판으로 잰 순위 — ${top1.length}판 (같은 경기는 이웃에서 뺐다), 오류 ${errors.length}`);
   console.log(`  1등 후보          중앙값 ${Math.round(median(top1))} mm · 300 안 ${within(top1, 300)} · 500 안 ${within(top1, 500)}`);
   console.log(`  상위 3개 중 최선   중앙값 ${Math.round(median(top3))} mm · 300 안 ${within(top3, 300)} · 500 안 ${within(top3, 500)}`);
+  const turned = (english.running || 0) + (english.reverse || 0);
+  if (turned) console.log(`  1등 줄의 회전: 도는 쪽 ${english.running || 0} · 반대쪽 ${english.reverse || 0}`
+    + ` (${Math.round(100 * (english.running || 0) / turned)}% 도는 쪽, 프로 73%) · 거의 없음 ${english.none || 0}`);
   if (errors.length) console.log('  ' + errors.slice(0, 3).join('\n  '));
 })();
