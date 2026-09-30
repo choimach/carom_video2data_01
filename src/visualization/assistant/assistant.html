@@ -871,6 +871,17 @@
       const pathKey = tokens && `${isNear}|${face}|${tokens}`;
       const chosenPath = (pathKey && pros.pathWeight.get(pathKey)) || 0;
       const ratePath = (((pathKey && pros.pathRate.get(pathKey)) || 0) + 1) / (chosenPath + 2);
+      // 이웃 프로 길과의 연속 닮음 (learn_choices.py의 "이웃길닮음", σ 300 mm, 공·면 무관).
+      let pathSim = 0;
+      if (cushions.length >= 2) {
+        for (const item of pros.near) {
+          const theirs = item.play.rails;
+          if (!theirs || theirs.length < 2 || item.play.face == null || item.play.near == null) continue;
+          const d = (Math.hypot(cushions[0][0] - theirs[0][0], cushions[0][1] - theirs[0][1])
+                   + Math.hypot(cushions[1][0] - theirs[1][0], cushions[1][1] - theirs[1][1])) / 2;
+          pathSim += Math.exp(-0.5 * (d / 300) ** 2);
+        }
+      }
       // 몇 명이 골랐는지만 보고 몇 명이 넣었는지를 안 보던 것이 틀린 이유였다.
       // 같은 배치에서 셋이 고른 뱅크샷(하나 성공)이 셋이 고른 뒤돌리기(둘 성공)를
       // 이겼다. 성공률은 표본이 작아 0%와 100%가 흔하므로, 한 번의 성공과 한 번의
@@ -905,7 +916,7 @@
         // 다만 옛날처럼 곱하지 않는다. **배운 식 안의 특징 둘**로 들어가서,
         // 무게를 내가 정하지 않고 자료가 정한다 (이웃프로수 +1.18, 이웃득점률 +0.82).
         band, thickOff: off,
-        score: agree * learnedScore(hit, chosen, rate, chosenPath, ratePath),
+        score: agree * learnedScore(hit, chosen, rate, chosenPath, ratePath, pathSim),
         chance: chanceOf({ ...hit, chosen, rate }),
       });
     }
@@ -1456,11 +1467,11 @@
     return out;
   })();
 
-  const learnedScore = (hit, chosen, rate, chosen_path, rate_path) => CHOICE.score({
+  const learnedScore = (hit, chosen, rate, chosen_path, rate_path, path_sim) => CHOICE.score({
     room: hit.room, thickness: hit.thickness,
     strength: SIM.strengthOf(hit.speed), rails: hit.judged.rails.length,
     pushed: hit.pushed, lines: hit.lines, side: hit.side, up: hit.vertical,
-    chosen, rate, prior: ROUTE_PRIOR.get(hit.route), chosen_path, rate_path,
+    chosen, rate, prior: ROUTE_PRIOR.get(hit.route), chosen_path, rate_path, path_sim,
   }, CHOICE_WEIGHTS);
 
   const label = (row) =>

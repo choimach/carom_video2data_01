@@ -70,12 +70,17 @@ def features(branch, layout=None, cue=None):
         # 판 102 · 빠진 판 51 (4.1 표준편차), 프로 후보 자리 3.2 표준편차.
         math.log1p(branch.get("chosen_path", 0)),
         branch.get("rate_path", 0.5),
+        # ★이웃 프로 길과의 **연속** 닮음 (2026-10). 이웃 40명의 첫 두 쿠션 자리와 이 후보의
+        # 첫 두 쿠션 자리 평균 거리 d로 exp(−½(d/300)²)를 더한다. 공·면은 안 맞춘다 (맞추면
+        # 더 약했다). 이름 표만으로는 구석 근처에서 레일 이름이 갈려 표를 잃는다.
+        # 짝지어: 1등 후보가 프로 길 300 mm 안으로 +47 / −17판 (3.8 SD). σ 150·600은 더 약했다.
+        math.log1p(branch.get("path_sim", 0.0)),
         1.0,                                 # 기준선
     ]
 
 
 NAMES = ["여유", "두께", "세기", "쿠션수", "1적구이동", "줄두께", "회전량", "상단당점",
-         "이웃프로수", "이웃득점률", "유형빈도", "이웃길수", "이웃길득점률", "기준"]
+         "이웃프로수", "이웃득점률", "유형빈도", "이웃길수", "이웃길득점률", "이웃길닮음", "기준"]
 
 # 유형을 한 번도 못 본 경우의 바닥값. 2,000판쯤에서 "한 번 봤다"보다 낮다.
 LOG_FLOOR = math.log(1 / 2000.0)
@@ -113,6 +118,10 @@ def load(limit=None):
 # 이웃 투표의 열쇠 (2026-09-30 실험). "name" = 유형|가까운공|면 (지금까지),
 # "pathN" = 가까운공|면|첫 N쿠션 레일 — 이름을 거치지 않고 **길**로 센다.
 VOTES = "both"
+# 실험 (2026-10): 이웃 길과 후보 길의 첫 두 쿠션 자리 거리로 준 연속 표. None이면 끔.
+SIGMA = 300.0
+SIM_SAME_FACE = False
+RAILS_OF = []
 TABLE_L, TABLE_W = 2844.0, 1422.0
 
 
@@ -171,6 +180,9 @@ def _with_neighbours(rounds):
         return f"{row['route']}|{gaps[first] == min(gaps.values())}|{'left' if side > 0 else 'right'}"
 
     picked = [bucket(r) for r in rows]
+    global RAILS_OF
+    _rails = pro_rails()
+    RAILS_OF = [_rails.get(f"{r['match']}:{r['inning']}:{r['shot']}", []) for r in rows]
     if VOTES.startswith("path"):
         n = int(VOTES[4:])
         rails = pro_rails()
@@ -189,7 +201,8 @@ def _with_neighbours(rounds):
         gap = np.linalg.norm(F - F[i], axis=1)
         gap[match == match[i]] = np.inf
         votes, wins = {}, {}
-        for j in np.argsort(gap)[:NEIGHBOURS]:
+        nearest = np.argsort(gap)[:NEIGHBOURS]
+        for j in nearest:
             key = picked[j]
             if not key:
                 continue
@@ -206,6 +219,20 @@ def _with_neighbours(rounds):
                 key = None if tokens is None else "|".join(key.split("|")[1:] + [tokens])
             branch["chosen"] = votes.get(key, 0)
             branch["rate"] = (wins.get(key, 0) + 1) / (branch["chosen"] + 2)
+            if SIGMA and VOTES == "name":
+                mine = branch.get("cush") or []
+                near_face = "|".join(key.split("|")[1:3])
+                total = 0.0
+                for j in nearest:
+                    theirs = RAILS_OF[j]
+                    if len(mine) < 2 or len(theirs) < 2 or not picked[j]:
+                        continue
+                    if SIM_SAME_FACE and "|".join(picked[j].split("|")[1:3]) != near_face:
+                        continue
+                    d = np.mean([math.hypot(mine[k][0] - theirs[k][0], mine[k][1] - theirs[k][1])
+                                 for k in (0, 1)])
+                    total += math.exp(-0.5 * (d / SIGMA) ** 2)
+                branch["path_sim"] = total
         out.append(one)
     return out
 
@@ -245,6 +272,14 @@ def path_gap(branch, rails):
 
 
 _RAILS = None
+# 프로의 후보를 무엇으로 정하나. "path" = 이름과 상관없이 프로 길에 가장 가까운 후보가
+# PATH_MATCH_MM 안이면 그것, 아니면 같은 이름 중 가장 가까운 것. "name" = 같은 이름만.
+# 2026-10: 이름이 다른 후보만 프로 길에 닿는 판이 22% — 이름으로 정답을 정하면 그 판에서
+# 프로 길과 먼 후보를 정답이라고 가르친다 (CLAUDE.md §0: 이름은 맨 끝이다).
+# ★재 보니 (2026-10) 길로 정답을 정해도 1등 후보가 프로 길에 닿는 비율은 그대로(37%)였고
+# 이름 1등만 27%로 떨어졌다 — 지금 특징으로는 이름이 다른 쪽 정답을 올리지 못한다. 그래서 이름.
+LABEL = "name"
+PATH_MATCH_MM = 300.0
 
 
 def pro_branch(one):
@@ -254,10 +289,16 @@ def pro_branch(one):
     global _RAILS
     if _RAILS is None:
         _RAILS = pro_rails()
+    rails = _RAILS.get(one["id"], [])
+    if LABEL == "path":
+        gaps = [(g, b) for b in one["found"] if (g := path_gap(b, rails)) is not None]
+        if gaps:
+            g, b = min(gaps, key=lambda t: t[0])
+            if g <= PATH_MATCH_MM:
+                return b
     same = [b for b in one["found"] if b["key"] == one["chose"]]
     if len(same) < 2:
         return same[0] if same else None
-    rails = _RAILS.get(one["id"], [])
     gaps = [path_gap(b, rails) for b in same]
     if all(g is None for g in gaps):
         return same[0]
@@ -278,9 +319,8 @@ def as_arrays(rounds):
         if not chose:
             continue
         one["pro_rails"] = rails.get(one["id"], [])
-        gaps = [path_gap(one["found"][i], one["pro_rails"]) for i in chose]
-        if any(g is not None for g in gaps):
-            chose = [min(zip(gaps, chose), key=lambda t: np.inf if t[0] is None else t[0])[1]]
+        pro = pro_branch(one)
+        chose = [next(i for i, b in enumerate(one["found"]) if b is pro)]
         out.append((np.array(rows, dtype=float), chose[0], one))
     return out
 
@@ -330,10 +370,16 @@ def main():
     parser.add_argument("--folds", type=int, default=10, help="경기 단위 겹 수")
     parser.add_argument("--votes", default="both", help="both | name | path1 | path2 | path3")
     parser.add_argument("--dry", action="store_true", help="가중치를 쓰지 않는다")
+    parser.add_argument("--label", default="name", help="name | path — 프로의 후보를 무엇으로 정하나")
+    parser.add_argument("--sigma", type=float, default=300.0, help="길 닮음 표의 폭 (mm)")
+    parser.add_argument("--same-face", action="store_true", help="실험: 길 닮음에 공·면을 맞춘다")
     parser.add_argument("--dump", default=None, help="판별 (1등 자리, 길 거리)를 JSON으로 — 두 식을 짝지어 견줄 때")
     args = parser.parse_args()
-    global VOTES
+    global VOTES, SIGMA, SIM_SAME_FACE, LABEL
+    LABEL = args.label
     VOTES = args.votes
+    SIGMA = args.sigma
+    SIM_SAME_FACE = args.same_face
 
     rounds = load(args.limit)
     if len(rounds) < 30:
@@ -364,7 +410,8 @@ def main():
     # ★길로 채점 (2026-09-30): 1등 후보의 첫 두 쿠션이 프로의 것과 몇 mm인가.
     # 이름이 같아도 길이 다르면 틀린 것, 이름이 달라도 길이 같으면 맞은 것으로 센다.
     per_play = {}
-    gap_of = {"아무렇게나": [], "손 식": [], "배운 식": [], "프로 이름 중 가장 가까운 것": []}
+    gap_of = {"아무렇게나": [], "손 식": [], "배운 식": [], "배운 식 3등 안 중 가장 가까운 것": [],
+              "정답으로 삼은 후보": []}
     sizes = []
     for fold in range(folds):
         train = [d for d in data if where[d[2].get("match")] != fold]
@@ -382,9 +429,13 @@ def main():
             picks = {"아무렇게나": int(rng.integers(0, len(rows))),
                      "손 식": max(range(len(found)), key=lambda i: by_hand(one, i)),
                      "배운 식": int(np.argmax(rows @ weight)),
-                     "프로 이름 중 가장 가까운 것": chose}
+                     "정답으로 삼은 후보": chose}
             for name, i in picks.items():
                 gap_of[name].append(path_gap(found[i], pro))
+            # 화면은 궤적 1개 + 2개다 (PURPOSE.md) — 셋 중 하나라도 프로 길 근처면 보여 준 것이다.
+            top3 = [path_gap(found[i], pro) for i in np.argsort(-(rows @ weight))[:3]]
+            top3 = [g for g in top3 if g is not None]
+            gap_of["배운 식 3등 안 중 가장 가까운 것"].append(min(top3) if top3 else None)
             per_play[one["id"]] = (places["배운 식"][-1], gap_of["배운 식"][-1])
 
     print(f"프로가 실제로 고른 길이 몇 번째에 오는가 ({len(sizes)}판, 전부 한 번씩 test)")

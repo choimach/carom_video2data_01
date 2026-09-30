@@ -21,7 +21,7 @@ const CHOICE = (() => {
   // learn_choices.py의 NAMES와 같은 차례.
   const NAMES = ["여유", "두께", "세기", "쿠션수", "1적구이동",
                  "줄두께", "회전량", "상단당점", "이웃프로수", "이웃득점률",
-                 "유형빈도", "이웃길수", "이웃길득점률", "기준"];
+                 "유형빈도", "이웃길수", "이웃길득점률", "이웃길닮음", "기준"];
 
   // 유형을 한 번도 못 본 경우의 바닥값 — learn_choices.py의 LOG_FLOOR와 같다.
   const LOG_FLOOR = Math.log(1 / 2000);
@@ -39,7 +39,7 @@ const CHOICE = (() => {
   // chosen_path, rate_path : 이웃 프로의 **길**(가까운공|면|첫 2쿠션 레일)로 센 표와
   //   득점률 (2026-09-30). 이름 표와 같이 쓴다 — learn_choices.py 참조.
   function features({ room, thickness, strength, rails, pushed, lines, side, up,
-                      chosen, rate, prior, chosen_path, rate_path }) {
+                      chosen, rate, prior, chosen_path, rate_path, path_sim }) {
     const tips = Math.hypot(side || 0, up || 0);
     return [
       Math.log1p(room),
@@ -66,6 +66,8 @@ const CHOICE = (() => {
       prior == null ? LOG_FLOOR : prior,
       Math.log1p(chosen_path || 0),
       rate_path == null ? 0.5 : rate_path,
+      // 이웃 프로 길과의 연속 닮음 — learn_choices.py 참조.
+      Math.log1p(path_sim || 0),
       1,
     ];
   }
