@@ -45,6 +45,7 @@ const pick = [];
 for (let i = 0; i < targets.length && pick.length < N; i += step) pick.push(targets[i]);
 
 const BANDS = [0, 0.25, 0.5, 1.0];
+const signs = [];
 const away = { 없이: [] }, room = {};
 for (const g of BANDS) { away['양보' + g] = []; room['양보' + g] = []; }
 for (const play of pick) {
@@ -91,6 +92,10 @@ for (const play of pick) {
   const dist = (h) => Math.hypot(h.side - play.tip[0], (h.up || 0) - play.tip[1]);
   const tight = mine.filter((h) => h.rough === top);
   away['없이'].push(dist(tight[0]));
+  // 좌우 부호 — 선수: "좌우가 바뀌는 것이 가장 흔한 문제" (2026-10-01). 둘 다 0.5팁 넘을 때만.
+  if (Math.abs(tight[0].side) >= 0.5 && Math.abs(play.tip[0]) >= 0.5) {
+    signs.push(Math.sign(tight[0].side) === Math.sign(play.tip[0]) ? 1 : 0);
+  }
   // 여유를 얼마나 양보하면 프로 당점 쪽으로 갈 수 있나.
   for (const give of BANDS) {
     const near2 = mine.filter((h) => h.rough >= top - give);
@@ -106,6 +111,8 @@ for (const play of pick) {
   }
 }
 const mid = (a) => (a.length ? [...a].sort((x, y) => x - y)[a.length >> 1] : NaN);
+if (signs.length) console.log(`좌우 부호가 프로와 같은 판 ${Math.round(100 * signs.reduce((a, b) => a + b, 0) / signs.length)}%`
+  + ` (둘 다 0.5팁 넘는 ${signs.length}판 · 우연이면 50%)`);
 console.log(`채점한 판 ${away['없이'].length}개 (같은 경기는 이웃에서 뺐다)\n`);
 console.log('여유를 얼마나 양보하면 당점이 프로에 가까워지나\n');
 console.log('  양보    당점 차이(팁)   내준 여유(도)   가까워진/멀어진   표준편차');

@@ -1,5 +1,19 @@
 // 프로가 준 당점을 관측 여럿으로 한꺼번에 맞춘다 (선수 제안, 2026-09-25).
 //
+// ★★2026-10-01: 아래 옛 방식은 **좌우를 못 가렸다** — 내보내는 것은 이제 v2다.
+//   "1쿠션 자리는 좌우 당점에 강하다"는 틀렸다. 좌우는 쿠션에서 **나가는 방향**을 바꾸지
+//   **닿는 자리**를 바꾸지 않는다: 좌우 −3→+3팁에 첫 쿠션 자리는 중앙값 21 mm만 움직였다
+//   (어긋남 74 mm). 비용이 좌우에 평평하니 동점이면 격자를 먼저 훑은 −3팁이 이겼고,
+//   −3에 100판 · +3에 0판이 붙어 좌우 중앙값 −1.25팁으로 치우쳤다. 이 값이 조언판의
+//   "가까운 프로 n명은 ○시를 줬습니다"에 들어가 있었다 — 선수: "좌우가 바뀌는 것".
+//   v2: 쿠션을 양쪽 다 처음부터 세어 **첫째·둘째 쿠션 자리** + 곡선 + 분리각을 맞추고,
+//   동점이면 가운데(작은 벌점). 셋째 쿠션(안 씀)으로 채점, 600판:
+//                   좌우 중앙값   ±3 끝   셋째 쿠션
+//     옛 방식        −1.25팁      29%     212 mm
+//     v2             0.00팁        0%      93 mm   (가까워진 판 154 · 멀어진 판 68)
+//   ⚠️ app-data의 `spin`(첫 쿠션 반사 각의 틀어짐)은 좌우 부호가 아니다 — 어느 맞추기와도
+//   부호 일치가 50%다. 부호는 `tools/check_side_sign.py`(english_side)로 잰다.
+//
 // 영상에서 겨냥과 강도를 알므로 **미지수는 좌우·상하 당점 둘**이다. 관측은:
 //
 //   1쿠션 자리   좌우 당점에 강하다 (쿠션이 팁당 5~7도 틀어 준다)
@@ -82,7 +96,8 @@ function observe(layout, cue, first, aim, side, up) {
     const c = unit(obj[i], obj[i + 4]), o = unit(way[i + 1], way[i + 5]);
     if (c && o) rise = o[0] * c[0] + o[1] * c[1];
   }
-  return { one: one.p, two: two ? two.p : null, curve, rise };
+  // 쿠션 전부, 처음부터 (1적구 앞 쿠션 포함) — 영상의 rails와 같은 정의.
+  return { one: one.p, two: two ? two.p : null, curve, rise, all: rails.map((e) => e.p) };
 }
 
 const EXPORT = process.argv.includes('--export');
@@ -103,13 +118,15 @@ if (EXPORT) {
 console.log(`맞출 판 ${pick.length}개${EXPORT ? ' (전부)' : ''}`);
 
 // 잔차를 견줄 수 있게 각자의 보통 크기로 나눈다.
-const SCALE = { one: 40, curve: 20, rise: 0.15 };
+const SCALE = { one: 40, two: 60, curve: 20, rise: 0.15 };
 const TIPS = [];
 for (let s = -3; s <= 3.0001; s += 0.25) {
   for (let u = -3; u <= 3.0001; u += 0.25) TIPS.push([Math.round(s * 100) / 100, Math.round(u * 100) / 100]);
 }
 
 const joint = [], alone = [];
+// DUMP=파일: 채점할 때 판별 맞춤(합동·1쿠션만)을 적는다 — tips.json은 안 건드린다.
+const dumped = {};
 const tips = [];
 const out = {};
 let done = 0;
@@ -124,7 +141,7 @@ for (const play of pick) {
   const rad = play.aim * Math.PI / 180;
   const aim = [Math.cos(rad) * play.speed, Math.sin(rad) * play.speed];
   const first = gap(play.balls[0], play.hit) < gap(play.balls[1], play.hit) ? 'yellow' : 'red';
-  let best = null, only = null;
+  let best = null, only = null, best2 = null;
   for (const [side, up] of TIPS) {
     const got = observe(layout, 'white', first, aim, side, up);
     if (!got) continue;
@@ -137,6 +154,38 @@ for (const play of pick) {
       + ((got.curve - play.curve[0]) / SCALE.curve) ** 2
       + ((got.rise - play.rise) / SCALE.rise) ** 2;
     if (!best || cost < best.cost) best = { cost, two: got.two, side, up, oneOff };
+    // v2 (2026-10): 좌우는 쿠션에 **닿는 자리**가 아니라 **나가는 방향**에서 드러난다.
+    // 첫 쿠션 자리는 좌우 −3→+3팁에 중앙값 21 mm만 움직여(어긋남은 74 mm) 비용이 평평했고,
+    // 동점이면 먼저 훑은 −3팁이 이겨 −3에 100판 · +3에 0판이 붙었다. 그래서 둘째 쿠션까지
+    // 넣고(셋째로 검증), 쿠션은 양쪽 다 처음부터 센다(옛 방식은 영상은 1적구 앞 쿠션부터,
+    // 시뮬은 1적구 뒤부터 세어 뱅크샷에서 다른 쿠션을 견줬다). 동점이면 가운데 — 작은 벌점.
+    if (got.all.length >= 2 && play.rails.length >= 2) {
+      const c2 = (gap(got.all[0], play.rails[0]) / SCALE.one) ** 2
+        + (gap(got.all[1], play.rails[1]) / SCALE.two) ** 2
+        + ((got.curve - play.curve[0]) / SCALE.curve) ** 2
+        + ((got.rise - play.rise) / SCALE.rise) ** 2
+        + 1e-3 * (side * side + up * up);
+      if (!best2 || c2 < best2.cost) {
+        best2 = { cost: c2, side, up, three: got.all[2] || null,
+                  d1: gap(got.all[0], play.rails[0]), d2: gap(got.all[1], play.rails[1]) };
+      }
+    }
+  }
+  if (EXPORT && best2) {
+    // v2로 내보낸다 (2026-10). 믿을 만한가 = 두 쿠션을 다 맞췄나.
+    out[`${play.match}:${play.inning}:${play.shot}`] = {
+      tip: [best2.side, best2.up],
+      ok: best2.d1 <= 60 && best2.d2 <= 150,
+      one: Math.round(best2.d1), two: Math.round(best2.d2), fit: 'v2',
+    };
+    continue;
+  }
+  if (EXPORT) {
+    // 쿠션이 하나뿐인 판 — v2를 못 쓴다. 옛 방식은 좌우를 못 가리므로(위 주석) 상하만 믿고
+    // 좌우는 0으로 둔다. 믿을 만한 것으로 치지 않는다.
+    if (!best) continue;
+    out[`${play.match}:${play.inning}:${play.shot}`] = { tip: [0, best.up], ok: false, one: Math.round(best.oneOff), fit: 'up-only' };
+    continue;
   }
   if (EXPORT) {
     if (!best) continue;
@@ -157,6 +206,18 @@ for (const play of pick) {
   alone.push(gap(only.two, play.rails[1]));
   tips.push({ side: best.side, up: best.up, oneOff: best.oneOff,
               edge: Math.abs(best.side) >= 2.99 || Math.abs(best.up) >= 2.99 });
+  // 셋째 쿠션(어느 맞추기에도 안 쓴다)으로 옛 방식과 v2를 견준다.
+  let threeOld = null;
+  if (play.rails.length >= 3) {
+    const shot = SIM.play(layout, 'white', aim, best.side, best.up);
+    const r = shot.events.filter((e) => e.kind === 'cushion');
+    if (r.length >= 3) threeOld = Math.round(gap(r[2].p, play.rails[2]));
+  }
+  dumped[`${play.match}:${play.inning}:${play.shot}`] = { side: best.side, up: best.up,
+    oneOff: Math.round(best.oneOff), onlySide: only.side, onlyUp: only.up,
+    v2: best2 && { side: best2.side, up: best2.up,
+                   three: best2.three && play.rails.length >= 3 ? Math.round(gap(best2.three, play.rails[2])) : null },
+    threeOld };
 }
 
 if (EXPORT) {
@@ -168,6 +229,7 @@ if (EXPORT) {
   process.exit(0);
 }
 
+if (process.env.DUMP) fs.writeFileSync(process.env.DUMP, JSON.stringify(dumped));
 console.log(`맞출 수 있었던 판 ${joint.length} / ${pick.length}\n`);
 console.log('맞추는 데 쓰지 않은 **2쿠션 자리**를 얼마나 맞히나 (중앙값)');
 console.log(`  1쿠션만 보고 맞춘 당점 (지금 방식)   ${Math.round(mid(alone))} mm`);
