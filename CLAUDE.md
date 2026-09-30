@@ -215,7 +215,7 @@ node --check build/sim.js
 
 | 무엇을 고쳤나 | 무엇으로 재나 |
 |---|---|
-| 순위 | `tools/table_check.py` (선수 판단), `tools/learn_choices.py` (프로 선택) |
+| 순위 | `tools/table_check.py` (선수 판단), `tools/learn_choices.py` (프로 선택), **`node tools/check_app_ranking.js`** (조언판 자신 — 조언판에서만 나는 버그를 잡는다) |
 | 유형 규칙 | `tools/rules_check.py` |
 | 물리 | `tools/fit_spin.py`, `tools/validate_simulator.py` |
 | 좌우 회전 부호 | `tools/check_side_sign.py`, `tools/check_side_vs_circuit.py` |
