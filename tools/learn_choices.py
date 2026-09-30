@@ -174,14 +174,39 @@ def with_prior(rounds, routes=None):
     return rounds
 
 
+def pro_rails():
+    """프로가 실제로 간 길의 쿠션 자리 (app-data, 열거와 같은 틀)."""
+    path = os.path.join(ROOT, "build", "app-data.json")
+    plays = json.load(open(path, encoding="utf-8"))["plays"]
+    return {f"soop_{p['match']}:{p['inning']}:{p['shot']}": p.get("rails") or [] for p in plays}
+
+
+def path_gap(branch, rails):
+    """후보와 프로의 첫 두 쿠션 자리 평균 거리 (mm). 못 재면 None."""
+    mine = branch.get("cush") or []
+    if len(mine) < 2 or len(rails) < 2:
+        return None
+    return float(np.mean([np.hypot(mine[k][0] - rails[k][0], mine[k][1] - rails[k][1])
+                          for k in (0, 1)]))
+
+
 def as_arrays(rounds):
-    """한 판을 (갈래별 특징, 고른 것의 자리)로."""
+    """한 판을 (갈래별 특징, 고른 것의 자리)로.
+
+    ★2026-09-30부터 열거는 이름 안에서도 길마다 후보를 따로 둔다. 같은 이름이 여럿이면
+    **첫 두 쿠션 자리가 프로의 것에 가장 가까운** 후보가 프로의 것이다 (예전엔 첫 번째).
+    """
+    rails = pro_rails()
     out = []
     for one in rounds:
         rows = [features(b, one["layout"], one["cue"]) for b in one["found"]]
         chose = [i for i, b in enumerate(one["found"]) if b["key"] == one["chose"]]
         if not chose:
             continue
+        one["pro_rails"] = rails.get(one["id"], [])
+        gaps = [path_gap(one["found"][i], one["pro_rails"]) for i in chose]
+        if any(g is not None for g in gaps):
+            chose = [min(zip(gaps, chose), key=lambda t: np.inf if t[0] is None else t[0])[1]]
         out.append((np.array(rows, dtype=float), chose[0], one))
     return out
 
@@ -257,6 +282,9 @@ def main():
 
     rng = np.random.default_rng(0)
     places = {"아무렇게나": [], "손 식": [], "배운 식": []}
+    # ★길로 채점 (2026-09-30): 1등 후보의 첫 두 쿠션이 프로의 것과 몇 mm인가.
+    # 이름이 같아도 길이 다르면 틀린 것, 이름이 달라도 길이 같으면 맞은 것으로 센다.
+    gap_of = {"아무렇게나": [], "손 식": [], "배운 식": [], "프로 이름 중 가장 가까운 것": []}
     sizes = []
     for fold in range(folds):
         train = [d for d in data if where[d[2].get("match")] != fold]
@@ -270,10 +298,24 @@ def main():
             places["손 식"].append(
                 sorted(range(len(one["found"])), key=lambda i: -by_hand(one, i)).index(chose) + 1)
             places["배운 식"].append(where_it_landed(rows, chose, weight))
+            found, pro = one["found"], one["pro_rails"]
+            picks = {"아무렇게나": int(rng.integers(0, len(rows))),
+                     "손 식": max(range(len(found)), key=lambda i: by_hand(one, i)),
+                     "배운 식": int(np.argmax(rows @ weight)),
+                     "프로 이름 중 가장 가까운 것": chose}
+            for name, i in picks.items():
+                gap_of[name].append(path_gap(found[i], pro))
 
     print(f"프로가 실제로 고른 길이 몇 번째에 오는가 ({len(sizes)}판, 전부 한 번씩 test)")
     for name in ("아무렇게나", "손 식", "배운 식"):
         report(name, places[name], sizes)
+
+    print("\n1등 후보의 길이 프로의 길과 얼마나 가까운가 (첫 두 쿠션 자리 평균, mm)")
+    for name, values in gap_of.items():
+        v = np.array([x for x in values if x is not None], float)
+        if len(v):
+            print(f"  {name:<18} 중앙값 {np.median(v):5.0f} · 200 안 {np.mean(v <= 200):4.0%}"
+                  f" · 300 안 {np.mean(v <= 300):4.0%} · 500 안 {np.mean(v <= 500):4.0%}  (n={len(v)})")
 
     # 이겼다고 말해도 되는가. 같은 판을 두 식이 나란히 풀었으므로 짝지어 센다.
     hand = np.array(places["손 식"]); learned = np.array(places["배운 식"])
