@@ -75,6 +75,7 @@ def features(branch, layout=None, cue=None):
         # 더 약했다). 이름 표만으로는 구석 근처에서 레일 이름이 갈려 표를 잃는다.
         # 짝지어: 1등 후보가 프로 길 300 mm 안으로 +47 / −17판 (3.8 SD). σ 150·600은 더 약했다.
         math.log1p(branch.get("path_sim", 0.0)),
+    ] + ([math.log1p(branch.get("path_sim3", 0.0))] if SIM3 else []) + [
         1.0,                                 # 기준선
     ]
 
@@ -121,6 +122,7 @@ VOTES = "both"
 # 실험 (2026-10): 이웃 길과 후보 길의 첫 두 쿠션 자리 거리로 준 연속 표. None이면 끔.
 SIGMA = 300.0
 SIM_SAME_FACE = False
+SIM3 = False   # 실험: 첫 세 쿠션으로 잰 닮음을 하나 더
 RAILS_OF = []
 TABLE_L, TABLE_W = 2844.0, 1422.0
 
@@ -222,7 +224,7 @@ def _with_neighbours(rounds):
             if SIGMA and VOTES == "name":
                 mine = branch.get("cush") or []
                 near_face = "|".join(key.split("|")[1:3])
-                total = 0.0
+                total = total3 = 0.0
                 for j in nearest:
                     theirs = RAILS_OF[j]
                     if len(mine) < 2 or len(theirs) < 2 or not picked[j]:
@@ -232,7 +234,12 @@ def _with_neighbours(rounds):
                     d = np.mean([math.hypot(mine[k][0] - theirs[k][0], mine[k][1] - theirs[k][1])
                                  for k in (0, 1)])
                     total += math.exp(-0.5 * (d / SIGMA) ** 2)
+                    if SIM3 and len(mine) >= 3 and len(theirs) >= 3:
+                        d3 = np.mean([math.hypot(mine[k][0] - theirs[k][0], mine[k][1] - theirs[k][1])
+                                      for k in (0, 1, 2)])
+                        total3 += math.exp(-0.5 * (d3 / SIGMA) ** 2)
                 branch["path_sim"] = total
+                branch["path_sim3"] = total3
         out.append(one)
     return out
 
@@ -373,6 +380,7 @@ def main():
     parser.add_argument("--label", default="name", help="name | path — 프로의 후보를 무엇으로 정하나")
     parser.add_argument("--sigma", type=float, default=300.0, help="길 닮음 표의 폭 (mm)")
     parser.add_argument("--same-face", action="store_true", help="실험: 길 닮음에 공·면을 맞춘다")
+    parser.add_argument("--sim3", action="store_true", help="실험: 첫 세 쿠션 닮음을 하나 더")
     parser.add_argument("--dump", default=None, help="판별 (1등 자리, 길 거리)를 JSON으로 — 두 식을 짝지어 견줄 때")
     args = parser.parse_args()
     global VOTES, SIGMA, SIM_SAME_FACE, LABEL
@@ -380,6 +388,8 @@ def main():
     VOTES = args.votes
     SIGMA = args.sigma
     SIM_SAME_FACE = args.same_face
+    global SIM3
+    SIM3 = args.sim3
 
     rounds = load(args.limit)
     if len(rounds) < 30:
