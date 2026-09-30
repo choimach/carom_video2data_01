@@ -54,6 +54,79 @@ def opening(path):
     return round(degrees, 1), round(travelled * 15.0)
 
 
+def opening_solved(original, marks, layout, cue, flip_x, flip_y, fps=60.0):
+    """겨냥과 속도를 **첫 사건 전** 구간에서 읽고, 속도는 시뮬로 되푼다 (2026-10).
+
+    `opening()`은 NaN을 걸러낸 배열의 1·5번째 점을 쓴다 — 공이 언제 출발했는지 안 보고,
+    1~5프레임 안에 1적구에 닿는 가까운 공이면 충돌 뒤까지 섞는다. 탐색 구멍 조사에서
+    프로의 겨냥·속도로 다시 친 판의 40%가 1적구부터 달랐다. 검증 쪽
+    (`validate_simulator.opening()`)은 2026-09-29에 같은 식으로 고쳤다.
+
+    * 출발 = 수구가 처음 5 mm 넘게 움직인 프레임의 앞.
+    * 방향 = 출발 + 2프레임부터 첫 사건(공·쿠션) 2프레임 전까지, 길어야 24프레임.
+    * 속도 = 그 창 끝에서 조언판과 같은 `spin.py` 모형(상단 2팁)이 실제와 같은 거리를
+      가 있도록 이분법으로. 창 평균은 미끄럼 감속이 섞여 낮게 읽힌다.
+
+    창을 못 잡으면 (None, None) — 부르는 쪽이 옛 읽기로 물러난다.
+
+    ⚠️ **재 보니 옛 읽기와 같다 — 연결하지 않았다** (2026-10, `tools/check_opening_read.py`,
+    창을 잡은 387판): 1적구 같음 83 → 82%, 첫 두 쿠션 300 mm 안 75 → 76%, 중앙값 75 → 66 mm.
+    나머지 196판은 첫 사건이 너무 빨라 창을 못 잡는다 (공이 가깝다) — 어느 읽기든 한계다.
+    프로 샷 재현 실패는 겨냥 읽기 탓이 아니다.
+    """
+    from src.physics.simulator import simulate_with_spin
+    pts = np.asarray(original, dtype=float)
+    if len(pts) < 8 or not np.isfinite(pts[0]).all():
+        return None, None
+    moved = np.flatnonzero(np.isfinite(pts).all(axis=1)
+                           & (np.hypot(*(pts - pts[0]).T) > 5.0))
+    if not len(moved):
+        return None, None
+    start = max(0, int(moved[0]) - 1)
+    if not np.isfinite(pts[start]).all():
+        start = 0
+    first_event = min((int(m[0]) for m in marks if len(m) >= 2), default=len(pts))
+    a = start + 2
+    b = min(a + 24, first_event - 2, len(pts) - 1)
+    while b > a and not np.isfinite(pts[b]).all():
+        b -= 1
+    if b - a < 3 or not np.isfinite(pts[a]).all():
+        return None, None
+    p_a = transform(pts[a], flip_x, flip_y)
+    p_b = transform(pts[b], flip_x, flip_y)
+    step = np.subtract(p_b, p_a)
+    if np.hypot(*step) < 5.0:
+        return None, None
+    degrees = float(np.degrees(np.arctan2(step[1], step[0])) % 360.0)
+    rad = np.radians(degrees)
+    heading = np.array([np.cos(rad), np.sin(rad)])
+    target = float(np.hypot(*(np.subtract(transform(pts[b], flip_x, flip_y),
+                                          transform(pts[start], flip_x, flip_y)))))
+    n = b - start
+    balls = {c: np.array(xy, dtype=float) for c, xy in layout.items()}
+
+    def gone(speed):
+        shot = simulate_with_spin(balls, cue, tuple(heading * speed), tips_vertical=2.0,
+                                  fps=fps, max_seconds=(n + 2) / fps)
+        path = shot.paths[cue]
+        i = min(n, len(path) - 1)
+        return float(np.hypot(*(np.asarray(path[i]) - path[0])))
+
+    guess = target / n * fps
+    if not np.isfinite(guess) or guess <= 0:
+        return None, None
+    low, high = 0.5 * guess, 3.0 * guess
+    if gone(high) < target:
+        return round(degrees, 1), round(high)
+    for _ in range(14):
+        middle = 0.5 * (low + high)
+        if gone(middle) < target:
+            low = middle
+        else:
+            high = middle
+    return round(degrees, 1), round(0.5 * (low + high))
+
+
 def curve_depth(turned, hit, first_rail):
     """1적구 충돌에서 1쿠션까지, 수구가 직선에서 얼마나 벗어났나 (mm).
 
