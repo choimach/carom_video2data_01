@@ -33,7 +33,7 @@ const { chromium } = require('$CORE');
   if (process.env.SEED) { await p.fill('#seed', process.env.SEED); await p.press('#seed', 'Enter'); } else await p.click('#dice');
   await p.click('#run');
   await p.waitForTimeout(20000);
-  await p.setViewportSize({ width: 1400, height: 900 }); await p.screenshot({ path: '$OUT' });
+  await p.evaluate(() => window.scrollTo(0, 0)); await p.screenshot({ path: '$OUT' });
   console.log('$OUT', 'errors', JSON.stringify(errs));
   await b.close();
 })();"
