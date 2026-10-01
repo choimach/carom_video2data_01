@@ -1080,7 +1080,7 @@
     // ★겹친 공략은 뒤로 (2026-10-02). 묶음을 첫 쿠션 자리 400 mm 칸으로 쪼갠 뒤, 같은 공략이
     // 칸 경계에 걸치면 둘로 나뉘어 카드 셋 중 둘을 차지했다 — 선수 (씨앗 3288843216):
     // "2적구 흰공을 정면으로 맞히냐, 약간 오른쪽을 맞히냐 차이만 있을 뿐 같은 선택".
-    // 같은 이름·공·면이고 첫 두 쿠션 자리가 각각 DUP_MM 안이면 겹친 것으로 본다. 지우지
+    // 같은 공·면이고 첫 두 쿠션 자리가 각각 DUP_MM 안이면 겹친 것으로 본다 (이름은 안 본다). 지우지
     // 않는다(기록은 전부 담는다 — 아래 주석). 맨 뒤로 보내고 고를 확률은 위쪽에 더한다.
     if (DUP_MM !== null) {
       const cushionsOf = (r) => r.hit.shot.events.filter((e) => e.kind === "cushion").slice(0, 2).map((e) => e.p);
@@ -1088,7 +1088,9 @@
       for (const row of routes) {
         const mine = cushionsOf(row);
         const twin = mine.length < 2 ? null : kept.find((k) => {
-          if (k.route !== row.route || k.hit.judged.first !== row.hit.judged.first || k.hit.face !== row.hit.face) return false;
+          // 이름은 보지 않는다 (2026-10-02) — 같은 길에 이름 판정이 갈려 "옆돌리기"와 "뒤돌리기"
+          // 두 후보가 됐다 (씨앗 802329664, 선수: "명칭은 짧게 뒤돌리기가 맞을 듯"). 이름은 ⑤다.
+          if (k.hit.judged.first !== row.hit.judged.first || k.hit.face !== row.hit.face) return false;
           const theirs = cushionsOf(k);
           return theirs.length >= 2 && [0, 1].every((i) => Math.hypot(mine[i][0] - theirs[i][0], mine[i][1] - theirs[i][1]) <= DUP_MM);
         });
