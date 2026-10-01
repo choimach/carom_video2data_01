@@ -551,6 +551,8 @@
   let GATE_LADDER_MM = 1000;
   // 대표 줄을 이웃 프로 당점 쪽으로 고를 때 양보할 여유(도). null이면 끈다. finish()가
   // 읽을 수 있게 advise()가 이번 배치의 이웃을 PROS_NOW에 둔다.
+  // 화면 순위에서 겹친 공략으로 볼 첫 두 쿠션 자리 차이 (mm). null이면 끈다.
+  let DUP_MM = 250;
   let TIP_YIELD = 0.5;
   // 대표 줄을 이웃 프로 강도 쪽으로도 고른다 (TIP_YIELD 안에서). null이면 강도는 안 본다.
   let STRENGTH_YIELD = true;
@@ -1075,6 +1077,26 @@
     // "프로가 이것을 고를 확률"이다 — 지금까지는 순서로만 쓰고 버리고 있었다.
     const heat = routes.reduce((sum, r) => sum + r.score, 0) || 1;
     for (const row of routes) row.share = row.score / heat;
+    // ★겹친 공략은 뒤로 (2026-10-02). 묶음을 첫 쿠션 자리 400 mm 칸으로 쪼갠 뒤, 같은 공략이
+    // 칸 경계에 걸치면 둘로 나뉘어 카드 셋 중 둘을 차지했다 — 선수 (씨앗 3288843216):
+    // "2적구 흰공을 정면으로 맞히냐, 약간 오른쪽을 맞히냐 차이만 있을 뿐 같은 선택".
+    // 같은 이름·공·면이고 첫 두 쿠션 자리가 각각 DUP_MM 안이면 겹친 것으로 본다. 지우지
+    // 않는다(기록은 전부 담는다 — 아래 주석). 맨 뒤로 보내고 고를 확률은 위쪽에 더한다.
+    if (DUP_MM !== null) {
+      const cushionsOf = (r) => r.hit.shot.events.filter((e) => e.kind === "cushion").slice(0, 2).map((e) => e.p);
+      const kept = [], later = [];
+      for (const row of routes) {
+        const mine = cushionsOf(row);
+        const twin = mine.length < 2 ? null : kept.find((k) => {
+          if (k.route !== row.route || k.hit.judged.first !== row.hit.judged.first || k.hit.face !== row.hit.face) return false;
+          const theirs = cushionsOf(k);
+          return theirs.length >= 2 && [0, 1].every((i) => Math.hypot(mine[i][0] - theirs[i][0], mine[i][1] - theirs[i][1]) <= DUP_MM);
+        });
+        if (twin) { row.dupOf = twin.key; twin.share += row.share; later.push(row); } else kept.push(row);
+      }
+      routes.length = 0;
+      routes.push(...kept, ...later);
+    }
     // 열두 개에서 자르지 않는다. 화면에는 셋만 보이지만 **복사되는 기록**은
     // 전부 담아야 한다 — 2026-09-25에 선수가 "횡단이 낫다"고 했는데 그 횡단이
     // 13등이라 기록에서 잘려 나갔고, 하마터면 "탐색이 못 찾았다"로 읽힐 뻔했다.
