@@ -526,6 +526,8 @@
   // 대표 줄을 이웃 프로 당점 쪽으로 고를 때 양보할 여유(도). null이면 끈다. finish()가
   // 읽을 수 있게 advise()가 이번 배치의 이웃을 PROS_NOW에 둔다.
   let TIP_YIELD = 0.5;
+  // 대표가 정중앙일 때 당점 있는 줄로 바꾸며 양보할 여유(도). null이면 끈다.
+  let CENTER_YIELD = 0.5;
   let PROS_NOW = null;
   function nearMiss(shot, first) {
     const other = ORDER.find((c) => c !== cue && c !== first);
@@ -926,6 +928,22 @@
           if (h.room >= kept.room - TIP_YIELD && gap(h) < gap(pick)) pick = h;
         }
         best.set(id, pick);
+      }
+    }
+    // ★대표가 정중앙이면 당점을 준 줄로 (2026-10-01). 선수: "당점이 정중앙인 경우는 흔치
+    // 않은데" — 영상에서 되찾은 프로 당점 661판 중 0.5팁 안은 3%뿐이다 (중앙값 1.75팁).
+    // 탐색이 정중앙부터 훑고 여유로 대표를 고르니 정중앙이 자주 이겼다. 여유를 CENTER_YIELD도
+    // 까지 양보해 당점 있는 줄 중 여유가 가장 넓은 것, 같으면 도는 쪽 회전(프로 73%).
+    if (CENTER_YIELD !== null) {
+      const tipOfHit = (h) => Math.hypot(h.side || 0, h.vertical || 0);
+      for (const [id, kept] of best) {
+        if (tipOfHit(kept) >= 0.5) continue;
+        let pick = null;
+        for (const h of members.get(id)) {
+          if (tipOfHit(h) < 0.5 || h.room < kept.room - CENTER_YIELD) continue;
+          if (!pick || h.room > pick.room || (h.room === pick.room && running(h) > running(pick))) pick = h;
+        }
+        if (pick) best.set(id, pick);
       }
     }
     // 대표를 고른 **다음**에 그 줄만 정밀하게 잰다. 굵은 눈금은 대표를 고르는

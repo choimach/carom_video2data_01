@@ -58,6 +58,7 @@ const median = (v) => { const s = [...v].sort((x, y) => x - y); return s[Math.fl
   const browser = await chromium.launch({ executablePath: SHELL, env: { ...process.env, LD_LIBRARY_PATH: LIBS } });
   const errors = [];
   const top1 = [], top3 = [], started = Date.now(), perPlay = {}, english = {}, sideSame = [];
+  let tipCount = 0, center = 0;
   let next = 0, done = 0;
   const worker = async () => {
   const page = await browser.newPage();
@@ -90,6 +91,7 @@ const median = (v) => { const s = [...v].sort((x, y) => x - y); return s[Math.fl
     if (got.flipped) throw new Error(`${play.id}: 정규화된 배치인데 frameOf()가 뒤집는다 — 틀이 다르다`);
     const gaps = got.top.filter((c) => c.length >= 2).map((c) => gap(c, play.rails));
     if (got.english) english[got.english] = (english[got.english] || 0) + 1;
+    if (got.topTip) { tipCount++; if (Math.hypot(got.topTip[0], got.topTip[1]) < 0.5) center++; }
     // 가려 둔 프로의 당점(영상에서 되찾은 것, 믿을 만한 것만)과 1등 당점의 좌우 — 배치가
     // 정규화된 틀이라 그대로 견준다.
     if (play.tip && got.topTip && Math.abs(play.tip[0]) >= 0.5 && Math.abs(got.topTip[0]) >= 0.5) {
@@ -108,6 +110,7 @@ const median = (v) => { const s = [...v].sort((x, y) => x - y); return s[Math.fl
   console.log(`조언판으로 잰 순위 — ${top1.length}판 (같은 경기는 이웃에서 뺐다), 오류 ${errors.length}`);
   console.log(`  1등 후보          중앙값 ${Math.round(median(top1))} mm · 300 안 ${within(top1, 300)} · 500 안 ${within(top1, 500)}`);
   console.log(`  상위 3개 중 최선   중앙값 ${Math.round(median(top3))} mm · 300 안 ${within(top3, 300)} · 500 안 ${within(top3, 500)}`);
+  if (tipCount) console.log(`  1등이 정중앙(0.5팁 안) ${Math.round(100 * center / tipCount)}% — 프로 3% (tips.json v2)`);
   if (sideSame.length) console.log(`  1등 당점 좌우가 그 판 프로와 같음 ${Math.round(100 * sideSame.reduce((a, b) => a + b, 0) / sideSame.length)}% (${sideSame.length}판)`);
   const turned = (english.running || 0) + (english.reverse || 0);
   if (turned) console.log(`  1등 줄의 회전: 도는 쪽 ${english.running || 0} · 반대쪽 ${english.reverse || 0}`
