@@ -48,6 +48,7 @@ CASES = [
 ]
 FACES = ("left", "right")
 CIRCUITS = (True, False)
+BANK_FACES = (None, "cushion", "away")
 
 
 class Event:
@@ -57,7 +58,7 @@ class Event:
         self.kind, self.detail, self.frame = kind, detail, frame
 
 
-def python_name(before, between, reached_second, face, circuit_right):
+def python_name(before, between, reached_second, face, circuit_right, bank=None):
     events = []
     frame = 0
     for rail in LONG[:1] * before if before else []:
@@ -75,7 +76,7 @@ def python_name(before, between, reached_second, face, circuit_right):
         events.append(Event("ball", "yellow", frame))
     # struck_side: 양수가 왼쪽 면 (app_data.py와 같은 규약).
     got = py_route.classify(events, struck_side=(1.0 if face == "left" else -1.0),
-                            circuit=(1.0 if circuit_right else -1.0))
+                            circuit=(1.0 if circuit_right else -1.0), bank_face=bank)
     return got["route"]
 
 
@@ -85,7 +86,7 @@ def js_names(cases):
     const cases = {json.dumps(cases, ensure_ascii=False)};
     console.log(JSON.stringify(cases.map((c) => ROUTE.name({{
       before: c[0], between: c[1], reachedSecond: c[2],
-      face: c[3], circuitRight: c[4],
+      face: c[3], circuitRight: c[4], bankFace: c[5],
     }}))));
     """
     done = subprocess.run(["node", "-e", script], capture_output=True, text=True, check=True)
@@ -98,8 +99,9 @@ def test_the_two_languages_name_the_same_route():
     for before, between, reached in CASES:
         for face in FACES:
             for circuit in CIRCUITS:
-                cases.append([before, between, reached, face, circuit])
-                expected.append(python_name(before, between, reached, face, circuit))
+                for bank in BANK_FACES:
+                    cases.append([before, between, reached, face, circuit, bank])
+                    expected.append(python_name(before, between, reached, face, circuit, bank))
 
     got = js_names(cases)
     wrong = []

@@ -41,8 +41,9 @@ def labelled():
     return out
 
 
-def by_family(play):
-    """The rule in place: the face struck against the circuit round the table."""
+def by_circuit(play):
+    """Dropped 2026-10-02: the face struck against the circuit round the table's middle
+    (signed area of the whole path). Wrong on short shots — see by_family."""
     rails = (play.get("route") or {}).get("rails") or []
     if not rails or play.get("struck_side") is None or play.get("circuit") is None:
         return None
@@ -116,9 +117,11 @@ def by_area_to_second(play):
     return _family(play, area > 0)
 
 
-def by_turning(play):
-    """시험 (2026-10-02): 도는 방향 = 1적구 → 쿠션들 → 2적구 점들이 꺾이는 방향의 합.
-    선수가 짚은 짧은 샷 둘("짧게 뒤돌리기", "앞돌리기 짧게")에서 탁자 가운데 둘레 넓이가 틀렸다."""
+def by_family(play):
+    """The rule in place (2026-10-02): the face struck against the way the path TURNS —
+    1적구 → 쿠션들 → 2적구 자리를 이은 선이 꺾이는 방향의 합, 동수면 by_circuit.
+    선수가 짚은 짧은 샷 둘("짧게 뒤돌리기", "앞돌리기 짧게")에서 탁자 가운데 둘레 넓이가
+    틀렸다. pipeline.turn_sign · route.js turnIsRight와 같다."""
     import numpy as np
     path, events = _points(play)
     if path is None:
@@ -140,17 +143,17 @@ def by_turning(play):
         u, v = b - a, c - b
         turn += np.sign(u[0] * v[1] - u[1] * v[0])
     if turn == 0:
-        # 좌우로 꺾인 수가 같으면 판정을 못 한다 — 지금 규칙(탁자 가운데 둘레 넓이)으로 물러난다.
-        return by_family(play)
+        # 좌우로 꺾인 수가 같으면 판정을 못 한다 — 탁자 가운데 둘레 넓이로 물러난다.
+        return by_circuit(play)
     return _family(play, turn > 0)
 
 
 TURNS = ("뒤돌리기", "옆돌리기", "앞돌리기", "빗겨치기")
-RULES = (("맞힌 면 vs 도는 방향 (지금)", by_family),
+RULES = (("맞힌 면 vs 궤적 꺾임 (지금, 2026-10-02)", by_family),
+         ("맞힌 면 vs 탁자 가운데 둘레 (버림 2026-10-02)", by_circuit),
          ("2쿠션 진행 거리 (버림)", by_drift),
          ("쿠션 순서 (버림)", by_rails),
-         ("도는 방향 = 넓이, 2적구까지 (시험)", by_area_to_second),
-         ("도는 방향 = 궤적 꺾임 (시험)", by_turning))
+         ("둘레 넓이를 2적구까지 (버림)", by_area_to_second))
 
 
 def main():

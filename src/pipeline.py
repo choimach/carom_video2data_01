@@ -466,6 +466,8 @@ def analyse(scan_data, recover=True):
         shot.away_mm = second_cushion_drift(shot, positions, details.get("events") or [])
         shot.struck_side = struck_side(shot, positions, details.get("events") or [])
         shot.circuit = circuit_sign(shot, positions)
+        shot.turn_sign = turn_sign(shot, positions, details.get("events") or [])
+        shot.bank_face = bank_face(shot, positions, details.get("events") or [])
         shot.english = english_side(shot, positions, details.get("events") or [])
     for shot in ordered:
         if shot.inferred:
@@ -651,6 +653,70 @@ def english_side(shot, positions, events, span=6):
     return float(-np.sign(along) * spin)
 
 
+def turn_sign(shot, positions, events):
+    """이름 판정에 쓰는 도는 방향 (2026-10-02): +1 오른쪽, -1 왼쪽.
+
+    1적구 → (그 사이 쿠션들) → 2적구에 닿은 수구 자리를 이은 선이 꺾이는 방향(외적
+    부호)의 합. 동수면 `circuit_sign`. 탁자 가운데 둘레의 넓이(`circuit_sign`)는 짧은
+    샷에서 틀렸다 — 탁자 한쪽에서 돌아 가운데를 감지 않고, 2적구 뒤에도 굴러간다.
+    선수가 조언판에서 고친 둘("짧게 뒤돌리기", "앞돌리기 짧게")을 맞히고, 그가 영상으로
+    붙인 이름 25개에서 22 → 23개 (`tools/rules_check.py`). ⚠️ `circuit_sign`은 그대로
+    둔다 — 회전 방향 통계(`tools/check_side_vs_circuit.py`)가 그것을 쓴다.
+    """
+    balls = [e for e in events if e.kind == "ball"]
+    if not balls:
+        return circuit_sign(shot, positions)
+    first = balls[0]
+    second = next((e for e in balls if e.detail != first.detail), None)
+    frames = [first.frame] + [e.frame for e in events if e.kind == "cushion"
+                              and e.frame > first.frame
+                              and (second is None or e.frame < second.frame)]
+    if second is not None:
+        frames.append(second.frame)
+    path = positions[shot.cue_ball]
+    points = []
+    for frame in frames:
+        at = shot.start_frame + int(frame)
+        if 0 <= at < len(path) and np.isfinite(path[at]).all():
+            points.append(path[at])
+    turn = 0.0
+    for a, b, c in zip(points, points[1:], points[2:]):
+        u, v = b - a, c - b
+        turn += np.sign(u[0] * v[1] - u[1] * v[0])
+    if turn == 0:
+        return circuit_sign(shot, positions)
+    return 1.0 if turn > 0 else -1.0
+
+
+def bank_face(shot, positions, events):
+    """1적구 전 쿠션이 하나일 때 1적구의 어느 면을 맞혔나: "cushion" | "away" | None.
+
+    선수의 정의 (2026-10-01): 그 쿠션 쪽 면이면 1뱅크(구멍), 반대쪽 면이면 걸어치기.
+    수구가 1적구에 닿은 자리 − 1적구 중심을, 첫 쿠션의 바깥쪽 방향에 투영한 부호.
+    """
+    first = next((e for e in events if e.kind == "ball"), None)
+    if first is None:
+        return None
+    before = [e for e in events if e.kind == "cushion" and e.frame < first.frame]
+    if len(before) != 1:
+        return None
+    if first.detail not in positions:
+        return None
+    cue, ball = positions[shot.cue_ball], positions[first.detail]
+    rail_at = shot.start_frame + int(before[0].frame)
+    hit_at = shot.start_frame + int(first.frame)
+    if not (0 <= rail_at < len(cue) and 0 <= hit_at < len(cue) and hit_at < len(ball)):
+        return None
+    rail, contact, centre = cue[rail_at], cue[hit_at], ball[max(hit_at - 1, 0)]
+    if not (np.isfinite(rail).all() and np.isfinite(contact).all() and np.isfinite(centre).all()):
+        return None
+    x, y = rail
+    walls = ((x, (-1.0, 0.0)), (TABLE_LENGTH_MM - x, (1.0, 0.0)),
+             (y, (0.0, -1.0)), (TABLE_WIDTH_MM - y, (0.0, 1.0)))
+    outward = np.array(min(walls, key=lambda w: w[0])[1])
+    return "cushion" if float(np.dot(contact - centre, outward)) > 0 else "away"
+
+
 def circuit_sign(shot, positions):
     """Which way round the table the cue ball went: +1 right, -1 left.
 
@@ -779,8 +845,10 @@ def route_of(verdict, shot):
                     turn_deg=getattr(shot, "turn_deg", None),
                     away_mm=getattr(shot, "away_mm", None),
                     struck_side=getattr(shot, "struck_side", None),
-                    circuit=getattr(shot, "circuit", None),
-                    english=getattr(shot, "english", None))
+                    # 이름은 궤적이 꺾이는 방향으로 판정한다 (turn_sign 참조).
+                    circuit=getattr(shot, "turn_sign", None) or getattr(shot, "circuit", None),
+                    english=getattr(shot, "english", None),
+                    bank_face=getattr(shot, "bank_face", None))
 
 
 def export_json(result, path):

@@ -20,10 +20,13 @@ const ROUTE = (() => {
   // reachedSecond : 2적구에 닿았는가
   // face          : 1적구의 어느 면을 맞았나 ("left" | "right")
   // circuitRight  : 테이블을 오른쪽으로 돌았나 (경로가 쓸고 간 부호 있는 넓이)
-  function name({ before, between, reachedSecond, face, circuitRight }) {
+  // bankFace      : 1적구 전 쿠션이 하나일 때 1적구의 첫 쿠션 쪽 면("cushion")인가 반대쪽("away")인가
+  function name({ before, between, reachedSecond, face, circuitRight, bankFace }) {
     // 1적구보다 먼저 쿠션을 맞으면 그건 "도는" 것이 아니다.
     if (before >= 2) return "뱅크샷";
-    if (before === 1) return "걸어치기";
+    // ★원 뱅크 계열 — 선수의 정의 (2026-10-01): 첫 쿠션 쪽 면이면 1뱅크(구멍), 반대쪽이면
+    // 걸어치기. route.py의 classify()와 같다.
+    if (before === 1) return bankFace === "cushion" ? "뱅크샷" : "걸어치기";
     if (!between || between.length === 0) return null;
 
     if (reachedSecond) {
@@ -151,6 +154,37 @@ const ROUTE = (() => {
     return area > 0;
   }
 
+  // 이름 판정의 도는 방향 (2026-10-02) — pipeline.turn_sign()과 같다: 1적구 → 그 사이 쿠션들
+  // → 2적구 자리를 이은 선이 꺾이는 방향의 합, 동수면 circuitIsRight. 짧은 샷에서 탁자
+  // 가운데 둘레 넓이가 틀렸다 (선수: "짧게 뒤돌리기", "앞돌리기 짧게").
+  function turnIsRight(shot, first, second, cue, length, width) {
+    const pts = [first.p, ...shot.events.filter((e) => e.kind === "cushion" && e.at > first.at
+      && (!second || e.at < second.at)).map((e) => e.p)];
+    if (second) pts.push(second.p);
+    let turn = 0;
+    for (let i = 0; i + 2 < pts.length; i++) {
+      const u = [pts[i + 1][0] - pts[i][0], pts[i + 1][1] - pts[i][1]];
+      const v = [pts[i + 2][0] - pts[i + 1][0], pts[i + 2][1] - pts[i + 1][1]];
+      turn += Math.sign(u[0] * v[1] - u[1] * v[0]);
+    }
+    if (turn === 0) return circuitIsRight(shot.paths[cue] || [], length, width);
+    return turn > 0;
+  }
+
+  // 1적구 전 쿠션이 하나일 때 첫 쿠션 쪽 면을 맞혔나 — pipeline.bank_face()와 같다.
+  function bankFaceOf(shot, first, cue, length, width) {
+    const before = shot.events.filter((e) => e.kind === "cushion" && e.at < first.at);
+    if (before.length !== 1) return null;
+    const way = shot.paths[first.detail] || [];
+    const centre = way[Math.max(0, Math.min(way.length - 1, Math.round(first.at * 60) - 1))];
+    if (!centre) return null;
+    const [x, y] = before[0].p;
+    const walls = [[x, [-1, 0]], [length - x, [1, 0]], [y, [0, -1]], [width - y, [0, 1]]];
+    const out = walls.reduce((a, b) => (b[0] < a[0] ? b : a))[1];
+    const d = (first.p[0] - centre[0]) * out[0] + (first.p[1] - centre[1]) * out[1];
+    return d > 0 ? "cushion" : "away";
+  }
+
   // 한 샷(sim.js의 결과)에서 위 함수가 필요한 것들을 뽑아 이름을 돌려준다.
   function of(shot, judged, face, cue, length, width) {
     const balls = shot.events.filter((e) => e.kind === "ball");
@@ -169,7 +203,8 @@ const ROUTE = (() => {
       .map((e) => e.english);
     const route = name({
       before, between, reachedSecond: !!second, face,
-      circuitRight: circuitIsRight(shot.paths[cue] || [], length, width),
+      circuitRight: turnIsRight(shot, first, second, cue, length, width),
+      bankFace: bankFaceOf(shot, first, cue, length, width),
     });
     const tags = subtypeOf(between, english, !!second) || [];
     if (standing(route, english)) tags.push("세워치기");

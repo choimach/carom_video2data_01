@@ -13,7 +13,13 @@
 
 ## 지금
 
-**돌고 있는 것: 없음.**
+**⏳ 돌고 있다: 열거 재실행 — 새 이름 규칙 (2026-10-02 07:37 시작, 조각 6, ~7시간).**
+이름 규칙 둘을 적용했다 (선수 정의·판단): ① 1적구 전 쿠션 하나 → 쿠션 쪽 면이면 1뱅크(뱅크샷), 반대쪽이면 걸어치기
+(`pipeline.bank_face`, `route.js bankFaceOf`) ② 도는 방향 = 궤적 꺾임 (`pipeline.turn_sign`, `route.js turnIsRight`;
+rules_check 22 → 23/25). 영상 자료 다시 뽑음: 5,694판 중 338판 이름이 바뀜 (걸어치기 → 뱅크샷 137, 뒤↔옆 129, 빗겨↔앞 72).
+옛 장부 `data/alternatives.jsonl.oldnames`. 보기: `tail ~/.cache/carom_enum/run.log`.
+끝나면: ① 값 확인 ② `learn_choices.py` · `score_probability.py` 재적합 → 가중치 `git add -f` ③ 빌드 →
+`node tools/check_app_ranking.js 240` (지금 1등 43% · 상위 3개 63%) ④ 조언판 게시 ⑤ 이 줄을 지운다.
 
 ①(프로라면 무엇을 골랐을까)의 자는 이제 **길**이다 — 1등 후보의 첫 두 쿠션 자리가 프로가 실제로 간
 자리와 몇 mm인가 (`tools/learn_choices.py`, 경기 단위 10겹, 2,334판):

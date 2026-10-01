@@ -124,7 +124,7 @@ def _standing(route, english):
 
 def classify(events, layout_mm=None, cue_ball=None, thickness=None, turn_deg=None,
              away_mm=None, struck_side=None, english=None, circuit=None,
-             english_at_rail=None):
+             english_at_rail=None, bank_face=None):
     """Name the route this shot took.
 
     `events` is what `judge_shot` leaves in its verdict: the cue ball's
@@ -158,7 +158,13 @@ def classify(events, layout_mm=None, cue_ball=None, thickness=None, turn_deg=Non
     # under 구멍.
     if len(opening) >= 2:
         return {**result, "route": BANK, "why": f"{len(opening)} cushions first"}
+    # ★쿠션 하나가 먼저면 둘 다 원 뱅크 계열이다. 선수의 정의 (2026-10-01):
+    # *"1뱅크(구멍)은 첫 번째 쿠션을 맞힌 후 1적구의 쿠션 쪽 면을 맞힌 다음 … 걸어치기는
+    # 첫 번째 쿠션을 맞힌 후 1적구의 쿠션 반대쪽 면을 맞힌 다음 …"* — `bank_face`가
+    # "cushion"이면 1뱅크(뱅크샷), 아니면 걸어치기. 모르면 예전처럼 걸어치기.
     if len(opening) == 1:
+        if bank_face == "cushion":
+            return {**result, "route": BANK, "why": "one cushion first, then the object ball's cushion-side face"}
         return {**result, "route": HOOK, "why": "a cushion before the first ball"}
 
     if not between:
