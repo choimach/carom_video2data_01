@@ -59,6 +59,7 @@ const median = (v) => { const s = [...v].sort((x, y) => x - y); return s[Math.fl
   const errors = [];
   const top1 = [], top3 = [], started = Date.now(), perPlay = {}, english = {}, sideSame = [];
   let tipCount = 0, center = 0;
+  const strengths = [];
   let next = 0, done = 0;
   const worker = async () => {
   const page = await browser.newPage();
@@ -81,6 +82,7 @@ const median = (v) => { const s = [...v].sort((x, y) => x - y); return s[Math.fl
         // 1등 줄의 회전이 도는 방향과 같은가 — 선수: "좌우가 바뀌는 것이 가장 흔한 문제".
         // 프로는 73%가 도는 쪽으로 준다 (tools/check_side_vs_circuit.py).
         topTip: r.routes.length ? [r.routes[0].hit.side || 0, r.routes[0].hit.vertical || 0] : null,
+        topStrength: r.routes.length ? SIM.strengthOf(r.routes[0].hit.speed) : null,
         english: r.routes.length ? (() => {
           const h = r.routes[0].hit;
           if (Math.abs(h.side || 0) < 0.3) return 'none';
@@ -91,6 +93,7 @@ const median = (v) => { const s = [...v].sort((x, y) => x - y); return s[Math.fl
     if (got.flipped) throw new Error(`${play.id}: 정규화된 배치인데 frameOf()가 뒤집는다 — 틀이 다르다`);
     const gaps = got.top.filter((c) => c.length >= 2).map((c) => gap(c, play.rails));
     if (got.english) english[got.english] = (english[got.english] || 0) + 1;
+    if (got.topStrength != null) strengths.push(got.topStrength);
     if (got.topTip) { tipCount++; if (Math.hypot(got.topTip[0], got.topTip[1]) < 0.5) center++; }
     // 가려 둔 프로의 당점(영상에서 되찾은 것, 믿을 만한 것만)과 1등 당점의 좌우 — 배치가
     // 정규화된 틀이라 그대로 견준다.
@@ -110,6 +113,12 @@ const median = (v) => { const s = [...v].sort((x, y) => x - y); return s[Math.fl
   console.log(`조언판으로 잰 순위 — ${top1.length}판 (같은 경기는 이웃에서 뺐다), 오류 ${errors.length}`);
   console.log(`  1등 후보          중앙값 ${Math.round(median(top1))} mm · 300 안 ${within(top1, 300)} · 500 안 ${within(top1, 500)}`);
   console.log(`  상위 3개 중 최선   중앙값 ${Math.round(median(top3))} mm · 300 안 ${within(top3, 300)} · 500 안 ${within(top3, 500)}`);
+  if (strengths.length) {
+    const s = [...strengths].sort((a, b) => a - b), q = (f) => s[Math.floor(f * (s.length - 1))].toFixed(1);
+    // 프로 (app-data 출발 속도, 2,641판): 25% 3.1 · 중앙 4.2 · 75% 5.4 · 6.5 넘음 13%
+    console.log(`  1등 강도 25% ${q(.25)} · 중앙 ${q(.5)} · 75% ${q(.75)} · 6.5 넘음 ${Math.round(100 * s.filter((x) => x >= 6.5).length / s.length)}%`
+      + ' — 프로 25% 3.1 · 중앙 4.2 · 75% 5.4 · 6.5 넘음 13%');
+  }
   if (tipCount) console.log(`  1등이 정중앙(0.5팁 안) ${Math.round(100 * center / tipCount)}% — 프로 3% (tips.json v2)`);
   if (sideSame.length) console.log(`  1등 당점 좌우가 그 판 프로와 같음 ${Math.round(100 * sideSame.reduce((a, b) => a + b, 0) / sideSame.length)}% (${sideSame.length}판)`);
   const turned = (english.running || 0) + (english.reverse || 0);

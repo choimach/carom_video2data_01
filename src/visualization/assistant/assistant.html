@@ -371,7 +371,7 @@
       return { play, gap: Math.sqrt(sum) };
     }).sort((a, b) => a.gap - b.gap).slice(0, K);
     const weight = new Map(), rate = new Map(), thick = new Map(), tip = new Map();
-    const pathWeight = new Map(), pathRate = new Map();
+    const pathWeight = new Map(), pathRate = new Map(), power = new Map();
     for (const item of near) {
       const key = `${item.play.route}|${item.play.near}|${item.play.face}`;
       weight.set(key, (weight.get(key) || 0) + 1);
@@ -402,8 +402,15 @@
           thick.get(at).push(item.play.thick);
         }
       }
+      // 이웃이 실제로 친 강도 (영상의 출발 속도를 지금 강도 표로). 두께와 같은 두 키.
+      if (item.play.speed) {
+        for (const at of [key, item.play.route]) {
+          if (!power.has(at)) power.set(at, []);
+          power.get(at).push(SIM.strengthOf(item.play.speed));
+        }
+      }
     }
-    return { weight, rate, thick, tip, pathWeight, pathRate, total: near.length, near };
+    return { weight, rate, thick, tip, power, pathWeight, pathRate, total: near.length, near };
   }
 
   // 이웃이 준 당점의 가운데. 좌우와 상하를 따로 중앙값 내지 않는다 — 당점은
@@ -435,6 +442,20 @@
 
   // 마지막 기댈 곳: 전체 플레이에서 유형별로 모은 두께. 이웃이 두께를 가진
   // 플레이를 거의 안 물어 왔을 때만 쓴다.
+  const median = (v) => { const s = [...v].sort((a, b) => a - b); return s[s.length >> 1]; };
+  // 유형마다 프로가 실제로 친 강도의 중앙값 — 이웃이 모자랄 때 기댈 곳.
+  const ROUTE_STRENGTH = (() => {
+    const by = new Map();
+    for (const play of DATA.plays) {
+      if (!play.speed || !play.route) continue;
+      if (!by.has(play.route)) by.set(play.route, []);
+      by.get(play.route).push(SIM.strengthOf(play.speed));
+    }
+    const out = new Map();
+    for (const [route, list] of by) if (list.length >= 20) out.set(route, median(list));
+    return out;
+  })();
+
   const ROUTE_THICKNESS = (() => {
     const by = new Map();
     for (const play of DATA.plays) {
@@ -531,6 +552,8 @@
   // 대표 줄을 이웃 프로 당점 쪽으로 고를 때 양보할 여유(도). null이면 끈다. finish()가
   // 읽을 수 있게 advise()가 이번 배치의 이웃을 PROS_NOW에 둔다.
   let TIP_YIELD = 0.5;
+  // 대표 줄을 이웃 프로 강도 쪽으로도 고른다 (TIP_YIELD 안에서). null이면 강도는 안 본다.
+  let STRENGTH_YIELD = true;
   // 대표가 정중앙일 때 당점 있는 줄로 바꾸며 양보할 여유(도). null이면 끈다.
   let CENTER_YIELD = 0.5;
   let PROS_NOW = null;
@@ -925,13 +948,24 @@
         const gapTo = (c) => Math.hypot(layout[c][0] - layout[cue][0], layout[c][1] - layout[cue][1]);
         const isNear = gapTo(first) <= gapTo(other);
         const face = frame.flipX !== frame.flipY ? (kept.face === "left" ? "right" : "left") : kept.face;
-        const want = inFrame(middleTip(PROS_NOW.tip.get(`${kept.route}|${isNear}|${face}`))
+        const proKey = `${kept.route}|${isNear}|${face}`;
+        const want = inFrame(middleTip(PROS_NOW.tip.get(proKey))
                              || middleTip(PROS_NOW.tip.get(kept.route)), frame);
-        if (!want || want.n < 3) continue;
-        const gap = (h) => Math.hypot((h.side || 0) - want.tip[0], (h.vertical || 0) - want.tip[1]);
+        // ★강도도 이웃 쪽으로 (2026-10-01). 조언판 1등 강도 중앙값 5.6 · 프로 4.2 — 첫 두 쿠션
+        // 자리는 강도에 둔해서 같은 길을 4.2로도 5.6으로도 치는데, 여유로만 고르면 센 줄이
+        // 이겼다. 선수: "2적구 이동거리가 길다". 이웃(3명 이상) → 그 유형 프로 전체의 중앙값.
+        const near3 = (list) => (list && list.length >= 3 ? median(list) : null);
+        const wantPower = STRENGTH_YIELD === null ? null
+          : (near3(PROS_NOW.power.get(proKey)) ?? near3(PROS_NOW.power.get(kept.route))
+             ?? ROUTE_STRENGTH.get(kept.route) ?? PRO_MID);
+        const useTip = want && want.n >= 3;
+        if (!useTip && wantPower === null) continue;
+        // 당점 1팁과 강도 1을 같은 무게로.
+        const cost = (h) => (useTip ? Math.hypot((h.side || 0) - want.tip[0], (h.vertical || 0) - want.tip[1]) : 0)
+          + (wantPower === null ? 0 : Math.abs(SIM.strengthOf(h.speed) - wantPower));
         let pick = kept;
         for (const h of members.get(id)) {
-          if (h.room >= kept.room - TIP_YIELD && gap(h) < gap(pick)) pick = h;
+          if (h.room >= kept.room - TIP_YIELD && cost(h) < cost(pick)) pick = h;
         }
         best.set(id, pick);
       }
