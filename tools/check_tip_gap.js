@@ -45,7 +45,7 @@ const pick = [];
 for (let i = 0; i < targets.length && pick.length < N; i += step) pick.push(targets[i]);
 
 const BANDS = [0, 0.25, 0.5, 1.0];
-const signs = [];
+const signs = [], bandSigns = {};
 const away = { 없이: [] }, room = {};
 for (const g of BANDS) { away['양보' + g] = []; room['양보' + g] = []; }
 for (const play of pick) {
@@ -107,6 +107,9 @@ for (const play of pick) {
       }
     }
     away['양보' + give].push(dist(best));
+    if (Math.abs(best.side) >= 0.5 && Math.abs(play.tip[0]) >= 0.5) {
+      (bandSigns[give] = bandSigns[give] || []).push(Math.sign(best.side) === Math.sign(play.tip[0]) ? 1 : 0);
+    }
     room['양보' + give].push(top - best.rough);
   }
 }
@@ -125,5 +128,7 @@ for (const g of BANDS) {
   const sd = (up + down) ? Math.abs(up - (up + down) / 2) / Math.sqrt((up + down) * 0.25) : 0;
   console.log(`  ${g.toFixed(2)}도    ${mid(away[k]).toFixed(2)}          `
     + `${mid(room[k]).toFixed(2)}           ${String(up).padStart(3)} / ${String(down).padStart(3)}`
-    + `        ${sd.toFixed(1)}` + (g === 0 ? '   ← 지금' : ''));
+    + `        ${sd.toFixed(1)}`
+    + (bandSigns[g] ? `   좌우 같음 ${Math.round(100 * bandSigns[g].reduce((a, b) => a + b, 0) / bandSigns[g].length)}% (${bandSigns[g].length})` : '')
+    + (g === 0 ? '   ← 지금' : ''));
 }
