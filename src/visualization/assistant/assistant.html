@@ -200,7 +200,7 @@
       <input id="seed" type="text" inputmode="numeric" placeholder="씨앗" title="지난 판의 씨앗을 넣고 엔터">
       <button id="run" class="run" type="button">실행</button>
     </div>
-    <p class="trust-note">진한 선은 친 뒤 3초까지 — 여기까지는 0.5 m 안으로 맞습니다. 옅은 점선과 멈춘 자리는 대략입니다. 흐린 점들은 당점(±1팁)·강도(±8%)를 조금 바꿔 쳤을 때 공이 멈추는 자리 — 넓게 퍼질수록 끝 자리를 믿기 어렵습니다.</p>
+    <p class="trust-note">진한 선은 친 뒤 3초까지 — 여기까지는 0.5 m 안으로 맞습니다. 옅은 점선과 멈춘 자리는 대략입니다. 흐린 점들은 당점(±1팁)·강도(±8%)를 조금 바꿔 쳐도 <b>득점할 때</b> 공이 멈추는 자리 — 넓게 퍼질수록 끝 자리를 믿기 어렵습니다.</p>
   </div>
 
   <aside class="side">
@@ -1020,13 +1020,20 @@
     const spots = {};
     for (const c of ORDER) spots[c] = [];
     const rad = hit.deg * Math.PI / 180;
+    let tried = 0, scored = 0;
     for (const ds of [-1, 0, 1]) for (const du of [-1, 0, 1]) for (const f of [0.92, 1, 1.08]) {
       if (!ds && !du && f === 1) continue;
       const v = [Math.cos(rad) * hit.speed * f, Math.sin(rad) * hit.speed * f];
       const shot = SIM.play(layout, cue, v, (hit.side || 0) + ds, (hit.vertical || 0) + du);
+      tried++;
+      // ★같은 1적구로 **득점한** 샷만 찍는다 (2026-10-01). 실패한 샷까지 찍었더니 씨앗
+      // 3602725286에서 26번 중 18번이 실패라 탁자 전체에 점이 흩어졌다 — 선수: "이상한 점들".
+      const judged = SIM.judge(shot);
+      if (!judged.scored || judged.first !== hit.judged.first) continue;
+      scored++;
       for (const c of ORDER) if (shot.rest[c]) spots[c].push(shot.rest[c]);
     }
-    hit.cloud = { key, spots };
+    hit.cloud = { key, spots, tried, scored };
     return spots;
   }
 
@@ -1707,9 +1714,11 @@
         쿠션 <b>${row.hit.judged.rails.length}개</b>,
         1적구 <b>${Math.round(row.hit.pushed)} mm</b> 이동.
         시뮬레이터가 회전을 공의 상태로 들고 있으므로 당점을 팁으로 말합니다.
-        영상 플레이 708개와 대조하면(2026-09-26) <b>첫 쿠션에서 나가는 각이
-        ±13도</b> 흩어지고 1초 뒤 위치가 <b>319 mm</b> 어긋납니다. 공 하나가
-        62 mm이니 다섯 개입니다. 그 13도는 <b>당점</b>에서 옵니다 — 큐가 공의
+        ${row.hit.cloud ? `당점을 ±1팁, 강도를 ±8% 흔들어 ${row.hit.cloud.tried}번 쳐 보면
+        <b>${row.hit.cloud.scored}번</b> 들어갑니다 — 많을수록 조금 어긋나도 들어가는 공략입니다. ` : ""}
+        프로 샷 수백 판을 영상 그대로 다시 쳐 보면(2026-09-30) <b>첫 쿠션에서 나가는 각이
+        ±10도</b>쯤 흩어지고 수구 위치가 <b>1초 뒤 165 mm · 3초 뒤 540 mm</b> 어긋납니다.
+        그 흩어짐은 대부분 <b>당점</b>에서 옵니다 — 큐가 공의
         어디를 때렸는지는 위에서 찍는 방송 화면에 안 보이므로, 영상을 더 모아도
         줄지 않습니다. <b>어느 쪽으로 도는 공략인지 보는 그림이지, 그대로 겨눠서
         맞는 처방이 아닙니다.</b>

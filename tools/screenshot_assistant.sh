@@ -5,6 +5,7 @@
 # ~/.cache/carom_libs에 풀고 LD_LIBRARY_PATH로 준다. `!`로는 sudo 비밀번호를 못 넣는다.
 #
 #   bash tools/screenshot_assistant.sh [out.png]
+#   SEED=3602725286 bash tools/screenshot_assistant.sh out.png   # 그 배치 그대로
 set -euo pipefail
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
 OUT=${1:-/tmp/assistant.png}
@@ -28,9 +29,11 @@ const { chromium } = require('$CORE');
   const errs = []; p.on('pageerror', e => errs.push(e.message));
   p.on('console', m => m.type() === 'error' && errs.push(m.text()));
   await p.goto('http://localhost:8765/carom_assistant.html');
-  await p.click('#dice'); await p.click('#run');
+  // SEED: 선수가 본 배치를 그대로 (씨앗이 수구까지 정한다).
+  if (process.env.SEED) { await p.fill('#seed', process.env.SEED); await p.press('#seed', 'Enter'); } else await p.click('#dice');
+  await p.click('#run');
   await p.waitForTimeout(20000);
-  await p.locator('.table-card').screenshot({ path: '$OUT' });
+  await p.setViewportSize({ width: 1400, height: 900 }); await p.screenshot({ path: '$OUT' });
   console.log('$OUT', 'errors', JSON.stringify(errs));
   await b.close();
 })();"
