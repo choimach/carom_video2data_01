@@ -35,6 +35,7 @@ def labelled():
             continue
         for play in json.load(open(path, encoding="utf-8"))["plays"]:
             if play["inning"] == inning and play["shot_number"] == shot:
+                play["_match"] = match
                 out.append((route, play))
                 break
     return out
@@ -70,10 +71,86 @@ def by_rails(play):
     return "뒤돌리기" if rails[0] in SHORT else "옆돌리기"
 
 
+_TRAJ = {}
+
+
+def _points(play):
+    """수구 궤적과 사건 자리 — 사건 프레임은 플레이 시작 기준 (app_data._at 참조)."""
+    import numpy as np
+    match = play.get("_match")
+    if match not in _TRAJ:
+        f = os.path.join(DATASET, f"{match}_traj.npz")
+        _TRAJ[match] = np.load(f) if os.path.exists(f) else None
+    bundle = _TRAJ[match]
+    key = f"i{play['inning']:03d}s{play['shot_number']:02d}_{play.get('cue_ball')}"
+    if bundle is None or key not in bundle:
+        return None, None
+    path = bundle[key]
+    events = [(int(e[0]), e[1], e[2] if len(e) > 2 else None) for e in (play.get("events") or [])]
+    return path, events
+
+
+def _family(play, right):
+    rails = (play.get("route") or {}).get("rails") or []
+    if not rails or play.get("struck_side") is None or right is None:
+        return None
+    same = (play["struck_side"] < 0) == right
+    short = rails[0] in SHORT
+    return ("앞돌리기" if short else "옆돌리기") if same else ("빗겨치기" if short else "뒤돌리기")
+
+
+def by_area_to_second(play):
+    """시험 (2026-10-02): 지금 규칙의 도는 방향을 2적구에 닿을 때까지의 궤적으로만."""
+    import numpy as np
+    path, events = _points(play)
+    if path is None:
+        return None
+    balls = [e for e in events if e[1] == "ball"]
+    end = balls[1][0] if len(balls) >= 2 else len(path) - 1
+    seg = path[:end + 1]
+    seg = seg[np.isfinite(seg).all(axis=1)]
+    if len(seg) < 5:
+        return None
+    about = seg - np.array([1422.0, 711.0])
+    area = float(np.sum(about[:-1, 0] * about[1:, 1] - about[:-1, 1] * about[1:, 0]))
+    return _family(play, area > 0)
+
+
+def by_turning(play):
+    """시험 (2026-10-02): 도는 방향 = 1적구 → 쿠션들 → 2적구 점들이 꺾이는 방향의 합.
+    선수가 짚은 짧은 샷 둘("짧게 뒤돌리기", "앞돌리기 짧게")에서 탁자 가운데 둘레 넓이가 틀렸다."""
+    import numpy as np
+    path, events = _points(play)
+    if path is None:
+        return None
+    balls = [e for e in events if e[1] == "ball"]
+    if not balls:
+        return None
+    first = balls[0][0]
+    second = balls[1][0] if len(balls) >= 2 else None
+    frames = [first] + [e[0] for e in events if e[1] == "cushion" and e[0] > first
+                        and (second is None or e[0] < second)]
+    if second is not None:
+        frames.append(second)
+    pts = [path[f] for f in frames if 0 <= f < len(path) and np.isfinite(path[f]).all()]
+    if len(pts) < 3:
+        return None
+    turn = 0.0
+    for a, b, c in zip(pts, pts[1:], pts[2:]):
+        u, v = b - a, c - b
+        turn += np.sign(u[0] * v[1] - u[1] * v[0])
+    if turn == 0:
+        # 좌우로 꺾인 수가 같으면 판정을 못 한다 — 지금 규칙(탁자 가운데 둘레 넓이)으로 물러난다.
+        return by_family(play)
+    return _family(play, turn > 0)
+
+
 TURNS = ("뒤돌리기", "옆돌리기", "앞돌리기", "빗겨치기")
 RULES = (("맞힌 면 vs 도는 방향 (지금)", by_family),
          ("2쿠션 진행 거리 (버림)", by_drift),
-         ("쿠션 순서 (버림)", by_rails))
+         ("쿠션 순서 (버림)", by_rails),
+         ("도는 방향 = 넓이, 2적구까지 (시험)", by_area_to_second),
+         ("도는 방향 = 궤적 꺾임 (시험)", by_turning))
 
 
 def main():
