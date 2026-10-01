@@ -523,6 +523,11 @@
   //   600 mm      7.3초 ·               40% ·          60%   (+1.0 / +0.9)
   // null이면 끈다 (tools/check_app_ranking.js의 PRE로 견줄 때).
   let GATE_MM = 300;
+  // 두께 사다리(1적구 먼저) 쪽 관문은 넓게 (2026-10-01). 관문은 **당점 없이** 친 길로
+  // 판단하는데, 1적구 먼저 치는 샷은 2팁을 주면 길이 크게 바뀐다. 선수가 말한 "빨간공
+  // 1적구 역회전 더블쿠션"(씨앗 571926146 — 빨간공 → 아래 → 위 → 왼쪽, 8시 2팁)이 300 mm
+  // 관문에 걸려 사라졌고 1000 mm면 살아난다. 쿠션 먼저(전방위) 쪽은 300 mm 그대로.
+  let GATE_LADDER_MM = 1000;
   // 대표 줄을 이웃 프로 당점 쪽으로 고를 때 양보할 여유(도). null이면 끈다. finish()가
   // 읽을 수 있게 advise()가 이번 배치의 이웃을 PROS_NOW에 둔다.
   let TIP_YIELD = 0.5;
@@ -581,8 +586,9 @@
          && shot.events.some((e) => e.kind === "cushion" && e.at < balls[0].at))
       : (balls.length > 0 && cushions >= 2);
     if (!judged.scored) {
-      if (promising && GATE_MM !== null && balls.length
-          && nearMiss(shot, balls[0].detail) > GATE_MM) return false;
+      const gate = fromSweep ? GATE_MM : GATE_LADDER_MM;
+      if (promising && gate !== null && balls.length
+          && nearMiss(shot, balls[0].detail) > gate) return false;
       return promising;
     }
     if (kissed(shot, judged)) { counters.kisses++; return promising; }
