@@ -200,7 +200,7 @@
       <input id="seed" type="text" inputmode="numeric" placeholder="씨앗" title="지난 판의 씨앗을 넣고 엔터">
       <button id="run" class="run" type="button">실행</button>
     </div>
-    <p class="trust-note">진한 선은 친 뒤 3초까지 — 여기까지는 0.5 m 안으로 맞습니다. 옅은 점선과 멈춘 자리는 대략입니다.</p>
+    <p class="trust-note">진한 선은 친 뒤 3초까지 — 여기까지는 0.5 m 안으로 맞습니다. 옅은 점선과 멈춘 자리는 대략입니다. 흐린 점들은 당점(±1팁)·강도(±8%)를 조금 바꿔 쳤을 때 공이 멈추는 자리 — 넓게 퍼질수록 끝 자리를 믿기 어렵습니다.</p>
   </div>
 
   <aside class="side">
@@ -1013,6 +1013,23 @@
     if (far.length > 1) el(svg, "polyline", { points: pts(far), fill: "none", ...attrs, ...faded });
   }
 
+  // 같은 공략을 당점 ±1팁 · 강도 ±8%로 흔들어 친 멈춘 자리들 (공마다). 줄마다 한 번만.
+  function restCloud(hit) {
+    const key = `${hit.deg}:${hit.speed}:${hit.side}:${hit.vertical || 0}`;
+    if (hit.cloud && hit.cloud.key === key) return hit.cloud.spots;
+    const spots = {};
+    for (const c of ORDER) spots[c] = [];
+    const rad = hit.deg * Math.PI / 180;
+    for (const ds of [-1, 0, 1]) for (const du of [-1, 0, 1]) for (const f of [0.92, 1, 1.08]) {
+      if (!ds && !du && f === 1) continue;
+      const v = [Math.cos(rad) * hit.speed * f, Math.sin(rad) * hit.speed * f];
+      const shot = SIM.play(layout, cue, v, (hit.side || 0) + ds, (hit.vertical || 0) + du);
+      for (const c of ORDER) if (shot.rest[c]) spots[c].push(shot.rest[c]);
+    }
+    hit.cloud = { key, spots };
+    return spots;
+  }
+
   function drawOnly() {
     const svg = document.getElementById("table");
     svg.textContent = "";
@@ -1072,6 +1089,19 @@
       };
       tag(head, "시작", "var(--track)");
       tag(tail, "끝", "var(--ball-yellow)");
+      // ★멈춘 자리는 점이 아니라 **구름**이다 (2026-10). 프로 샷을 그대로 다시 쳐도 멈춘
+      // 자리는 공당 ~0.8 m 틀리고("안 움직였다"와 비슷, tools/replay_rest.py), 그 대부분이
+      // 영상에 안 찍히는 당점·강도다. 같은 공략을 당점 ±1팁 · 강도 ±8%로 흔들어 친 자리를
+      // 옅게 찍어, 끝 자리를 얼마나 믿을 수 있는지 보이게 한다. 선수: "최종위치".
+      if (!playing) {
+        for (const [colour, spots] of Object.entries(restCloud(row.hit))) {
+          for (const at of spots) {
+            // 빨강은 천 색에 묻혀 조금 더 진하게.
+            el(svg, "circle", { cx: at[0], cy: at[1], r: 16, fill: `var(--ball-${colour})`,
+                                opacity: colour === "red" ? .5 : .28 });
+          }
+        }
+      }
       for (const colour of ORDER) {
         const at = shot.rest[colour];
         if (!at) continue;
