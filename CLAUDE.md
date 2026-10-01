@@ -207,6 +207,9 @@ node --check build/sim.js
 - **화면은 `bash tools/screenshot_assistant.sh out.png`로 본다** — 무작위 배치 하나를 실행해 찍고
   콘솔 오류를 찍는다. sudo 없이 된다 (빠진 라이브러리를 `apt-get download`로 받아 쓴다).
   `!` 명령으로는 sudo 비밀번호를 넣을 수 없다.
+- **게시 주소는 하나다: https://claude.ai/artifact/MjgXgHrhmfcHWkUWWNLEc6** — 페이지는
+  `build/carom_assistant.html`, 함께 `sim.js` · `route.js` · `choice.js`를 `files`로. 새 주소를 만들지
+  말 것 (2026-09-28 판이 10-01까지 갱신 안 된 채 남아 있었다 — 고친 것이 선수에게 안 갔다).
 - **게시 전에 항상 `node --check`.** 페이지는 스크립트 한 덩어리라 괄호 하나가
   전체를 조용히 죽인다. 정의 없이 호출되던 `kissed()` 하나 때문에 모든 배치가
   "득점하는 선을 찾지 못했습니다"로 나온 적이 있다.
