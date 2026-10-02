@@ -48,14 +48,19 @@ def main(argv=None):
         verdicts = record.get("verdicts") or {}
         print(f"\n  {record.get('at')} · 씨앗 {record.get('seed')} · 수구 {record.get('cue')}"
               f" · 판단 {len(verdicts)}개 · 빌드 {build}")
-        for key, verdict in verdicts.items():
-            print(f"    {verdict:5s} {key}")
+        for key in sorted(set(verdicts) | set(record.get("notes") or {}) | set(record.get("renames") or {})):
+            extra = " ".join((record.get("notes") or {}).get(key, []))
+            name = (record.get("renames") or {}).get(key)
+            print(f"    {verdicts.get(key, '-'):5s} {key}  {extra}{'  이름→' + name if name else ''}")
+        if record.get("better"):
+            print(f"    더 나은 공략: {record['better']}")
         if record.get("comment"):
             print("    의견: " + record["comment"].replace("\n", "\n          "))
     if args.save and fresh:
         for _created, path, build, record in fresh:
-            keep = {k: record.get(k) for k in ("at", "origin", "seed", "table", "cue", "layout",
-                                               "picked", "kisses", "verdicts", "played", "comment")}
+            # 통째로 담는다 — record_feedback.py와 같다. 후보 목록(candidates)이 있어야 판단을
+            # 순위에 대고 채점할 수 있다 (2026-10-03까지 빼고 담았다).
+            keep = dict(record)
             keep["note"] = f"폰 앱에서 보냄 (빌드 {build}, {path})"
             ledger["rounds"].append(keep)
         with open(LEDGER, "w", encoding="utf-8") as handle:

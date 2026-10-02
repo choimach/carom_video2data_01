@@ -107,6 +107,12 @@
   .choice .say button[data-say="bad"][aria-pressed="true"] {
     background: var(--warn); border-color: var(--warn); color: #fff; }
   .choice .thin { color: var(--warn); }
+  /* 고른 카드의 세부 버튼 — 폰에서 손가락으로 누를 크기 */
+  .choice .notes { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 6px; }
+  .choice .notes button, .choice .notes select { padding: 5px 9px; font-size: 12px; border-radius: 6px; }
+  .choice .notes button[aria-pressed="true"] { background: var(--good); border-color: var(--good); color: #fff; }
+  .better { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; width: 100%; margin-top: 8px; }
+  .better select, .better button { padding: 5px 9px; font-size: 12.5px; }
   .trust-note { margin: 6px 12px 10px; font-size: 12px; color: var(--soft); }
   .detail { margin-top: 14px; background: var(--surface); border: 1px solid var(--line);
             border-radius: 10px; padding: 14px; font-size: 13.5px; color: var(--soft); display: none; }
@@ -257,6 +263,23 @@
   let playing = null;   // {frame, timer}
   // 후보마다의 판단과, 실제로 쳐 본 결과. 이것이 곧 "버린 길"의 기록이다.
   let verdicts = {};    // {후보 key: "good" | "bad"}
+  // ★버튼으로 받는 세부 판단 (2026-10-03). 선수: "phone에서의 feedback은 간단한 button 선택이
+  // 주가 되고 text feedback은 최소한으로". 버튼 종류는 그가 지금까지 **글로 적은 의견 20개**에서
+  // 되풀이된 것들이다 — 당점 좌우가 바뀜, 이름이 틀림(짧게 뒤돌리기·더블…), 가능하지만 어려움,
+  // 위와 같은 선택, 2적구가 너무 멀리 감(셈), 더 나은 공략(횡단 등).
+  let notes = {};       // {후보 key: ["tip_flip", "strong", …]}
+  let renames = {};     // {후보 key: "짧게 뒤돌리기"} — 그가 부르는 이름
+  let better = null;    // {route, first} — 이 배치에서 더 나은 공략이 따로 있다면
+  const NOTE_KINDS = [
+    ["tip_flip", "당점 좌우 반대"], ["tip_other", "당점 다름"],
+    ["strong", "너무 셈"], ["weak", "너무 약함"],
+    ["thicker", "더 두껍게"], ["thinner", "더 얇게"],
+    ["hard", "어려움"], ["dup", "위와 같은 공략"],
+  ];
+  // 그가 쓰는 이름들 (ref/taxonomy.md, 의견에서). 이름은 ⑤번이지만, 틀린 이름은 무엇을
+  // 가리키는지 헷갈리게 하므로 받아 둔다.
+  const SPOKEN_NAMES = ["뒤돌리기", "짧게 뒤돌리기", "리버스 뒤돌리기", "옆돌리기", "앞돌리기",
+    "앞돌리기 짧게", "빗겨치기", "걸어치기", "뱅크샷", "더블", "횡단", "대회전", "되돌아오기", "기타"];
   let played = null;    // {key, scored} — 실제로 쳐 보셨다면
   let wantFirst = "any";   // 1적구: any | 공 이름
   let wantFace = "any";    // 맞히는 면: any | left | right
@@ -1566,6 +1589,31 @@
       };
       foot.appendChild(button);
     }
+    // 더 나은 공략이 따로 있다면 — 이름과 1적구만 고른다 (선수가 "횡단이 나은듯"이라고 적던 것).
+    const line = document.createElement("div");
+    line.className = "better";
+    const lead = document.createElement("span");
+    lead.className = "ask";
+    lead.textContent = "더 나은 공략:";
+    line.appendChild(lead);
+    const name = document.createElement("select");
+    name.innerHTML = `<option value="">없음</option>`
+      + SPOKEN_NAMES.map((n) => `<option${better && better.route === n ? " selected" : ""}>${n}</option>`).join("");
+    name.onchange = () => {
+      better = name.value ? { route: name.value, first: better ? better.first : null } : null;
+      render();
+    };
+    line.appendChild(name);
+    for (const colour of ORDER.filter((c) => c !== cue)) {
+      const ball = document.createElement("button");
+      ball.type = "button";
+      ball.textContent = `${NAMES[colour]} 1적구`;
+      ball.disabled = !better;
+      ball.setAttribute("aria-pressed", String(!!better && better.first === colour));
+      ball.onclick = () => { better.first = better.first === colour ? null : colour; render(); };
+      line.appendChild(ball);
+    }
+    foot.appendChild(line);
   }
 
 
@@ -1819,6 +1867,40 @@
         say.appendChild(mark);
       }
       card.appendChild(say);
+      // 고른 카드에만 펼친다 — 셋 다 펼치면 폰 화면이 버튼으로 덮인다.
+      if (row.key === picked) {
+        const more = document.createElement("div");
+        more.className = "notes";
+        const mine = notes[row.key] || [];
+        for (const [kind, text] of NOTE_KINDS) {
+          const chip = document.createElement("button");
+          chip.type = "button";
+          chip.textContent = text;
+          chip.setAttribute("aria-pressed", String(mine.includes(kind)));
+          chip.onclick = (event) => {
+            event.stopPropagation();
+            const now = new Set(notes[row.key] || []);
+            if (now.has(kind)) now.delete(kind); else now.add(kind);
+            // 서로 반대인 것은 함께 켜지지 않게.
+            for (const [a, b] of [["strong", "weak"], ["thicker", "thinner"], ["tip_flip", "tip_other"]]) {
+              if (kind === a) now.delete(b); if (kind === b) now.delete(a);
+            }
+            if (now.size) notes[row.key] = [...now]; else delete notes[row.key];
+            render();
+          };
+          more.appendChild(chip);
+        }
+        const rename = document.createElement("select");
+        rename.innerHTML = `<option value="">이름 맞음</option>`
+          + SPOKEN_NAMES.map((n) => `<option${renames[row.key] === n ? " selected" : ""}>${n}</option>`).join("");
+        rename.onclick = (event) => event.stopPropagation();
+        rename.onchange = () => {
+          if (rename.value) renames[row.key] = rename.value; else delete renames[row.key];
+          render();
+        };
+        more.appendChild(rename);
+        card.appendChild(more);
+      }
       box.appendChild(card);
     });
     const shown = new Set(show.map((s) => s.row.key)).size;
@@ -2018,11 +2100,11 @@
   document.getElementById("clear").onclick = () => {
     stopPlaying();
     layout = {}; result = null; picked = null; cue = "white";
-    verdicts = {}; played = null; dealt = null; render();
+    verdicts = {}; played = null; notes = {}; renames = {}; better = null; dealt = null; render();
   };
   const deal = (seed) => {
     stopPlaying();
-    result = null; picked = null; verdicts = {}; played = null;
+    result = null; picked = null; verdicts = {}; played = null; notes = {}; renames = {}; better = null;
     dealRandom(seed);
     render();
     // 깔았으면 바로 푼다 — 단추를 두 번 누르게 할 이유가 없다.
@@ -2068,7 +2150,7 @@
       }
     }
     layout = put;
-    result = null; picked = null; verdicts = {}; played = null;
+    result = null; picked = null; verdicts = {}; played = null; notes = {}; renames = {}; better = null;
     // 더 이상 씨앗으로 되살릴 수 있는 판이 아니다 — 칸을 비워 헷갈리지 않게.
     dealt = null;
     try { history.replaceState(null, "", " "); } catch (e) {}
@@ -2101,7 +2183,7 @@
     // 한 프레임 쉬어 버튼 상태가 보이게 한 뒤 푼다.
     setTimeout(async () => {
       try {
-        verdicts = {}; played = null;   // 새 계산은 새 판단이다
+        verdicts = {}; played = null; notes = {}; renames = {}; better = null;   // 새 계산은 새 판단이다
         const began = performance.now();
         result = await advise((done) => {
           button.textContent = `계산 중 ${Math.round(done * 100)}%`;
@@ -2168,15 +2250,21 @@
     } else {
       lines.push("아직 실행하지 않음");
     }
-    const judged = Object.keys(verdicts);
-    if (judged.length) {
+    const judged = new Set([...Object.keys(verdicts), ...Object.keys(notes), ...Object.keys(renames)]);
+    if (judged.size) {
       lines.push("", "판단:");
+      const said = { good: "맞다", thin: "가능하지만 프로가 고를 리 없다", bad: "아니다" };
+      const noteText = Object.fromEntries(NOTE_KINDS);
       result.routes.forEach((row, index) => {
-        if (!verdicts[row.key]) return;
-        const said = { good: "맞다", thin: "가능하지만 프로가 고를 리 없다", bad: "아니다" };
-        lines.push(`  ${index + 1}. ${label(row)} — ${said[verdicts[row.key]] || "아니다"}`);
+        if (!judged.has(row.key)) return;
+        const parts = [];
+        if (verdicts[row.key]) parts.push(said[verdicts[row.key]] || "아니다");
+        for (const n of notes[row.key] || []) parts.push(noteText[n]);
+        if (renames[row.key]) parts.push(`이름은 ${renames[row.key]}`);
+        lines.push(`  ${index + 1}. ${label(row)} — ${parts.join(" · ")}`);
       });
     }
+    if (better) lines.push(`더 나은 공략: ${better.route}${better.first ? ` (${NAMES[better.first]} 1적구)` : ""}`);
     if (played) {
       const at = result.routes.findIndex((r) => r.key === played.key) + 1;
       lines.push(`실제로 쳐보니: ${at}번 ${played.scored ? "들어갔다" : "빗나갔다"}`);
@@ -2213,6 +2301,7 @@
       })),
       // 버린 길의 기록. 프로 영상에는 없는 것이고, 순위 계산이 채점받는 근거다.
       verdicts,
+      notes, renames, better,
       played,
       comment: comment.value.trim() || null,
     };
