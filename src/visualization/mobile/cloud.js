@@ -46,4 +46,11 @@ const button = document.getElementById("copy");
 if (button) button.textContent = "결과 보내기";
 uid().catch(() => {});   // 미리 로그인해 둔다 — 첫 보내기가 빨라진다
 
+// 어느 판이 떠 있는지 화면 맨 아래에 적는다 — 선수: "자동으로 update되나?" (2026-10-03).
+// 서비스 워커가 네트워크 먼저라 온라인에서 열면 늘 최신이지만, 눈으로 확인할 수 있어야 한다.
+const stamp = document.createElement("p");
+stamp.textContent = `폰 앱 · 빌드 ${window.CAROM_BUILD || "?"}`;
+stamp.style.cssText = "margin:10px 16px 18px;font-size:11px;color:#8b968e;text-align:center";
+document.body.appendChild(stamp);
+
 if ("serviceWorker" in navigator) navigator.serviceWorker.register("./sw.js").catch(() => {});
