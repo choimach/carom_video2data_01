@@ -64,7 +64,8 @@ const median = (v) => { const s = [...v].sort((x, y) => x - y); return s[Math.fl
   const worker = async () => {
   const page = await browser.newPage();
   page.on('pageerror', (e) => errors.push(e.message));
-  await page.goto('file://' + path.join(ROOT, 'build', 'carom_assistant.html'));
+  // PAGE: 다른 판의 조언판(예: 내려받은 지난 게시본)을 잴 때 — 같은 판들로 짝지어 견준다.
+  await page.goto('file://' + (process.env.PAGE || path.join(ROOT, 'build', 'carom_assistant.html')));
   // PRE: 페이지를 연 뒤 돌릴 JS — 변형을 시험할 때 (예: PRE='REFINE_TIPS = TIP_POINTS.slice(0, 5)').
   if (process.env.PRE) await page.evaluate(process.env.PRE);
   while (next < plays.length) {
