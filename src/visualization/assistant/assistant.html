@@ -617,13 +617,10 @@
       return promising;
     }
     if (kissed(shot, judged)) { counters.kisses++; return promising; }
-    const target = layout[judged.first];
-    const toBall = [target[0] - layout[cue][0], target[1] - layout[cue][1]];
-    const face = (aim[0] * toBall[1] - aim[1] * toBall[0]) > 0 ? "left" : "right";
     // 두께 = 1 − (수구 진행선과 적구 중심 사이 수직 거리) / 공 지름. 정면이 1,
-    // 스치면 0. 선수가 쓰는 말이 이것이므로 화면에도 이것으로 적는다.
-    const offset = Math.abs(aim[0] * toBall[1] - aim[1] * toBall[0]);
-    const thickness = Math.max(0, Math.min(1, 1 - offset / (SIM.RADIUS * 2)));
+    // 스치면 0. 진행선은 **1적구에 들어가는** 방향이다 — 쿠션을 먼저 맞는 샷은 처음
+    // 겨냥과 다르다 (SIM.contact(), 2026-10-02).
+    const { face, thickness } = SIM.contact(shot, layout, cue);
     if (wantFace !== "any" && face !== wantFace) return promising;
     if (wantFirst !== "any" && judged.first !== wantFirst) return promising;
     const { route, tags } = nameRoute(shot, judged, aim, face);
@@ -833,9 +830,7 @@
                           hit.side, hit.vertical || 0);
     const judged = SIM.judge(shot);
     if (!judged.scored || judged.first !== hit.judged.first || kissed(shot, judged)) return false;
-    const to = layout[judged.first], from = layout[cue];
-    const across = aim[0] * (to[1] - from[1]) - aim[1] * (to[0] - from[0]);
-    const face = across > 0 ? "left" : "right";
+    const { face } = SIM.contact(shot, layout, cue);
     if (face !== hit.face) return false;
     const { route } = nameRoute(shot, judged, aim, face);
     return route === hit.route;
@@ -1423,11 +1418,8 @@
     // 옛 겨냥의 것으로 남는다.
     const first = row.hit.judged.first;
     if (first && layout[first]) {
-      const aim = [Math.cos(rad), Math.sin(rad)];
-      const from = layout[cue], to = layout[first];
-      const across = aim[0] * (to[1] - from[1]) - aim[1] * (to[0] - from[0]);
-      row.hit.thickness = Math.max(0, Math.min(1, 1 - Math.abs(across) / SIM.DIAMETER));
-      row.hit.face = across > 0 ? "left" : "right";
+      const touched = SIM.contact(row.hit.shot, layout, cue);
+      if (touched) { row.hit.thickness = touched.thickness; row.hit.face = touched.face; }
     }
     drawOnly();
   }
@@ -1696,9 +1688,15 @@
     chosen, rate, prior: ROUTE_PRIOR.get(hit.route), chosen_path, rate_path, path_sim,
   }, CHOICE_WEIGHTS);
 
-  const label = (row) =>
-    `${row.route}${row.hit.tags ? ` (${row.hit.tags.join("·")})` : ""}`
-    + ` · ${NAMES[row.first]} ${row.hit.face === "left" ? "왼쪽" : "오른쪽"}면`;
+  // 더블은 앞에 세운다 (2026-10-02) — 선수: "명칭은 그냥 더블이 좋을 듯" (씨앗 2030585427).
+  // 자료 안의 이름은 바탕 유형 그대로다 (더블은 꼬리표 — 2026-09-20의 결정). 화면 표기만.
+  const label = (row) => {
+    const tags = row.hit.tags || [];
+    const head = tags.includes("더블") ? `더블 (${row.route})` : row.route;
+    const rest = tags.filter((t) => t !== "더블");
+    return `${head}${rest.length ? ` (${rest.join("·")})` : ""}`
+      + ` · ${NAMES[row.first]} ${row.hit.face === "left" ? "왼쪽" : "오른쪽"}면`;
+  };
 
   function paint() {
     const ready = placed().length === 3;

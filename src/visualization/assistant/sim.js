@@ -298,6 +298,24 @@ const SIM = (() => {
   const speedFor = (strength) => between(strength, STRENGTH, STRENGTH_SPEED);
   const strengthOf = (speed) => between(speed, STRENGTH_SPEED, STRENGTH);
 
-  return { play, judge, struck, speedFor, strengthOf,
+  // 1적구를 맞힌 면과 두께 — 1적구에 **들어가는** 방향으로 (2026-10-02). 그 직전 쿠션(없으면
+  // 출발점)에서 충돌 자리로 가는 선과 1적구 중심의 거리. 처음 겨냥으로 재면 쿠션을 먼저 맞는
+  // 샷(뱅크샷·걸어치기)은 두께가 늘 0, 면은 절반이 반대였다 — 선수 (씨앗 2030585427): "빨간공을
+  // 두껍게 약간 오른쪽면을 맞추어야함"인데 화면은 "왼쪽면, 스치듯". 영상 쪽
+  // (pipeline.struck_side)은 처음부터 충돌 직전 방향으로 쟀다.
+  function contact(shot, layout, cue) {
+    const ball = shot.events.find((e) => e.kind === "ball");
+    if (!ball || !layout[ball.detail]) return null;
+    const prev = shot.events.filter((e) => e.kind === "cushion" && e.at < ball.at).pop();
+    const from = prev ? prev.p : layout[cue];
+    const dir = [ball.p[0] - from[0], ball.p[1] - from[1]];
+    const n = Math.hypot(dir[0], dir[1]) || 1;
+    const c = layout[ball.detail], to = [c[0] - from[0], c[1] - from[1]];
+    const across = (dir[0] * to[1] - dir[1] * to[0]) / n;
+    return { face: across > 0 ? "left" : "right",
+             thickness: clamp(1 - Math.abs(across) / DIAMETER, 0, 1) };
+  }
+
+  return { play, judge, struck, speedFor, strengthOf, contact,
            L, W, RADIUS, DIAMETER, MAX_TIPS, TIP_MM, LONG_RAIL: L };
 })();

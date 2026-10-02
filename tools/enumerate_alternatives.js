@@ -135,9 +135,8 @@ function search(layout, cue, opts = {}) {
          && shot.events.some((e) => e.kind === 'cushion' && e.at < balls[0].at))
       : (balls.length > 0 && cushions >= 2);
     if (!judged.scored || kissed(shot)) return maybe;
-    const target = layout[judged.first];
-    const across = aim[0] * (target[1] - from[1]) - aim[1] * (target[0] - from[0]);
-    const face = across > 0 ? 'left' : 'right';
+    // 면·두께는 1적구에 들어가는 방향으로 — SIM.contact() 참조 (2026-10-02).
+    const { face, thickness } = SIM.contact(shot, layout, cue);
     const { route, tags } = nameRoute(shot, judged, aim, face);
     if (!route) return maybe;
     const way = shot.paths[judged.first] || [];
@@ -150,7 +149,7 @@ function search(layout, cue, opts = {}) {
       // 물어보려면 궤적이 있어야 하는데, 없으면 같은 공을 두 번 치게 된다.
       shot,
       route, tags, first: judged.first, face,
-      thickness: Math.max(0, Math.min(1, 1 - Math.abs(across) / SIM.DIAMETER)),
+      thickness,
       // speed까지 들고 간다. 한때 strength만 남겼는데, 나중에 같은 줄을 다시
       // 치려는 trueRoom()이 hit.speed를 찾다가 undefined를 받아 **여유가 전부
       // 0으로** 나왔다 — 여섯 시간짜리 열거를 한 번 통째로 버렸다.
@@ -200,9 +199,7 @@ function sameLine(layout, cue, hit, deg) {
   shot.cue = cue;
   const judged = SIM.judge(shot);
   if (!judged.scored || judged.first !== hit.first || kissed(shot)) return false;
-  const to = layout[judged.first], from = layout[cue];
-  const across = aim[0] * (to[1] - from[1]) - aim[1] * (to[0] - from[0]);
-  const face = across > 0 ? 'left' : 'right';
+  const { face } = SIM.contact(shot, layout, cue);
   if (face !== hit.face) return false;
   const { route } = nameRoute(shot, judged, aim, face);
   return route === hit.route;
