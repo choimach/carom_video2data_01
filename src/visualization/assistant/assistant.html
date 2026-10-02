@@ -1974,6 +1974,17 @@
       box.appendChild(button);
     }
   }
+  // 수구 고르기. 2026-10-03까지 이 처리가 없었다 — 버튼은 표시만 했고, 수구는 무작위
+  // 배치가 정해 줄 때만 바뀌었다. 선수가 폰에서 손으로 놓고서야 드러났다: "수구 선택이 안돼".
+  document.querySelectorAll("[data-cue]").forEach((button) => {
+    button.onclick = () => {
+      if (cue === button.dataset.cue) return;
+      cue = button.dataset.cue;
+      // 조언은 그 수구의 것이었다. 씨앗의 배치도 수구까지 포함이므로 더는 그 판이 아니다.
+      stopPlaying(); result = null; picked = null; dealt = null;
+      render();
+    };
+  });
   document.querySelectorAll("[data-face]").forEach((button) => {
     button.onclick = () => {
       wantFace = button.dataset.face;
