@@ -44,7 +44,7 @@ def main():
         raise SystemExit("먼저 tools/build_assistant.py를 돌리세요")
     shutil.rmtree(OUT, ignore_errors=True)
     os.makedirs(os.path.join(OUT, "icons"))
-    for name in ("sim.js", "route.js", "choice.js"):
+    for name in ("sim.js", "route.js", "choice.js", "search.js"):
         shutil.copy(os.path.join(BUILD, name), OUT)
     for name in ("cloud.js", "sw.js", "manifest.webmanifest"):
         shutil.copy(os.path.join(MOBILE, name), OUT)

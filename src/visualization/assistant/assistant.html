@@ -48,6 +48,7 @@
   svg.table { display: block; width: 100%; height: auto; max-height: 46vh;
               touch-action: none; cursor: crosshair; }
 
+  body.busy .table-card { pointer-events: none; }
   .bar { display: flex; flex-wrap: wrap; gap: 6px; align-items: center;
          padding: 8px 10px; border-top: 1px solid var(--line); }
   .bar .label { font-size: 13px; color: var(--soft); margin-right: 2px; }
@@ -232,6 +233,7 @@
 <script src="sim.js"></script>
 <script src="route.js"></script>
 <script src="choice.js"></script>
+<script src="search.js"></script>
 <script id="data" type="application/json">__DATA__</script>
 <script>
   const DATA = JSON.parse(document.getElementById("data").textContent);
@@ -560,81 +562,124 @@
   // 대표가 정중앙일 때 당점 있는 줄로 바꾸며 양보할 여유(도). null이면 끈다.
   let CENTER_YIELD = 0.5;
   let PROS_NOW = null;
-  function nearMiss(shot, first) {
-    const other = ORDER.find((c) => c !== cue && c !== first);
-    if (!other || !layout[other]) return Infinity;
-    const hitAt = (shot.events.find((e) => e.kind === "ball") || {}).at;
-    if (hitAt === undefined) return Infinity;
-    const after = shot.events.filter((e) => e.kind === "cushion");
-    if (after.length < 3) return Infinity;
-    const from = Math.max(Math.round(after[2].at * 60), Math.round(hitAt * 60));
-    const path = shot.paths[cue] || [];
-    const [x, y] = layout[other];
-    let best = Infinity;
-    for (let i = Math.min(from, path.length - 1); i < path.length; i++) {
-      best = Math.min(best, Math.hypot(path[i][0] - x, path[i][1] - y));
+  // ── 계산을 뒤로 (2026-10-03) ─────────────────────────────────────────────
+  // 한 줄을 쳐 보고 판정하는 일은 search.js로 갔다 (SEARCH). 화면 스레드에서 돌리면 폰에서
+  // 12초 동안 화면이 멈췄다. 줄마다 독립이므로 워커 여럿에 나눈다. 워커가 안 되는 곳
+  // (file://로 연 시험 도구, 막힌 환경)에서는 **같은 SEARCH를 화면에서** 돌린다 — 결과는 같다:
+  // 묶음을 일감 순서대로 이어 붙이므로 한 줄로 돈 것과 hit 순서까지 같다.
+  const ctxNow = () => ({ layout, cue, wantFace, wantFirst,
+                          gate: GATE_MM, gateLadder: GATE_LADDER_MM, L, W });
+  let USE_WORKERS = true;     // 시험 도구가 끌 수 있게 let
+  const POOL = (() => {
+    let workers = null, ready = null, seq = 0;
+    const waiting = new Map();
+    // 코어를 다 쓰지 않는다 — 하나는 화면 몫, 많아도 여섯.
+    const want = () => Math.max(1, Math.min(6, (navigator.hardwareConcurrency || 2) - 1));
+    const failAll = (why) => {
+      for (const [id, slot] of waiting) { clearTimeout(slot.timer); slot.fail(new Error(why)); }
+      waiting.clear();
+    };
+    const ask = (worker, message, ms) => new Promise((done, fail) => {
+      const id = ++seq;
+      const timer = ms ? setTimeout(() => { waiting.delete(id); fail(new Error("워커 응답 없음")); }, ms) : null;
+      waiting.set(id, { done, fail, timer });
+      worker.postMessage({ id, ...message });
+    });
+    const kill = () => {
+      for (const w of workers || []) { try { w.terminate(); } catch (e) {} }
+      workers = null; ready = Promise.resolve(null);
+      failAll("워커를 껐다");
+    };
+    const start = () => {
+      if (ready) return ready;
+      ready = (async () => {
+        const made = [];
+        try {
+          for (let i = 0; i < want(); i++) {
+            const w = new Worker("search.js");
+            w.onmessage = (e) => {
+              const slot = waiting.get(e.data.id);
+              if (!slot) return;
+              waiting.delete(e.data.id); clearTimeout(slot.timer);
+              if (e.data.error) slot.fail(new Error(e.data.error)); else slot.done(e.data);
+            };
+            w.onerror = (e) => { if (e && e.preventDefault) e.preventDefault(); failAll("워커 오류"); };
+            made.push(w);
+          }
+          await Promise.all(made.map((w) => ask(w, { kind: "ping" }, 5000)));
+          workers = made;
+        } catch (e) {
+          for (const w of made) { try { w.terminate(); } catch (x) {} }
+          workers = null;
+        }
+        return workers;
+      })();
+      return ready;
+    };
+    // 조각들을 한가한 워커에 차례로 준다 (폰은 코어 빠르기가 제각각이라 미리 똑같이 나누지 않는다).
+    const spread = async (pieces, onProgress) => {
+      const out = new Array(pieces.length);
+      let next = 0, done = 0;
+      await Promise.all(workers.map(async (w) => {
+        while (next < pieces.length) {
+          const i = next++;
+          out[i] = await ask(w, pieces[i]);
+          onProgress(++done / pieces.length);
+        }
+      }));
+      return out;
+    };
+    return { start, spread, kill, count: () => (workers ? workers.length : 0) };
+  })();
+  const PIECE = 150;          // 워커에 한 번에 주는 일감 수
+  async function runJobs(jobs, onProgress) {
+    const ctx = ctxNow();
+    if (USE_WORKERS && jobs.length >= 2 * PIECE && await POOL.start()) {
+      try {
+        const pieces = [];
+        for (let i = 0; i < jobs.length; i += PIECE) pieces.push({ kind: "jobs", ctx, jobs: jobs.slice(i, i + PIECE) });
+        const parts = await POOL.spread(pieces, onProgress);
+        const out = { flags: [], hits: [], kisses: 0 };
+        for (const part of parts) {
+          for (const f of part.flags) out.flags.push(f);
+          for (const h of part.hits) out.hits.push(h);
+          out.kisses += part.kisses;
+        }
+        return out;
+      } catch (e) { console.warn("워커 실패 — 화면에서 계산합니다", e); POOL.kill(); }
     }
-    return best;
-  }
-
-  // 키스 — 계산한 줄이 실제로는 성립하지 않는 두 가지.
-  //
-  // 이 함수가 없는 채로 호출만 남아 있었다. 득점하는 줄을 처음 찾는 순간
-  // ReferenceError가 나고 탐색 전체가 무너져서, 화면에는 언제나 "이 배치에서
-  // 득점하는 선을 찾지 못했습니다"가 나왔다. 배치 탓이 아니었다.
-  function kissed(shot, judged) {
-    const balls = shot.events.filter((e) => e.kind === "ball");
-    if (!balls.length) return false;
-    const first = balls[0];
-    const second = balls.find((e) => e.detail !== first.detail);
-    if (!second) return false;
-    // 적구끼리 부딪히면 2적구가 그린 자리에 없다 — 계산한 줄이 아니게 된다.
-    if (shot.events.some((e) => e.kind === "kiss" && e.at <= second.at)) return true;
-    // 수구가 1적구를 한 번 더 건드리고 가는 것도 키스다. 실제로는 여기서
-    // 진로가 막히거나 세기가 죽어 남은 길을 가지 못한다.
-    return balls.some((e) => e !== first && e.detail === first.detail && e.at < second.at);
-  }
-
-  function tryAngle(deg, speed, side, hits, counters, vertical = 0, fromSweep = false) {
-    const rad = deg * Math.PI / 180;
-    const aim = [Math.cos(rad), Math.sin(rad)];
-    const shot = SIM.play(layout, cue, [aim[0] * speed, aim[1] * speed], side, vertical);
-    const judged = SIM.judge(shot);
-    const balls = shot.events.filter((e) => e.kind === "ball");
-    const cushions = shot.events.filter((e) => e.kind === "cushion").length;
-    // 전방위 그물에서 나온 자리는 **쿠션을 먼저 맞은 것만**, 그리고 **쿠션 4개
-    // 이상**일 때만 본다. 그게 이 그물을 친 이유(걸어치기·뱅크샷)이고 — 먼저
-    // 하나 + 적구 사이 셋 = 넷이 필요하다 — 두께 사다리가 이미 나머지를 덮는다.
-    // 이 조건이 없으면 될 만한 자리가 137개에서 381개로 불어나고, 그 각각이
-    // 당점 13곳 × 각도 9칸으로 퍼져서 실행이 2.6초에서 18.1초가 된다.
-    const promising = fromSweep
-      ? (balls.length > 0 && cushions >= 4
-         && shot.events.some((e) => e.kind === "cushion" && e.at < balls[0].at))
-      : (balls.length > 0 && cushions >= 2);
-    if (!judged.scored) {
-      const gate = fromSweep ? GATE_MM : GATE_LADDER_MM;
-      if (promising && gate !== null && balls.length
-          && nearMiss(shot, balls[0].detail) > gate) return false;
-      return promising;
+    const out = { flags: new Array(jobs.length), hits: [], kisses: 0 };
+    for (let i = 0; i < jobs.length; i++) {
+      const got = SEARCH.tryJob(ctx, jobs[i]);
+      out.flags[i] = got.promising ? 1 : 0;
+      if (got.kiss) out.kisses++;
+      if (got.hit) out.hits.push(got.hit);
+      if (i % CHUNK === CHUNK - 1) { onProgress(i / jobs.length); await pause(); }
     }
-    if (kissed(shot, judged)) { counters.kisses++; return promising; }
-    // 두께 = 1 − (수구 진행선과 적구 중심 사이 수직 거리) / 공 지름. 정면이 1,
-    // 스치면 0. 진행선은 **1적구에 들어가는** 방향이다 — 쿠션을 먼저 맞는 샷은 처음
-    // 겨냥과 다르다 (SIM.contact(), 2026-10-02).
-    const { face, thickness } = SIM.contact(shot, layout, cue);
-    if (wantFace !== "any" && face !== wantFace) return promising;
-    if (wantFirst !== "any" && judged.first !== wantFirst) return promising;
-    const { route, tags } = nameRoute(shot, judged, aim, face);
-    if (!route) return promising;
-    const way = shot.paths[judged.first] || [];
-    let pushed = 0;
-    for (let i = 1; i < way.length; i++) {
-      pushed += Math.hypot(way[i][0] - way[i - 1][0], way[i][1] - way[i - 1][1]);
-    }
-    hits.push({ deg, speed, side, vertical, route, tags, shot, judged, face, pushed, thickness });
-    return true;
+    return out;
   }
-
+  // 대표 줄들의 정밀한 여유.
+  async function runRooms(reps) {
+    const ctx = ctxNow();
+    if (USE_WORKERS && reps.length >= 8 && await POOL.start()) {
+      try {
+        const pieces = [];
+        for (let i = 0; i < reps.length; i += 3) {
+          pieces.push({ kind: "rooms", ctx, hits: reps.slice(i, i + 3).map((h) => ({
+            deg: h.deg, speed: h.speed, side: h.side, vertical: h.vertical,
+            route: h.route, face: h.face, judged: { first: h.judged.first } })) });
+        }
+        const parts = await POOL.spread(pieces, () => {});
+        return parts.flatMap((part) => part.rooms);
+      } catch (e) { console.warn("워커 실패 — 화면에서 계산합니다", e); POOL.kill(); }
+    }
+    const rooms = [];
+    for (let i = 0; i < reps.length; i++) {
+      rooms.push(trueRoom(reps[i]));
+      if (i % 8 === 7) await pause();
+    }
+    return rooms;
+  }
   // 각도를 0도부터 360도까지 훑으면 대부분이 1적구를 스치지도 못하고 버려진다.
   // 대신 "어느 공을, 어느 면을, 얼마나 두껍게" 맞힐지로 훑는다. 그러면 모든
   // 시도가 반드시 1적구에 맞고, 선수가 실제로 고르는 것과 같은 축이 된다.
@@ -719,6 +764,13 @@
 
   async function solve(onProgress, near) {
     const hits = [], counters = { kisses: 0 };
+    // 일감 한 벌을 돌리고 득점 줄을 hits에 잇는다. 돌려주는 것은 일감마다의 "가망" 표시.
+    const run = async (jobs, lo, hi) => {
+      const out = await runJobs(jobs, (f) => onProgress(lo + (hi - lo) * f));
+      for (const h of out.hits) hits.push(h);
+      counters.kisses += out.kisses;
+      return out.flags;
+    };
     // 1) 두께로 훑기 — 모든 시도가 1적구에 맞는다. 여기에 전방위 훑기를
     //    **함께** 돌린다: 두께 사다리는 적구를 똑바로 겨냥하므로 쿠션을 먼저
     //    맞는 길(걸어치기·뱅크샷)은 우연히 아니면 걸리지 않는다. 프로가 실제로
@@ -726,14 +778,8 @@
     //    6/6을 찾았다. 쿠션은 거울이 아니라서(17.8도로 들어간 공이 33.7도로
     //    나온다) 거울상을 겨냥하는 방법은 쓰지 않는다.
     const contact = contactJobs().concat(sweepJobs());
-    const promising = [];
-    for (let i = 0; i < contact.length; i++) {
-      const [deg, speed, side, up, born] = contact[i];
-      if (tryAngle(deg, speed, side, hits, counters, up, born === "sweep")) {
-        promising.push(contact[i]);
-      }
-      if (i % CHUNK === CHUNK - 1) { onProgress(0.45 * i / contact.length); await pause(); }
-    }
+    const flags = await run(contact, 0, 0.3);
+    const promising = contact.filter((_, i) => flags[i]);
     // 2) 그중 될 뻔한 자리 둘레만 0.25도로 다시 — 득점 창이 그만큼 좁다.
     // 될 만한 자리에서만 시계 열두 방향을 펼친다. 방향은 여기서부터 중요해진다.
     const key4 = ([d, s, x, u]) => `${d}:${s}:${x}:${u || 0}`;
@@ -755,61 +801,48 @@
     }
     // 마지막 탐색의 크기 — tools/profile_app.js가 읽는다.
     solve.stats = { contact: contact.length, promising: promising.length,
-                    fromSweep: promising.filter((j) => j[4] === "sweep").length, around: around.length };
-    for (let i = 0; i < around.length; i++) {
-      tryAngle(around[i][0], around[i][1], around[i][2], hits, counters, around[i][3]);
-      if (i % CHUNK === CHUNK - 1) { onProgress(0.45 + 0.25 * i / around.length); await pause(); }
-    }
+                    fromSweep: promising.filter((j) => j[4] === "sweep").length, around: around.length,
+                    workers: POOL.count() };
+    await run(around, 0.3, 0.8);
     // 밀어치기와 끌어치기는 그 다음이다. 중단 당점으로 이미 여러 줄이 나왔으면
     // 굳이 세 배로 돌리지 않는다 — 기다리는 시간이 그만큼 늘어난다.
     // 득점한 줄마다 같은 방향에서 팁 양만 1팁·3팁으로 바꿔 본다. 방향은
     // 이미 맞았으니 값이 싸고, "2팁 말고 1팁이면?"은 선수가 실제로 묻는 것이다.
-    const found = hits.slice();
-    for (let i = 0; i < found.length; i++) {
-      const h = found[i];
+    const amounts = [];
+    for (const h of hits) {
       const was = Math.hypot(h.side, h.vertical || 0);
-      if (was > 0.01) {
-        for (const amount of TIP_AMOUNTS) {
-          const scale = amount / was;
-          tryAngle(h.deg, h.speed, h.side * scale, hits, counters, (h.vertical || 0) * scale);
-        }
+      if (was <= 0.01) continue;
+      for (const amount of TIP_AMOUNTS) {
+        const scale = amount / was;
+        amounts.push([h.deg, h.speed, h.side * scale, (h.vertical || 0) * scale]);
       }
-      if (i % CHUNK === CHUNK - 1) { onProgress(0.70 + 0.10 * i / found.length); await pause(); }
     }
+    await run(amounts, 0.8, 0.92);
     // 3) 후보가 적을 때만, 프로가 실제로 친 방향 둘레를 더 본다. 두께 훑기가
     // 대개 충분하므로 이건 대비책이고, 매번 돌리면 그만큼 느려진다.
     const seeded = hits.length >= 5 ? []
       : seedJobs(near || []).filter((j) => !seen.has(key4(j)));
-    for (let i = 0; i < seeded.length; i++) {
-      tryAngle(seeded[i][0], seeded[i][1], seeded[i][2], hits, counters, seeded[i][3]);
-      if (i % CHUNK === CHUNK - 1) { onProgress(0.8 + 0.2 * i / seeded.length); await pause(); }
-    }
+    await run(seeded, 0.92, 0.95);
     if (hits.length) return finish(hits, counters, "두께로 훑어");
 
-    // 아무것도 없으면 전방위로 한 번 더.
+    // 아무것도 없으면 전방위로 한 번 더. (상하 당점은 이 그물에서 쓰지 않는다 — 예전 그대로.)
     const jobs = [];
     for (const speed of SPEEDS) {
-      for (const [side, up] of TIP_POINTS) {
-        for (let deg = 0; deg < 360; deg += COARSE) jobs.push([deg, speed, side, up]);
+      for (const [side] of TIP_POINTS) {
+        for (let deg = 0; deg < 360; deg += COARSE) jobs.push([deg, speed, side, 0]);
       }
     }
+    const coarse = await run(jobs, 0, 0.5);
     const fine = [];
-    for (let i = 0; i < jobs.length; i++) {
-      const [deg, speed, side] = jobs[i];
-      if (tryAngle(deg, speed, side, hits, counters)) {
-        // 거친 간격이 2도이므로 그 절반씩만 훑으면 빈틈 없이 덮인다.
-        for (let d = -COARSE / 2; d <= COARSE / 2; d += FINE) {
-          const at = Math.round(((deg + d + 360) % 360) / FINE) * FINE;
-          if (Math.abs(at - deg) > 1e-9) fine.push([at, speed, side]);
-        }
+    jobs.forEach(([deg, speed, side], i) => {
+      if (!coarse[i]) return;
+      // 거친 간격이 2도이므로 그 절반씩만 훑으면 빈틈 없이 덮인다.
+      for (let d = -COARSE / 2; d <= COARSE / 2; d += FINE) {
+        const at = Math.round(((deg + d + 360) % 360) / FINE) * FINE;
+        if (Math.abs(at - deg) > 1e-9) fine.push([at, speed, side, 0]);
       }
-      if (i % CHUNK === CHUNK - 1) { onProgress(0.5 * i / jobs.length); await pause(); }
-    }
-    for (let i = 0; i < fine.length; i++) {
-      tryAngle(fine[i][0], fine[i][1], fine[i][2], hits, counters);
-      if (i % CHUNK === CHUNK - 1) { onProgress(0.5 + 0.5 * i / fine.length); await pause(); }
-    }
-
+    });
+    await run(fine, 0.5, 0.95);
     return finish(hits, counters, "전방위 탐색");
   }
 
@@ -824,37 +857,9 @@
   // 자리를 가둔 뒤 여덟 번 반으로 접으면 서른 번 남짓에 0.006도까지 나오고,
   // 값이 연속이라 묶이지 않는다. 한 번 치는 데 0.6 ms이므로 통 서른 개에
   // 0.5초쯤이다.
-  function sameLine(hit, deg) {
-    const rad = deg * Math.PI / 180;
-    const aim = [Math.cos(rad), Math.sin(rad)];
-    const shot = SIM.play(layout, cue, [aim[0] * hit.speed, aim[1] * hit.speed],
-                          hit.side, hit.vertical || 0);
-    const judged = SIM.judge(shot);
-    if (!judged.scored || judged.first !== hit.judged.first || kissed(shot, judged)) return false;
-    const { face } = SIM.contact(shot, layout, cue);
-    if (face !== hit.face) return false;
-    const { route } = nameRoute(shot, judged, aim, face);
-    return route === hit.route;
-  }
+  function trueRoom(hit) { return SEARCH.trueRoom(ctxNow(), hit); }
 
-  function trueRoom(hit) {
-    let room = 0;
-    for (const dir of [1, -1]) {
-      let good = 0, bad = null;
-      for (const span of [0.05, 0.1, 0.2, 0.4, 0.8, 1.6, 3.2]) {
-        if (sameLine(hit, hit.deg + dir * span)) good = span; else { bad = span; break; }
-      }
-      if (bad === null) { room += good; continue; }
-      for (let i = 0; i < 8; i++) {
-        const middle = (good + bad) / 2;
-        if (sameLine(hit, hit.deg + dir * middle)) good = middle; else bad = middle;
-      }
-      room += good;
-    }
-    return Math.round(room * 1000) / 1000;
-  }
-
-  function finish(hits, counters, how) {
+  async function finish(hits, counters, how) {
     const key = (h, deg) => `${h.speed}:${h.side}:${Math.round(deg / FINE) * FINE}`;
     const byKey = new Map();
     for (const hit of hits) byKey.set(key(hit, hit.deg), hit);
@@ -875,16 +880,8 @@
     // 이름 하나에 여러 갈래인 길(뒤돌리기 80%를 덮는 데 12갈래) 중 하나만 남고,
     // 같은 레일 순서라도 쿠션 자리가 몇 m씩 달라 대표 하나가 프로 길을 버린다.
     // 400 mm 칸으로 탐색 구멍 58판 중 21판이 되살아났고 닿던 판은 하나도 안 잃었다.
-    const BIN_MM = 400;
-    const idOf = (h) => {
-      if (h.pathId === undefined) {
-        const cush = h.shot.events.filter((e) => e.kind === "cushion");
-        const bin = cush.length
-          ? `@${Math.floor(cush[0].p[0] / BIN_MM)},${Math.floor(cush[0].p[1] / BIN_MM)}` : "";
-        h.pathId = cush.slice(0, 3).map((e) => e.detail).join("-") + bin;
-      }
-      return `${h.route}|${h.judged.first}|${h.face}|${h.pathId}`;
-    };
+    // pathId(첫 3쿠션 레일 + 첫 쿠션 자리 칸)는 SEARCH.tryJob이 붙여 온다.
+    const idOf = (h) => `${h.route}|${h.judged.first}|${h.face}|${h.pathId}`;
     // 당점은 극좌표 한 점이다 — 좌우와 상하를 따로 세면 아무도 치지 않는 점이
     // 나온다. 여기서는 (좌우, 상하) 쌍째로 센다.
     const tipOf = (h) => `${Math.round((h.side || 0) * 100)}:${Math.round((h.vertical || 0) * 100)}`;
@@ -895,14 +892,7 @@
       perTip.set(tip, (perTip.get(tip) || 0) + 1);
     }
     // 도는 쪽으로 회전을 주었는가. 동점을 가를 때만 쓰므로 그때만 계산한다.
-    const running = (hit) => {
-      if (hit.running === undefined) {
-        const side = hit.side || 0;
-        hit.running = Math.abs(side) < 0.01 ? 0
-          : ((side > 0) === ROUTE.circuitIsRight(hit.shot.paths[cue] || [], L, W) ? 1 : -1);
-      }
-      return hit.running;
-    };
+    const running = (hit) => hit.running;   // SEARCH.tryJob이 붙여 온다
     // 여유가 같으면 지금까지는 **배열에 먼저 들어온 줄**이 그냥 이겼다. 좁은
     // 묶음에서는 그게 늘 일어난다: 선수가 잡아낸 앞돌리기 묶음은 득점 줄 14개가
     // 전부 바닥값 0.25도였고, 그가 말한 1시 당점은 그 묶음에서 줄이 가장 많은
@@ -987,10 +977,17 @@
     // 대표를 고른 **다음**에 그 줄만 정밀하게 잰다. 굵은 눈금은 대표를 고르는
     // 데는 충분하고(줄이 이어지는지만 보면 된다), 순위에 들어갈 값은 정밀해야
     // 한다. 수백 줄 전부를 정밀하게 재면 탐색이 몇 배 느려진다.
+    const reps = [...best.values()];
+    const rooms = await runRooms(reps);
+    let at = 0;
     for (const [id, hit] of best) {
       hit.lines = lines.get(id);
       hit.rough = hit.room;        // 굵은 눈금 값 — 대표를 고른 근거
-      hit.room = trueRoom(hit);
+      hit.room = rooms[at++];
+      // 탐색은 궤적을 싣고 오지 않는다 (워커에서 넘기기엔 무겁다). 대표 줄만 다시 친다 —
+      // 시뮬레이터는 결정적이라 같은 줄이 나온다.
+      hit.shot = SEARCH.strike(ctxNow(), hit.deg, hit.speed, hit.side, hit.vertical);
+      hit.judged = SIM.judge(hit.shot);
     }
     return { best, kisses: counters.kisses, how };
   }
@@ -1887,7 +1884,8 @@
       `들어가는 길 <b>${result.routes.length}가지</b>`
       + `${result.kisses ? ` · 키스 나는 <b>${result.kisses}개</b>는 제외` : ""}`
       + ` · 확률은 프로 ${DATA.plays.length}개 플레이로 맞춘 식 (1등 25%, 우연이면 4%)`
-      + ` · 궤적은 이 배치에서 직접 계산`;
+      + ` · 궤적은 이 배치에서 직접 계산`
+      + (result.took ? ` · 계산 ${result.took.toFixed(1)}초${result.workers ? ` (워커 ${result.workers})` : ""}` : "");
   }
 
   // 화면의 한 점을 탁자 좌표(mm)로. inside가 참이면 공이 놓일 수 있는 범위로 가둔다.
@@ -2096,18 +2094,27 @@
     const button = document.getElementById("run");
     button.disabled = true;
     button.textContent = "계산 중…";
+    // ★계산하는 동안 탁자와 그 아래 단추를 잠근다 (2026-10-03). 계산이 워커로 가면서 화면이
+    // 살아 있게 됐는데, 그 사이에 공이나 수구를 바꾸면 계산은 옛 배치로 돌고 정리는 새 배치로
+    // 해서 엉킨다 (옛날에는 화면이 멈춰 있어서 그럴 수가 없었다).
+    document.body.classList.add("busy");
     // 한 프레임 쉬어 버튼 상태가 보이게 한 뒤 푼다.
     setTimeout(async () => {
       try {
         verdicts = {}; played = null;   // 새 계산은 새 판단이다
+        const began = performance.now();
         result = await advise((done) => {
           button.textContent = `계산 중 ${Math.round(done * 100)}%`;
         });
+        // 얼마나 걸렸는지 화면 맨 아래에 적는다 — 폰마다 다르고, 선수가 재서 알려 주던 것이다.
+        result.took = (performance.now() - began) / 1000;
+        result.workers = POOL.count();
         picked = result.routes.length ? result.routes[0].key : null;
       } catch (e) {
         result = { routes: [], total: 0, kisses: 0 };
         console.error(e);
       } finally {
+        document.body.classList.remove("busy");
         button.textContent = "실행";
         render();
       }

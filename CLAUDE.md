@@ -210,11 +210,15 @@ node --check build/sim.js
   선수가 폰에서 "결과 보내기"로 보낸 판단은 `python tools/pull_feedback.py --save`로 장부에 가져온다.
   ⚠️ 같은 프로젝트의 **https://carom001.web.app 은 다른 앱**(저장소 `carom_bot_01`, 2026-09-10)이다 — 덮어쓰지 말 것.
   Firestore 규칙의 원본은 `carom_bot_01/firestore.rules` 한 곳이다 (이 저장소에서 규칙을 올리지 않는다).
+- **계산은 워커에서 돈다 (2026-10-03).** 한 줄을 쳐 보고 판정하는 알맹이는 `search.js` **한 벌**이고
+  화면과 워커가 같이 쓴다 (워커가 안 되면 화면에서 — `file://`로 여는 시험 도구들이 그렇다. 결과는 같다).
+  탐색을 고치면 `node tools/check_workers.js <옛 빌드 폴더> build`로 **옛 판과 같은지** 본다.
+  hit에는 `shot`이 없다 — 대표 줄만 `finish()`가 다시 친다. 계산 중에는 탁자를 잠근다 (`body.busy`).
 - **화면은 `bash tools/screenshot_assistant.sh out.png`로 본다** — 무작위 배치 하나를 실행해 찍고
   콘솔 오류를 찍는다. sudo 없이 된다 (빠진 라이브러리를 `apt-get download`로 받아 쓴다).
   `!` 명령으로는 sudo 비밀번호를 넣을 수 없다.
 - **게시 주소는 하나다: https://claude.ai/artifact/MjgXgHrhmfcHWkUWWNLEc6** — 페이지는
-  `build/carom_assistant.html`, 함께 `sim.js` · `route.js` · `choice.js`를 `files`로. 새 주소를 만들지
+  `build/carom_assistant.html`, 함께 `sim.js` · `route.js` · `choice.js` · `search.js`를 `files`로. 새 주소를 만들지
   말 것 (2026-09-28 판이 10-01까지 갱신 안 된 채 남아 있었다 — 고친 것이 선수에게 안 갔다).
 - **게시 전에 항상 `node --check`.** 페이지는 스크립트 한 덩어리라 괄호 하나가
   전체를 조용히 죽인다. 정의 없이 호출되던 `kissed()` 하나 때문에 모든 배치가
