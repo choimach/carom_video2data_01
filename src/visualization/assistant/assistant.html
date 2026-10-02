@@ -1,4 +1,5 @@
 <meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>캐롬 공략 조언판</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Gothic+A1:wght@500;700&family=Noto+Sans+KR:wght@400;500&family=IBM+Plex+Mono:wght@400;500&display=swap">
 <style>
@@ -2182,15 +2183,28 @@
     };
     lines.push("", "```carom-feedback", JSON.stringify(record), "```");
     const said = document.getElementById("copied");
+    // 폰 앱(Firebase에 올린 판)에서는 같은 기록을 클라우드에도 보낸다 (2026-10-03).
+    // `mobile/cloud.js`가 붙어 있을 때만 — 조언판(claude.ai)에는 없다. 보낸 것은
+    // `tools/pull_feedback.py`가 data/table_feedback.json으로 가져온다.
+    let sent = false, copied = false;
+    if (window.CAROM_CLOUD) {
+      said.textContent = "보내는 중…";
+      try { sent = await window.CAROM_CLOUD.send(record, lines.join("\n")); } catch (e) { sent = false; }
+    }
     try {
       await navigator.clipboard.writeText(lines.join("\n"));
-      said.textContent = "복사됨 — 채팅창에 붙여넣어 주세요";
+      copied = true;
+    } catch (e) { copied = false; }
+    if (sent || copied) {
+      said.textContent = sent ? "보냈습니다" + (copied ? " (복사도 됨)" : "")
+        : (window.CAROM_CLOUD ? "보내기 실패 — 복사는 됐습니다. 채팅창에 붙여넣어 주세요"
+           : "복사됨 — 채팅창에 붙여넣어 주세요");
       // 복사한 의견은 비운다. 남겨 두면 다음 배치의 의견에 지난 말이 섞여
       // 들어가고, 장부에는 어느 배치에 대한 말인지 알 수 없는 기록이 쌓인다.
       comment.value = "";
       try { localStorage.removeItem(COMMENT_KEY); } catch (e) {}
-    } catch (e) {
-      said.textContent = "복사 실패";
+    } else {
+      said.textContent = window.CAROM_CLOUD ? "보내기·복사 실패 — 의견은 그대로 뒀습니다" : "복사 실패";
     }
     setTimeout(() => { said.textContent = ""; }, 4000);
   };

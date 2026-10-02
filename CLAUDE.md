@@ -204,6 +204,12 @@ node --check build/sim.js
 
 - 원본은 `src/visualization/assistant/`. **스크래치패드에서 작업하지 말 것** —
   세션과 함께 사라지고, 실제로 며칠간 저장소 밖에 있었다.
+- **폰 앱도 같이 올린다 (2026-10-03): https://carom001-board.web.app** — 조언판 그대로에 매니페스트·서비스
+  워커·Firestore 보내기(`src/visualization/mobile/`)를 붙인 설치형 웹앱이다.
+  `python tools/build_mobile.py && firebase deploy --only hosting --project carom001`.
+  선수가 폰에서 "결과 보내기"로 보낸 판단은 `python tools/pull_feedback.py --save`로 장부에 가져온다.
+  ⚠️ 같은 프로젝트의 **https://carom001.web.app 은 다른 앱**(저장소 `carom_bot_01`, 2026-09-10)이다 — 덮어쓰지 말 것.
+  Firestore 규칙의 원본은 `carom_bot_01/firestore.rules` 한 곳이다 (이 저장소에서 규칙을 올리지 않는다).
 - **화면은 `bash tools/screenshot_assistant.sh out.png`로 본다** — 무작위 배치 하나를 실행해 찍고
   콘솔 오류를 찍는다. sudo 없이 된다 (빠진 라이브러리를 `apt-get download`로 받아 쓴다).
   `!` 명령으로는 sudo 비밀번호를 넣을 수 없다.

@@ -1,0 +1,16 @@
+{
+  "name": "캐롬 공략 조언판",
+  "short_name": "캐롬 조언판",
+  "description": "프로 경기 자료로 3쿠션 공략 셋을 추천하고 궤적·당점·강도를 보여 줍니다.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#e8ebe7",
+  "theme_color": "#2f6b52",
+  "lang": "ko",
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ]
+}
