@@ -1354,6 +1354,40 @@
    "played": null,
    "comment": "1,2. ok. 단 앞돌리기 짧게라고 봐야함. \n3,ok\n4. ok",
    "note": "버전 66. 공략은 다 맞다. 1·2(빗겨치기 노란공 오른쪽) 이름 → '앞돌리기 짧게'. 도는 방향을 궤적 꺾임으로 재면 맞는다 (rules_check 23/25, 지금 22/25)."
+  },
+  {
+   "at": "2026-10-02T11:46:43",
+   "origin": "random",
+   "seed": 3534369073,
+   "table": [
+    2844,
+    1422
+   ],
+   "cue": "yellow",
+   "layout": {
+    "white": [
+     87,
+     822
+    ],
+    "yellow": [
+     1847,
+     37
+    ],
+    "red": [
+     1811,
+     1233
+    ]
+   },
+   "picked": "뱅크샷|red|left|top-right-bottom@4,0",
+   "kisses": 52,
+   "verdicts": {
+    "옆돌리기|red|left|bottom-right-top@5,3": "good",
+    "뒤돌리기|white|left|bottom-left-top@0,3": "good",
+    "뱅크샷|red|left|top-right-bottom@4,0": "thin"
+   },
+   "played": null,
+   "comment": "1,2. 옆돌리기 빨간 공 왼쪽면. not bad\n3. 뒤돌리기. 흰공 왼쪽면.:: ok\n4. 뱅크샷: 가능하지만 어려움",
+   "note": "버전 67. 이름 지적 없음. 3위 뱅크샷 '가능하지만 어려움'. 지금까지 뱅크샷 판단 맞다 3 · 아니다/안 고름 5 — 그런데 프로는 뱅크샷을 17% 고르고 모델 1등은 8% · 상위 3개 15%로 프로보다 적다. 선수 습관을 순위에 넣지 않는다 (CLAUDE.md §2) — 기록만."
   }
  ]
 }
