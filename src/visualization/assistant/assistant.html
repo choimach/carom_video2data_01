@@ -1246,6 +1246,7 @@
       }
     }
 
+    const pieces = {};
     for (const colour of ["red", "yellow", "white"]) {
       if (!layout[colour]) continue;
       const at = layout[colour];
@@ -1256,7 +1257,20 @@
       const ball = el(svg, "circle", { cx: at[0], cy: at[1], r: R, fill: `var(--ball-${colour})`,
                                        stroke: "rgba(0,0,0,.45)", "stroke-width": 4,
                                        opacity: playing ? .25 : 1, style: "cursor:grab" });
-      drag(ball, colour, svg, ring);
+      pieces[colour] = { ball, ring };
+    }
+    // ★손잡이는 공보다 크다 (2026-10-03). 폰에서는 탁자 3,144 mm가 화면 폭에 들어가 공이
+    // 지름 8픽셀쯤이라 손가락으로 못 잡았다 — 선수: "공이 drag이 잘 안되네". 보이지 않는
+    // 손잡이를 **맨 위에** 얹는다 (터치 화면은 반지름 22픽셀쯤, 마우스는 공보다 조금 크게).
+    const box = svg.getBoundingClientRect();
+    const mmPerPx = box.width ? (L + 300) / box.width : 1;
+    const coarse = window.matchMedia && window.matchMedia("(pointer: coarse)").matches;
+    const reach = Math.max(R + 12, (coarse ? 22 : 10) * mmPerPx);
+    for (const colour of Object.keys(pieces)) {
+      const at = layout[colour];
+      pieces[colour].handle = el(svg, "circle", { cx: at[0], cy: at[1], r: reach,
+                                                  fill: "transparent", style: "cursor:grab" });
+      drag(pieces, colour, svg);
     }
   }
 
@@ -1876,36 +1890,46 @@
       + ` · 궤적은 이 배치에서 직접 계산`;
   }
 
-  function point(event, svg) {
+  // 화면의 한 점을 탁자 좌표(mm)로. inside가 참이면 공이 놓일 수 있는 범위로 가둔다.
+  function point(event, svg, inside = true) {
     const box = svg.getBoundingClientRect();
     const scale = (L + 300) / box.width;
-    return [
-      Math.max(R, Math.min(L - R, (event.clientX - box.left) * scale - 150)),
-      Math.max(R, Math.min(W - R, (event.clientY - box.top) * scale - 150)),
-    ];
+    const x = (event.clientX - box.left) * scale - 150, y = (event.clientY - box.top) * scale - 150;
+    return inside ? [Math.max(R, Math.min(L - R, x)), Math.max(R, Math.min(W - R, y))] : [x, y];
   }
 
-  function drag(ball, colour, svg, ring) {
+  function drag(pieces, own, svg) {
     // The ball is moved by setting its own centre, not by redrawing the table.
     // Redrawing removes the very element the pointer is captured on, so the
     // first move was also the last: the ball jumped once and then let go.
-    ball.addEventListener("pointerdown", (event) => {
+    const grip = pieces[own].handle;
+    grip.addEventListener("pointerdown", (event) => {
       event.stopPropagation();
       event.preventDefault();
-      ball.setPointerCapture(event.pointerId);
-      ball.style.cursor = "grabbing";
+      // 손잡이가 겹치면 (공이 붙어 있으면) 누른 자리에 **가장 가까운 공**을 잡는다.
+      const down = point(event, svg, false);
+      const colour = Object.keys(pieces).reduce((a, b) =>
+        Math.hypot(layout[b][0] - down[0], layout[b][1] - down[1])
+          < Math.hypot(layout[a][0] - down[0], layout[a][1] - down[1]) ? b : a);
+      const { ball, ring, handle } = pieces[colour];
+      // 잡은 자리와 공 중심의 간격을 지킨다 — 공 옆을 잡고 끌면 공이 손가락에 가리지 않는다.
+      const offset = [layout[colour][0] - down[0], layout[colour][1] - down[1]];
+      grip.setPointerCapture(event.pointerId);
+      grip.style.cursor = "grabbing";
       const move = (e) => {
-        const at = point(e, svg);
+        const raw = point(e, svg, false);
+        const at = [Math.max(R, Math.min(L - R, raw[0] + offset[0])),
+                    Math.max(R, Math.min(W - R, raw[1] + offset[1]))];
         layout[colour] = at;
-        ball.setAttribute("cx", at[0]);
-        ball.setAttribute("cy", at[1]);
-        if (ring) { ring.setAttribute("cx", at[0]); ring.setAttribute("cy", at[1]); }
+        for (const piece of [ball, ring, handle]) {
+          if (piece) { piece.setAttribute("cx", at[0]); piece.setAttribute("cy", at[1]); }
+        }
       };
       const up = () => {
-        ball.removeEventListener("pointermove", move);
-        ball.removeEventListener("pointerup", up);
-        ball.removeEventListener("pointercancel", up);
-        ball.style.cursor = "grab";
+        grip.removeEventListener("pointermove", move);
+        grip.removeEventListener("pointerup", up);
+        grip.removeEventListener("pointercancel", up);
+        grip.style.cursor = "grab";
         // The advice belonged to where the balls were, so it goes with them.
         stopPlaying();
         result = null;
@@ -1914,9 +1938,9 @@
         dealt = null;
         render();
       };
-      ball.addEventListener("pointermove", move);
-      ball.addEventListener("pointerup", up);
-      ball.addEventListener("pointercancel", up);
+      grip.addEventListener("pointermove", move);
+      grip.addEventListener("pointerup", up);
+      grip.addEventListener("pointercancel", up);
     });
   }
 
@@ -1929,14 +1953,7 @@
     render();
   });
 
-  function point(event, svg) {
-    const box = svg.getBoundingClientRect();
-    const scale = (L + 300) / box.width;
-    return [
-      Math.max(R, Math.min(L - R, (event.clientX - box.left) * scale - 150)),
-      Math.max(R, Math.min(W - R, (event.clientY - box.top) * scale - 150)),
-    ];
-  }
+
 
   function firstBallButtons() {
     // 수구가 정해져야 1적구 후보가 정해진다: 남은 두 공과 "자동".
