@@ -42,6 +42,7 @@ header, .trust-note { display: none !important; }
   #picks button { text-align: left; padding: 5px 6px; font-size: 11px; line-height: 1.25;
                   white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   #picks button b { font-weight: 700; margin-right: 2px; }
-  .table-card .bar #clear { flex: 2 1 0; padding: 9px 4px; }
+  .table-card .bar #photo-btn { flex: 1.6 1 0; padding: 9px 2px; font-size: 11.5px; white-space: nowrap; }
+  .table-card .bar #clear { flex: 2.2 1 0; padding: 9px 2px; font-size: 11.5px; white-space: nowrap; }
   .table-card .bar #run { flex: 3 1 0; width: auto; padding: 9px 4px; }
 }

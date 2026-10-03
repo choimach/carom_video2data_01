@@ -61,13 +61,13 @@ def build(data_path, out_dir):
     page.write_text(template.replace(PLACEHOLDER, json.dumps(data, ensure_ascii=False,
                                                              separators=(",", ":"))),
                     encoding="utf-8")
-    for side in ("sim.js", "route.js", "choice.js", "search.js"):
+    for side in ("sim.js", "route.js", "choice.js", "search.js", "photo.js"):
         shutil.copy(SOURCE / side, out_dir / side)
 
     # The physics is the part a browser cannot complain about usefully, so run
     # node over it here if node is around.
     try:
-        for side in ("sim.js", "route.js", "choice.js", "search.js"):
+        for side in ("sim.js", "route.js", "choice.js", "search.js", "photo.js"):
             subprocess.run(["node", "--check", str(out_dir / side)], check=True)
         # ★페이지 안의 스크립트도 검사한다 (2026-10-03). 옆 파일만 검사하고 있었는데, 페이지는
         # 스크립트 한 덩어리라 문법 오류 하나가 전체를 조용히 죽인다 — 화면에는 빈 탁자만 남는다.

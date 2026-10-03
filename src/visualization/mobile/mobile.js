@@ -12,7 +12,7 @@
   if (!bar || !run || typeof render !== "function") return;
   const box = document.createElement("div");
   box.id = "picks";
-  bar.insertBefore(box, document.getElementById("clear"));
+  bar.insertBefore(box, document.getElementById("photo-btn") || document.getElementById("clear"));
   // ★고른 공략의 두께 · 당점 · 강도 그림도 탁자 옆에 (선수, 2026-10-03: "공략시 당점, 두께,
   // 스트로크 강도 이미지도 table의 우측에"). 아래의 큰 그림(#aim)을 **베껴** 작게 보인다 —
   // 그림을 두 벌로 그리지 않는다. 끌어서 바꾸는 것은 아래 큰 그림에서 (여기는 보기만).

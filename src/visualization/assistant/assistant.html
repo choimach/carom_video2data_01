@@ -49,6 +49,15 @@
               touch-action: none; cursor: crosshair; }
 
   body.busy .table-card { pointer-events: none; }
+  /* 사진으로 공 놓기 — 화면 전체 */
+  #photo-panel { position: fixed; inset: 0; z-index: 50; background: #111; display: flex; gap: 8px; padding: 8px;
+                 box-sizing: border-box; }
+  #photo-panel[hidden] { display: none; }
+  #photo-canvas { flex: 1 1 auto; min-width: 0; max-height: 100%; touch-action: none; object-fit: contain; }
+  #photo-panel .photo-side { flex: 0 0 170px; display: flex; flex-direction: column; gap: 8px; color: #ddd; font-size: 12.5px; }
+  #photo-panel .photo-side p { margin: 0; line-height: 1.45; }
+  #photo-panel .photo-side button { padding: 10px; }
+  @media (orientation: portrait) { #photo-panel { flex-direction: column; } #photo-panel .photo-side { flex: 0 0 auto; } }
   .bar { display: flex; flex-wrap: wrap; gap: 6px; align-items: center;
          padding: 8px 10px; border-top: 1px solid var(--line); }
   .bar .label { font-size: 13px; color: var(--soft); margin-right: 2px; }
@@ -202,6 +211,8 @@
       <button data-face="right" type="button">오른쪽</button>
       <span style="flex:1 1 100%; height:0"></span>
       <button id="play" type="button" disabled>재생</button>
+      <button id="photo-btn" type="button" title="탁자 사진을 찍으면 세 공의 자리를 잡아 줍니다">사진</button>
+      <input id="photo-file" type="file" accept="image/*" capture="environment" hidden>
       <button id="clear" type="button">다시 놓기</button>
       <button id="again" type="button" disabled title="고른 공략을 친 뒤의 자리에서 이어 칩니다. 멈춘 자리는 대략입니다 — 공 하나당 평균 0.8 m쯤 어긋납니다">계속치기</button>
       <button id="dice" type="button">무작위 배치</button>
@@ -234,12 +245,23 @@
     </div>
   </section>
   <footer id="footer"></footer>
+  <!-- 사진으로 공 놓기 (2026-10-03). 사진 위에 잡은 네 모서리와 공을 보여 주고, 모서리는 끌어서 고친다. -->
+  <div id="photo-panel" hidden>
+    <canvas id="photo-canvas"></canvas>
+    <div class="photo-side">
+      <p id="photo-say">사진을 읽는 중…</p>
+      <button id="photo-turn" type="button" title="장축과 단축을 바꿔 잡습니다">축 바꾸기</button>
+      <button id="photo-cancel" type="button">취소</button>
+      <button id="photo-apply" type="button" class="run">적용</button>
+    </div>
+  </div>
 </div>
 
 <script src="sim.js"></script>
 <script src="route.js"></script>
 <script src="choice.js"></script>
 <script src="search.js"></script>
+<script src="photo.js"></script>
 <script id="data" type="application/json">__DATA__</script>
 <script>
   const DATA = JSON.parse(document.getElementById("data").textContent);
@@ -287,6 +309,7 @@
   // 넣으면 가장 가까운 이웃이 **그 판 자신**이 되어 길 표·길 닮음이 답을 미리 본다.
   // 화면에서는 늘 null이다.
   let excludeMatch = null;
+  let backdrop = null;      // 사진으로 놓았을 때 바탕에 까는 펴진 사진 {url, pad}
   let dealt = null;        // 무작위로 깔았다면 그 씨앗 — 같은 판을 다시 만들 수 있게
 
   // 선수 (2026-09-23): *"지금까지는 공배치를 내가 정했기 때문에 내가 익숙한
@@ -1196,6 +1219,12 @@
     svg.textContent = "";
     el(svg, "rect", { x: -150, y: -150, width: L + 300, height: W + 300, rx: 46, fill: "var(--wood)" });
     el(svg, "rect", { x: 0, y: 0, width: L, height: W, fill: "var(--cloth)" });
+    // 사진으로 놓았으면 펴진 사진을 바탕에 옅게 깐다 — 그린 공과 실제 공이 맞는지 눈으로 본다.
+    if (backdrop) {
+      el(svg, "image", { href: backdrop.url, x: -backdrop.pad, y: -backdrop.pad,
+                         width: L + 2 * backdrop.pad, height: W + 2 * backdrop.pad,
+                         preserveAspectRatio: "none", opacity: .6, style: "pointer-events:none" });
+    }
     for (let k = 1; k <= 7; k++) {
       const x = (L / 8) * k;
       el(svg, "circle", { cx: x, cy: -75, r: 15, fill: "var(--cloth-line)" });
@@ -2107,11 +2136,13 @@
 
   document.getElementById("clear").onclick = () => {
     stopPlaying();
+    backdrop = null;
     layout = {}; result = null; picked = null; cue = "white";
     verdicts = {}; played = null; notes = {}; renames = {}; better = null; dealt = null; render();
   };
   const deal = (seed) => {
     stopPlaying();
+    backdrop = null;
     result = null; picked = null; verdicts = {}; played = null; notes = {}; renames = {}; better = null;
     dealRandom(seed);
     render();
@@ -2210,6 +2241,113 @@
       }
     }, 30);
   };
+
+  // ── 사진으로 공 놓기 (2026-10-03) ───────────────────────────────────────
+  // 선수가 당구장에서 써 보고: "공들을 drag해서는 정확한 곳에 위치시키기 힘들고, 시간도 많이
+  // 걸려. 사진을 찍어서 공 위치를 잡아야겠어." 인식은 photo.js (합성 사진 54공: 중앙값 26 mm).
+  // 자동이 틀릴 수 있으니 네 모서리를 끌어서 고치게 하고, 고치면 그 모서리로 다시 읽는다.
+  (() => {
+    const panel = document.getElementById("photo-panel");
+    const canvas = document.getElementById("photo-canvas");
+    const say = document.getElementById("photo-say");
+    const file = document.getElementById("photo-file");
+    let img = null, shown = null, got = null, corners = null;
+    const COLOURS = { white: "#f4f4f0", yellow: "#f2c21b", red: "#d8332b" };
+    const paint = () => {
+      if (!shown) return;
+      const g = canvas.getContext("2d");
+      g.drawImage(shown, 0, 0);
+      const s = canvas.width / 1000;
+      if (corners) {
+        g.lineWidth = 3 * s; g.strokeStyle = "#39d98a";
+        g.beginPath(); corners.forEach((p, i) => (i ? g.lineTo(p[0], p[1]) : g.moveTo(p[0], p[1]))); g.closePath(); g.stroke();
+        corners.forEach((p, i) => {
+          g.fillStyle = i === 0 ? "#ff5a5a" : "#39d98a";
+          g.beginPath(); g.arc(p[0], p[1], 9 * s, 0, 7); g.fill();
+        });
+      }
+      for (const [colour, b] of Object.entries((got && got.balls) || {})) {
+        const at = PHOTO.toImage(corners, b.at);
+        if (!at) continue;
+        g.lineWidth = 3 * s; g.strokeStyle = COLOURS[colour];
+        g.beginPath(); g.arc(at[0], at[1], 22 * s, 0, 7); g.stroke();
+      }
+    };
+    const read = () => {
+      say.textContent = "읽는 중…";
+      setTimeout(() => {
+        const t0 = performance.now();
+        try { got = PHOTO.analyze(img, corners); } catch (e) { got = null; console.error(e); }
+        if (got && got.corners) corners = got.corners;
+        const names = { white: "흰공", yellow: "노란공", red: "빨간공" };
+        const found = got ? Object.keys(got.balls) : [];
+        say.innerHTML = !got || !got.corners ? "탁자를 찾지 못했습니다. 탁자 전체가 나오게 다시 찍어 주세요."
+          : `${found.length ? found.map((c) => names[c]).join(" · ") + " 찾음" : "공을 찾지 못함"}`
+            + ` (${((performance.now() - t0) / 1000).toFixed(1)}초)<br>`
+            + `<small>초록 테두리가 천의 바깥 끝(쿠션 포함)에 맞지 않으면 모서리 점을 끌어 옮기세요. 옮기면 다시 읽습니다.</small>`
+            + (got.warnings.length ? `<br><small style="color:#f7b267">${got.warnings.join("<br>")}</small>` : "");
+        document.getElementById("photo-apply").disabled = !found.length;
+        paint();
+      }, 30);
+    };
+    document.getElementById("photo-btn").onclick = () => { file.value = ""; file.click(); };
+    file.onchange = async () => {
+      const f = file.files && file.files[0];
+      if (!f) return;
+      panel.hidden = false;
+      say.textContent = "사진을 여는 중…";
+      const bitmap = await createImageBitmap(f, { imageOrientation: "from-image" }).catch(() => null);
+      if (!bitmap) { say.textContent = "사진을 열지 못했습니다."; return; }
+      const k = Math.min(1, 1600 / Math.max(bitmap.width, bitmap.height));
+      canvas.width = Math.round(bitmap.width * k); canvas.height = Math.round(bitmap.height * k);
+      const g = canvas.getContext("2d");
+      g.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+      img = g.getImageData(0, 0, canvas.width, canvas.height);
+      shown = await createImageBitmap(img);
+      corners = null; got = null;
+      read();
+    };
+    // 모서리 끌기 — 가장 가까운 모서리를 잡는다.
+    canvas.addEventListener("pointerdown", (event) => {
+      if (!corners) return;
+      const box = canvas.getBoundingClientRect();
+      const k = canvas.width / box.width;
+      const at = (e) => [(e.clientX - box.left) * k, (e.clientY - box.top) * k];
+      const p = at(event);
+      let pick = 0;
+      corners.forEach((c, i) => { if (Math.hypot(c[0] - p[0], c[1] - p[1]) < Math.hypot(corners[pick][0] - p[0], corners[pick][1] - p[1])) pick = i; });
+      if (Math.hypot(corners[pick][0] - p[0], corners[pick][1] - p[1]) > 80 * k) return;
+      canvas.setPointerCapture(event.pointerId);
+      const move = (e) => { corners[pick] = at(e); got = got && { ...got, balls: {} }; paint(); };
+      const up = () => {
+        canvas.removeEventListener("pointermove", move);
+        canvas.removeEventListener("pointerup", up);
+        read();
+      };
+      canvas.addEventListener("pointermove", move);
+      canvas.addEventListener("pointerup", up);
+    });
+    document.getElementById("photo-turn").onclick = () => {
+      if (!corners) return;
+      corners = corners.slice(1).concat(corners.slice(0, 1));
+      read();
+    };
+    document.getElementById("photo-cancel").onclick = () => { panel.hidden = true; };
+    document.getElementById("photo-apply").onclick = () => {
+      if (!got) return;
+      stopPlaying();
+      for (const [colour, b] of Object.entries(got.balls)) layout[colour] = b.at.slice();
+      // 펴진 사진을 바탕으로
+      const c = document.createElement("canvas");
+      c.width = got.top.width; c.height = got.top.height;
+      c.getContext("2d").putImageData(new ImageData(got.top.data, got.top.width, got.top.height), 0, 0);
+      backdrop = { url: c.toDataURL("image/jpeg", 0.75), pad: PHOTO.topFrame.pad };
+      result = null; picked = null; dealt = null;
+      verdicts = {}; played = null; notes = {}; renames = {}; better = null;
+      panel.hidden = true;
+      render();
+    };
+  })();
 
   const COMMENT_KEY = "carom-assistant-comment";
   const comment = document.getElementById("comment");

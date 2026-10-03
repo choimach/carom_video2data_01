@@ -215,6 +215,10 @@ node --check build/sim.js
   화면과 워커가 같이 쓴다 (워커가 안 되면 화면에서 — `file://`로 여는 시험 도구들이 그렇다. 결과는 같다).
   탐색을 고치면 `node tools/check_workers.js <옛 빌드 폴더> build`로 **옛 판과 같은지** 본다.
   hit에는 `shot`이 없다 — 대표 줄만 `finish()`가 다시 친다. 계산 중에는 탁자를 잠근다 (`body.busy`).
+- **사진으로 공 놓기 (2026-10-03)** — `photo.js` (carom_bot_01/vision.py를 OpenCV 없이 옮김). 천의 바깥 끝 =
+  쿠션 윗면(경기 면 +50 mm, 높이 37 mm)에 맞춰 펴서 공이 떠 있는 밀림을 없앤다. 재는 법:
+  `python tools/synth_photos.py DIR 3 && node tools/check_photo.js DIR` (합성 18장 54공: 중앙값 26 mm, 전부 찾음).
+  ⚠️ 합성 사진은 그림자·반사가 없다 — 실제 사진으로 다시 잴 것.
 - **화면은 `bash tools/screenshot_assistant.sh out.png`로 본다** — 무작위 배치 하나를 실행해 찍고
   콘솔 오류를 찍는다. sudo 없이 된다 (빠진 라이브러리를 `apt-get download`로 받아 쓴다).
   `!` 명령으로는 sudo 비밀번호를 넣을 수 없다.
