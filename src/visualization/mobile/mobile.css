@@ -27,4 +27,11 @@ header, .trust-note { display: none !important; }
   .table-card .bar button { padding: 6px 7px; font-size: 12px; }
   .table-card .bar #seed { width: 100%; box-sizing: border-box; }
   .table-card .bar #run { width: 100%; padding: 11px 8px; font-size: 15px; }
+  /* 수구 · 공략 넷 · 다시 놓기 · 실행만 (선수, 2026-10-03). 나머지는 폰에서 숨긴다. */
+  .table-card .bar .label:not(:first-child), .table-card .bar #first-buttons,
+  .table-card .bar [data-face], #play, #again, #dice, #seed { display: none !important; }
+  #picks { display: grid; gap: 4px; width: 100%; margin: 4px 0; }
+  #picks button { text-align: left; padding: 5px 7px; font-size: 12px; line-height: 1.25; }
+  #picks button small { display: block; font-size: 10px; opacity: .75; }
+  .table-card .bar #clear { width: 100%; }
 }

@@ -46,7 +46,7 @@ def main():
     os.makedirs(os.path.join(OUT, "icons"))
     for name in ("sim.js", "route.js", "choice.js", "search.js"):
         shutil.copy(os.path.join(BUILD, name), OUT)
-    for name in ("cloud.js", "sw.js", "manifest.webmanifest", "mobile.css"):
+    for name in ("cloud.js", "sw.js", "manifest.webmanifest", "mobile.css", "mobile.js"):
         shutil.copy(os.path.join(MOBILE, name), OUT)
     for size in (192, 512):
         cv2.imwrite(os.path.join(OUT, "icons", f"icon-{size}.png"), icon(size))
@@ -70,6 +70,7 @@ def main():
     assert first_script in html
     html = html.replace(first_script, '<link rel="stylesheet" href="./mobile.css">\n' + first_script, 1)
     html += (f'\n<script>window.CAROM_BUILD = {stamp!r};</script>\n'
+             '<script src="./mobile.js"></script>\n'
              '<script type="module" src="./cloud.js"></script>\n')
     with open(os.path.join(OUT, "index.html"), "w", encoding="utf-8") as handle:
         handle.write(html)
