@@ -204,6 +204,7 @@ node --check build/sim.js
 
 - 원본은 `src/visualization/assistant/`. **스크래치패드에서 작업하지 말 것** —
   세션과 함께 사라지고, 실제로 며칠간 저장소 밖에 있었다.
+- ★**바뀐 것은 언제나 두 곳에 함께 올린다** — 선수 (2026-10-03): *"변경사항이 생기면 항상 desktop과 phone app 모두에 반영해줘."*
 - **폰 앱도 같이 올린다 (2026-10-03): https://carom001-board.web.app** — 조언판 그대로에 매니페스트·서비스
   워커·Firestore 보내기(`src/visualization/mobile/`)를 붙인 설치형 웹앱이다.
   `python tools/build_mobile.py && firebase deploy --only hosting --project carom001`.

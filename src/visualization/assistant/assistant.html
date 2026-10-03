@@ -974,9 +974,17 @@
         // 당점 1팁과 강도 1을 같은 무게로.
         const cost = (h) => (useTip ? Math.hypot((h.side || 0) - want.tip[0], (h.vertical || 0) - want.tip[1]) : 0)
           + (wantPower === null ? 0 : Math.abs(SIM.strengthOf(h.speed) - wantPower));
+        // ★정중앙은 고르지 않는다 (2026-10-03). 프로 당점(9~10시)에 "가장 가까운" 줄로 정중앙이
+        // 뽑히면 아래의 정중앙 규칙(CENTER_YIELD)이 그것을 **여유가 가장 넓은 당점 줄로** 바꾸는데,
+        // 그 규칙은 프로 쪽을 보지 않아서 반대편 2시 3팁이 됐다 — 선수: "당점 좌우 반대"
+        // (배치 흰공 (919,399) 수구, 가까운 프로 4명 중 3명이 왼쪽). 당점 있는 줄이 양보 안에
+        // 있으면 그중에서 프로 쪽에 가장 가까운 것을 고른다. 프로가 정중앙을 치는 것은 3%다.
+        const centred = (h) => CENTER_YIELD !== null && Math.hypot(h.side || 0, h.vertical || 0) < 0.5;
         let pick = kept;
         for (const h of members.get(id)) {
-          if (h.room >= kept.room - TIP_YIELD && cost(h) < cost(pick)) pick = h;
+          if (h.room < kept.room - TIP_YIELD) continue;
+          const better = centred(pick) !== centred(h) ? centred(pick) : cost(h) < cost(pick);
+          if (better) pick = h;
         }
         best.set(id, pick);
       }
