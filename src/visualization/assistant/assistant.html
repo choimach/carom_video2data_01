@@ -1456,21 +1456,33 @@
       row.hit.side = Math.round(side * 2) / 2;
       row.hit.vertical = Math.round(up * 2) / 2;
       row.hit.byHand = true;
+      // ★점이 손을 따라온다 (2026-10-03, 선수: "당점이 잘 안 옮겨짐"). 그림은 손을 뗄 때 다시
+      // 그리므로, 끄는 동안 점이 제자리에 서 있어서 안 움직이는 것처럼 보였다.
+      for (const node of [dot, grab]) {
+        node.setAttribute("cx", centre + row.hit.side * scale);
+        node.setAttribute("cy", -row.hit.vertical * scale);
+      }
       replay(row);
     };
 
-    grab.onpointerdown = (event) => {
+    // 점을 정확히 잡지 않아도 된다 — 그림 어디를 눌러도 그 자리가 당점이 된다. 터치에서는
+    // 끄는 동작이 화면 스크롤로 새지 않게 막는다.
+    plate.style.touchAction = "none";
+    plate.style.cursor = "crosshair";
+    plate.onpointerdown = (event) => {
       event.preventDefault();
-      grab.setPointerCapture(event.pointerId);
+      plate.setPointerCapture(event.pointerId);
       stopPlaying();
       const move = (e) => place(e);
       const done = () => {
-        grab.removeEventListener("pointermove", move);
-        grab.removeEventListener("pointerup", done);
+        plate.removeEventListener("pointermove", move);
+        plate.removeEventListener("pointerup", done);
+        plate.removeEventListener("pointercancel", done);
         render();
       };
-      grab.addEventListener("pointermove", move);
-      grab.addEventListener("pointerup", done);
+      plate.addEventListener("pointermove", move);
+      plate.addEventListener("pointerup", done);
+      plate.addEventListener("pointercancel", done);
       place(event);
     };
   }
@@ -1551,7 +1563,7 @@
     const mark = el(svg, "text", { x: first.p[0], y: first.p[1] + 92, "text-anchor": "middle",
                                    fill: "var(--warn)", "font-size": 46, "font-weight": 700,
                                    "font-family": "Gothic A1, sans-serif" });
-    const rails = row.hit.judged.rails.length;
+    const rails = (row.hit.judged.rails || []).length;
     mark.textContent = row.hit.byHand
       ? (row.hit.judged.scored ? `득점 · 쿠션 ${rails}개` : "안 들어감")
       : "1쿠션 — 끌어 보세요";
@@ -1967,7 +1979,7 @@
         당점 <b>${side}</b>${row.proTip
           ? ` — 가까운 프로 ${row.proTip.n}명은 <b>${asTip(row.proTip.tip[0], row.proTip.tip[1])}</b>을 줬습니다`
           : ""}.
-        쿠션 <b>${row.hit.judged.rails.length}개</b>,
+        쿠션 <b>${(row.hit.judged.rails || []).length}개</b>,
         1적구 <b>${Math.round(row.hit.pushed)} mm</b> 이동.
         시뮬레이터가 회전을 공의 상태로 들고 있으므로 당점을 팁으로 말합니다.
         ${(() => { const sp = restCloud(row.hit), c = row.hit.cloud, r = spreadOf(sp[cue]);
@@ -2472,7 +2484,7 @@
           + `두께 ${asThickness(row.hit.thickness)}`
           + (row.band ? `(프로 ${row.band.n}명 ${asThickness(row.band.mid)})` : "")
           + ` · 당점 ${asTip(row.hit.side, row.hit.vertical || 0)} · `
-          + `쿠션 ${row.hit.judged.rails.length}개${row.key === picked ? "   ← 선택됨" : ""}`);
+          + `쿠션 ${(row.hit.judged.rails || []).length}개${row.key === picked ? "   ← 선택됨" : ""}`);
       });
     } else if (result) {
       lines.push("후보: 없음");
@@ -2524,7 +2536,7 @@
         tips: [Math.round(row.hit.side * 100) / 100,
                Math.round((row.hit.vertical || 0) * 100) / 100],
         strength: Math.round(SIM.strengthOf(row.hit.speed) * 10) / 10,
-        deg: row.hit.deg, room: row.hit.room, rails: row.hit.judged.rails.length,
+        deg: row.hit.deg, room: row.hit.room, rails: (row.hit.judged.rails || []).length,
         chosen: row.chosen, scored: row.scored, total: result.total,
         band: row.band ? [row.band.n, row.band.mid] : null,
       })),
