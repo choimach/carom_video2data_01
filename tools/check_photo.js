@@ -30,15 +30,26 @@ const server = http.createServer((q, r) => {
   const byPose = {};
   const rows = [];
   for (const [id, t] of Object.entries(truth)) {
-    const got = await p.evaluate(async (src) => {
-      const im = new Image(); im.src = src; await im.decode();
-      const c = document.createElement('canvas'); c.width = im.naturalWidth; c.height = im.naturalHeight;
-      const g = c.getContext('2d'); g.drawImage(im, 0, 0);
-      const img = g.getImageData(0, 0, c.width, c.height);
+    // 두 장짜리(truth의 camera_mm가 둘): NNNa.png + NNNb.png → analyzeEnd 둘 → combineEnds
+    const pair = Array.isArray(t.camera_mm[0]);
+    const got = await p.evaluate(async ([srcs, pair]) => {
+      const load = async (src) => {
+        const im = new Image(); im.src = src; await im.decode();
+        const c = document.createElement('canvas'); c.width = im.naturalWidth; c.height = im.naturalHeight;
+        const g = c.getContext('2d'); g.drawImage(im, 0, 0);
+        return g.getImageData(0, 0, c.width, c.height);
+      };
+      const imgs = [];
+      for (const s of srcs) imgs.push(await load(s));
       const t0 = performance.now();
-      const res = PHOTO.analyze(img);
-      return { ms: performance.now() - t0, balls: res.balls, warnings: res.warnings, camera: res.camera, corners: res.corners };
-    }, `/${id}.png`);
+      if (!pair) {
+        const res = PHOTO.analyze(imgs[0]);
+        return { ms: performance.now() - t0, balls: res.balls, warnings: res.warnings, camera: res.camera };
+      }
+      const res = PHOTO.analyzePair(imgs[0], imgs[1]);
+      return { ms: performance.now() - t0, balls: res.balls, camera: null, warnings: res.warnings,
+               diamonds: res.single ? ['한 장'] : res.ends.map((e) => (e.diamonds ? e.diamonds.length : 'x')) };
+    }, [pair ? [`/${id}a.png`, `/${id}b.png`] : [`/${id}.png`], pair]);
     const L = 2844, W = 1422;
     const err = (rot) => Object.entries(t.balls).map(([c, [x, y]]) => {
       const g = got.balls[c];
@@ -51,7 +62,7 @@ const server = http.createServer((q, r) => {
     rows.push({ id, pose: t.pose, e, ms: got.ms, warn: got.warnings.length, cam: got.camera });
     (byPose[t.pose] = byPose[t.pose] || []).push(...e);
     console.log(`${id} ${t.pose.padEnd(9)} 오차 ${e.map((v) => (Number.isFinite(v) ? Math.round(v) : '못찾음')).join(' / ').padEnd(16)} mm · ${Math.round(got.ms)} ms`
-      + (got.camera ? ` · 카메라 높이 ${Math.round(got.camera.height)} (참 ${t.camera_mm[2]})` : ' · 카메라 추정 없음')
+      + (got.diamonds ? ` · 다이아몬드 ${got.diamonds.join('+')}` : got.camera ? ` · 카메라 높이 ${Math.round(got.camera.height)} (참 ${t.camera_mm[2]})` : ' · 카메라 추정 없음')
       + (got.warnings.length ? ` · ⚠ ${got.warnings[0].slice(0, 40)}` : ''));
   }
   const med = (v) => { const s = v.filter(Number.isFinite).sort((a, b) => a - b); return s.length ? Math.round(s[s.length >> 1]) : '-'; };

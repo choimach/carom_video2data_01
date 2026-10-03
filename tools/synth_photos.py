@@ -37,6 +37,23 @@ POSES = {   # 카메라 위치 (월드 mm, y 위로), 바라보는 점
 }
 
 
+# ★두 장으로 나눠 찍기 (2026-10-03, 선수: "한 번에 테이블 전체가 나오게 찍는 건 불가능해").
+# 한 판마다 (왼쪽 끝 사진, 오른쪽 끝 사진). 오른쪽은 왼쪽 자세를 탁자 가운데로 180도 돌린 것에
+# 조금씩 다르게 — 사람이 같은 자세로 정확히 서지 않는다.
+HALF_POSES = {
+    "side_near_end": ((450, -800, 1550), (800, W / 2, 0)),       # 장쿠션 옆, 끝 가까이에 서서
+    "side_far_back": ((700, -1000, 1450), (1000, W / 2 + 80, 0)),
+    "behind_end": ((-450, W / 2 - 150, 1550), (1000, W / 2, 0)),   # 단쿠션 뒤에 바짝 서서
+    "corner": ((-250, -300, 1550), (900, W / 2, 0)),
+}
+
+
+def mirrored(pos, look, jitter):
+    """탁자 가운데로 180도 돌리고 사람 오차를 조금 얹는다."""
+    (px, py, pz), (lx, ly, lz) = pos, look
+    return ((L - px + jitter[0], W - py + jitter[1], pz + jitter[2]), (L - lx, W - ly, lz))
+
+
 def camera(pos, look, w, h, fov_w=1.32):        # 가로 화각 약 76도
     c = np.array(pos, float); f = w / 2 / math.tan(fov_w / 2)
     z = np.array(look, float) - c; z /= np.linalg.norm(z)
@@ -96,6 +113,30 @@ def render(balls, cam, w, h, rng):
     return np.clip(img, 0, 255).astype(np.uint8)
 
 
+def main_halves(out, n_per_pose=3):
+    os.makedirs(out, exist_ok=True)
+    rng = np.random.default_rng(11)
+    w, h = 1600, 1200
+    truth = {}
+    k = 0
+    for pose, (pos, look) in HALF_POSES.items():
+        for _ in range(n_per_pose):
+            while True:
+                pts = rng.uniform([R, R], [L - R, W - R], (3, 2))
+                if min(np.linalg.norm(pts[i] - pts[j]) for i in range(3) for j in range(i + 1, 3)) > 3 * R:
+                    break
+            balls = dict(zip(["white", "yellow", "red"], map(tuple, pts)))
+            pos2, look2 = mirrored(pos, look, rng.normal(0, 120, 3))
+            for side, (p, l) in (("a", (pos, look)), ("b", (pos2, look2))):
+                cam = camera(p, l, w, h)
+                cv2.imwrite(os.path.join(out, f"{k:03d}{side}.png"), render(balls, cam, w, h, rng))
+            truth[f"{k:03d}"] = {"pose": pose, "camera_mm": [pos, pos2],
+                                 "balls": {c: [round(x, 1), round(W - y, 1)] for c, (x, y) in balls.items()}}
+            k += 1
+    json.dump(truth, open(os.path.join(out, "truth.json"), "w"), indent=1)
+    print(f"{k}쌍 → {out}")
+
+
 def main(out, n_per_pose=5):
     os.makedirs(out, exist_ok=True)
     rng = np.random.default_rng(7)
@@ -124,4 +165,5 @@ def main(out, n_per_pose=5):
 
 
 if __name__ == "__main__":
-    main(sys.argv[1], int(sys.argv[2]) if len(sys.argv) > 2 else 5)
+    args = [a for a in sys.argv[1:] if a != "--halves"]
+    (main_halves if "--halves" in sys.argv else main)(args[0], int(args[1]) if len(args) > 1 else 5)

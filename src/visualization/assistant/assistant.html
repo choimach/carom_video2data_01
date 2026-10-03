@@ -211,7 +211,7 @@
       <button data-face="right" type="button">오른쪽</button>
       <span style="flex:1 1 100%; height:0"></span>
       <button id="play" type="button" disabled>재생</button>
-      <button id="photo-btn" type="button" title="탁자 사진을 찍으면 세 공의 자리를 잡아 줍니다">사진</button>
+      <button id="photo-btn" type="button" title="탁자를 두 장(한쪽 끝, 반대쪽 끝)으로 찍으면 세 공의 자리를 잡아 줍니다">사진</button>
       <input id="photo-file" type="file" accept="image/*" capture="environment" hidden>
       <button id="clear" type="button">다시 놓기</button>
       <button id="again" type="button" disabled title="고른 공략을 친 뒤의 자리에서 이어 칩니다. 멈춘 자리는 대략입니다 — 공 하나당 평균 0.8 m쯤 어긋납니다">계속치기</button>
@@ -250,7 +250,10 @@
     <canvas id="photo-canvas"></canvas>
     <div class="photo-side">
       <p id="photo-say">사진을 읽는 중…</p>
-      <button id="photo-turn" type="button" title="장축과 단축을 바꿔 잡습니다">축 바꾸기</button>
+      <button id="photo-next" type="button" class="run" hidden>2장 찍기 (반대쪽 끝)</button>
+      <button id="photo-again1" type="button" hidden>1장 다시</button>
+      <button id="photo-again2" type="button" hidden>2장 다시</button>
+      <button id="photo-turn" type="button" hidden title="장축과 단축을 바꿔 잡습니다">축 바꾸기</button>
       <button id="photo-cancel" type="button">취소</button>
       <button id="photo-apply" type="button" class="run">적용</button>
     </div>
@@ -2246,70 +2249,150 @@
   // 선수가 당구장에서 써 보고: "공들을 drag해서는 정확한 곳에 위치시키기 힘들고, 시간도 많이
   // 걸려. 사진을 찍어서 공 위치를 잡아야겠어." 인식은 photo.js (합성 사진 54공: 중앙값 26 mm).
   // 자동이 틀릴 수 있으니 네 모서리를 끌어서 고치게 하고, 고치면 그 모서리로 다시 읽는다.
+  // ★두 장으로 나눠 찍기가 기본이다 (선수: "한 번에 테이블 전체가 나오게 찍는 건 불가능해").
+  // 1장 = 한쪽 끝, 2장 = 반대쪽 끝 (photo.js의 analyzeEnd · combineEnds). 1장에 탁자 전체가
+  // 보이면 그 한 장으로 끝내고, 그때만 네 모서리를 끌어 고칠 수 있다.
   (() => {
     const panel = document.getElementById("photo-panel");
     const canvas = document.getElementById("photo-canvas");
     const say = document.getElementById("photo-say");
     const file = document.getElementById("photo-file");
-    let img = null, shown = null, got = null, corners = null;
+    const $ = (id) => document.getElementById(id);
+    const NAMES_KO = { white: "흰공", yellow: "노란공", red: "빨간공" };
     const COLOURS = { white: "#f4f4f0", yellow: "#f2c21b", red: "#d8332b" };
-    const paint = () => {
-      if (!shown) return;
-      const g = canvas.getContext("2d");
-      g.drawImage(shown, 0, 0);
-      const s = canvas.width / 1000;
+    let slot = 0;                 // 지금 찍는 장 (0 = 1장, 1 = 2장)
+    const imgs = [null, null], ends = [null, null];
+    let single = null, corners = null, final = null;   // final = {balls, warnings, top(ImageData)}
+    const show = (ids) => {
+      for (const id of ["photo-next", "photo-again1", "photo-again2", "photo-turn"]) $(id).hidden = !ids.includes(id);
+    };
+    const toImageData = async (f) => {
+      const bitmap = await createImageBitmap(f, { imageOrientation: "from-image" }).catch(() => null);
+      if (!bitmap) return null;
+      const k = Math.min(1, 1600 / Math.max(bitmap.width, bitmap.height));
+      const c = document.createElement("canvas");
+      c.width = Math.round(bitmap.width * k); c.height = Math.round(bitmap.height * k);
+      const g = c.getContext("2d");
+      g.drawImage(bitmap, 0, 0, c.width, c.height);
+      return g.getImageData(0, 0, c.width, c.height);
+    };
+    const drawImage = (img) => {
+      canvas.width = img.width; canvas.height = img.height;
+      canvas.getContext("2d").putImageData(img, 0, 0);
+      return canvas.getContext("2d");
+    };
+    const ring = (g, at, colour, r, s) => { g.lineWidth = 3 * s; g.strokeStyle = colour; g.beginPath(); g.arc(at[0], at[1], r * s, 0, 7); g.stroke(); };
+    // 한쪽 끝 사진 위에: 두 모서리, 짝지은 다이아몬드, 찾은 공
+    const paintEnd = (img, end) => {
+      const g = drawImage(img), s = img.width / 1000;
+      for (const d of end.diamonds || []) { g.fillStyle = "#39d98a"; g.beginPath(); g.arc(d[0], d[1], 6 * s, 0, 7); g.fill(); }
+      end.corners.forEach((p, i) => { g.fillStyle = i ? "#39d98a" : "#ff5a5a"; g.beginPath(); g.arc(p[0], p[1], 10 * s, 0, 7); g.fill(); });
+      for (const [colour, b] of Object.entries(end.balls || {})) ring(g, PHOTO.apply(end.H, b.world), COLOURS[colour], 22, s);
+    };
+    // 두 끝의 펴진 그림을 이어 붙인다 (2장은 180도 돌려 오른쪽 절반)
+    const stitch = (one, two) => {
+      const { width: tw, height: th, pad, px } = PHOTO.topFrame;
+      const c = document.createElement("canvas"); c.width = tw; c.height = th;
+      const g = c.getContext("2d");
+      const half = (L / 2 + pad) * px;
+      const put = (top, flip) => {
+        const tmp = document.createElement("canvas"); tmp.width = tw; tmp.height = th;
+        tmp.getContext("2d").putImageData(new ImageData(top.data, top.width, top.height), 0, 0);
+        g.save();
+        g.beginPath(); flip ? g.rect(half, 0, tw - half, th) : g.rect(0, 0, half, th); g.clip();
+        if (flip) { g.translate(tw, th); g.rotate(Math.PI); }
+        g.drawImage(tmp, 0, 0);
+        g.restore();
+      };
+      put(one.top, false); put(two.top, true);
+      return g.getImageData(0, 0, tw, th);
+    };
+    // 이어 붙인 위에서 본 그림 + 공
+    const paintFinal = () => {
+      const g = drawImage(final.top), s = final.top.width / 1000;
+      const { pad, px } = PHOTO.topFrame;
+      for (const [colour, b] of Object.entries(final.balls)) ring(g, [(b.at[0] + pad) * px, (b.at[1] + pad) * px], COLOURS[colour], 26, s);
+    };
+    const listBalls = (balls) => {
+      const found = Object.keys(balls);
+      return found.length ? found.map((c) => NAMES_KO[c]).join(" · ") + " 찾음" : "공을 찾지 못함";
+    };
+    const warn = (list) => (list && list.length ? `<br><small style="color:#f7b267">${[...new Set(list)].join("<br>")}</small>` : "");
+
+    // ── 한 장 방식 (탁자 전체가 보일 때) ──
+    const paintSingle = () => {
+      const g = drawImage(imgs[0]), s = imgs[0].width / 1000;
       if (corners) {
         g.lineWidth = 3 * s; g.strokeStyle = "#39d98a";
         g.beginPath(); corners.forEach((p, i) => (i ? g.lineTo(p[0], p[1]) : g.moveTo(p[0], p[1]))); g.closePath(); g.stroke();
-        corners.forEach((p, i) => {
-          g.fillStyle = i === 0 ? "#ff5a5a" : "#39d98a";
-          g.beginPath(); g.arc(p[0], p[1], 9 * s, 0, 7); g.fill();
-        });
+        corners.forEach((p, i) => { g.fillStyle = i === 0 ? "#ff5a5a" : "#39d98a"; g.beginPath(); g.arc(p[0], p[1], 9 * s, 0, 7); g.fill(); });
       }
-      for (const [colour, b] of Object.entries((got && got.balls) || {})) {
+      for (const [colour, b] of Object.entries((single && single.balls) || {})) {
         const at = PHOTO.toImage(corners, b.at);
-        if (!at) continue;
-        g.lineWidth = 3 * s; g.strokeStyle = COLOURS[colour];
-        g.beginPath(); g.arc(at[0], at[1], 22 * s, 0, 7); g.stroke();
+        if (at) ring(g, at, COLOURS[colour], 22, s);
       }
     };
-    const read = () => {
-      say.textContent = "읽는 중…";
-      setTimeout(() => {
-        const t0 = performance.now();
-        try { got = PHOTO.analyze(img, corners); } catch (e) { got = null; console.error(e); }
-        if (got && got.corners) corners = got.corners;
-        const names = { white: "흰공", yellow: "노란공", red: "빨간공" };
-        const found = got ? Object.keys(got.balls) : [];
-        say.innerHTML = !got || !got.corners ? "탁자를 찾지 못했습니다. 탁자 전체가 나오게 다시 찍어 주세요."
-          : `${found.length ? found.map((c) => names[c]).join(" · ") + " 찾음" : "공을 찾지 못함"}`
-            + ` (${((performance.now() - t0) / 1000).toFixed(1)}초)<br>`
-            + `<small>초록 테두리가 천의 바깥 끝(쿠션 포함)에 맞지 않으면 모서리 점을 끌어 옮기세요. 옮기면 다시 읽습니다.</small>`
-            + (got.warnings.length ? `<br><small style="color:#f7b267">${got.warnings.join("<br>")}</small>` : "");
-        document.getElementById("photo-apply").disabled = !found.length;
-        paint();
-      }, 30);
+    const readSingle = () => {
+      const t0 = performance.now();
+      try { single = PHOTO.analyze(imgs[0], corners); } catch (e) { single = null; console.error(e); }
+      if (single && single.corners) corners = single.corners;
+      final = single && single.corners ? { balls: single.balls, warnings: single.warnings, top: single.top } : null;
+      say.innerHTML = !final ? "탁자를 찾지 못했습니다. 다시 찍어 주세요."
+        : `탁자 전체가 한 장에 나왔습니다 — ${listBalls(final.balls)} (${((performance.now() - t0) / 1000).toFixed(1)}초)<br>`
+          + `<small>초록 테두리가 천의 바깥 끝(쿠션 포함)에 안 맞으면 모서리 점을 끌어 옮기세요.</small>` + warn(final.warnings);
+      $("photo-apply").disabled = !final || !Object.keys(final.balls).length;
+      show(["photo-again1", "photo-turn"]);
+      paintSingle();
     };
-    document.getElementById("photo-btn").onclick = () => { file.value = ""; file.click(); };
-    file.onchange = async () => {
-      const f = file.files && file.files[0];
-      if (!f) return;
+
+    // ── 사진이 들어왔을 때 ──
+    const read = async (f) => {
       panel.hidden = false;
       say.textContent = "사진을 여는 중…";
-      const bitmap = await createImageBitmap(f, { imageOrientation: "from-image" }).catch(() => null);
-      if (!bitmap) { say.textContent = "사진을 열지 못했습니다."; return; }
-      const k = Math.min(1, 1600 / Math.max(bitmap.width, bitmap.height));
-      canvas.width = Math.round(bitmap.width * k); canvas.height = Math.round(bitmap.height * k);
-      const g = canvas.getContext("2d");
-      g.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
-      img = g.getImageData(0, 0, canvas.width, canvas.height);
-      shown = await createImageBitmap(img);
-      corners = null; got = null;
-      read();
+      const img = await toImageData(f);
+      if (!img) { say.textContent = "사진을 열지 못했습니다."; return; }
+      imgs[slot] = img;
+      say.textContent = "읽는 중…";
+      await new Promise((go) => setTimeout(go, 30));
+      const t0 = performance.now();
+      let end;
+      try { end = PHOTO.analyzeEnd(img); } catch (e) { end = { error: String(e.message || e) }; console.error(e); }
+      const took = ((performance.now() - t0) / 1000).toFixed(1);
+      if (slot === 0 && end.whole) { single = null; corners = null; readSingle(); return; }
+      ends[slot] = end;
+      if (end.error) {
+        drawImage(img);
+        say.innerHTML = end.error;
+        $("photo-apply").disabled = true;
+        show([slot === 0 ? "photo-again1" : "photo-again2"]);
+        return;
+      }
+      paintEnd(img, end);
+      if (slot === 0) {
+        say.innerHTML = `<b>1장</b> — 다이아몬드 ${end.diamonds.length}개, ${listBalls(end.balls)} (${took}초)<br>`
+          + `이제 <b>반대쪽 끝</b>을 찍으세요. 단쿠션과 두 모서리가 보이게.` + warn(end.warnings);
+        $("photo-apply").disabled = true;
+        show(["photo-next", "photo-again1"]);
+        return;
+      }
+      const both = PHOTO.combineEnds(ends[0], ends[1]);
+      final = { balls: both.balls, warnings: [...ends[0].warnings, ...end.warnings, ...both.warnings], top: stitch(ends[0], end) };
+      paintFinal();
+      say.innerHTML = `<b>두 장을 합쳤습니다</b> — ${listBalls(final.balls)}<br>`
+        + `<small>위에서 본 그림입니다. 동그라미가 공에 맞는지 보고 적용하세요. 틀린 공은 적용한 뒤 끌어서 고치면 됩니다.</small>`
+        + warn(final.warnings);
+      $("photo-apply").disabled = !Object.keys(final.balls).length;
+      show(["photo-again1", "photo-again2"]);
     };
-    // 모서리 끌기 — 가장 가까운 모서리를 잡는다.
+    const take = (k) => { slot = k; file.value = ""; file.click(); };
+    file.onchange = () => { const f = file.files && file.files[0]; if (f) read(f); };
+    $("photo-btn").onclick = () => { ends[0] = ends[1] = null; single = null; corners = null; final = null; take(0); };
+    $("photo-next").onclick = () => take(1);
+    $("photo-again1").onclick = () => { ends[1] = null; final = null; take(0); };
+    $("photo-again2").onclick = () => take(1);
+    // 한 장 방식에서만: 모서리 끌기
     canvas.addEventListener("pointerdown", (event) => {
-      if (!corners) return;
+      if (!single || !corners) return;
       const box = canvas.getBoundingClientRect();
       const k = canvas.width / box.width;
       const at = (e) => [(e.clientX - box.left) * k, (e.clientY - box.top) * k];
@@ -2318,29 +2401,29 @@
       corners.forEach((c, i) => { if (Math.hypot(c[0] - p[0], c[1] - p[1]) < Math.hypot(corners[pick][0] - p[0], corners[pick][1] - p[1])) pick = i; });
       if (Math.hypot(corners[pick][0] - p[0], corners[pick][1] - p[1]) > 80 * k) return;
       canvas.setPointerCapture(event.pointerId);
-      const move = (e) => { corners[pick] = at(e); got = got && { ...got, balls: {} }; paint(); };
+      const move = (e) => { corners[pick] = at(e); single = { ...single, balls: {} }; paintSingle(); };
       const up = () => {
         canvas.removeEventListener("pointermove", move);
         canvas.removeEventListener("pointerup", up);
-        read();
+        readSingle();
       };
       canvas.addEventListener("pointermove", move);
       canvas.addEventListener("pointerup", up);
     });
-    document.getElementById("photo-turn").onclick = () => {
+    $("photo-turn").onclick = () => {
       if (!corners) return;
       corners = corners.slice(1).concat(corners.slice(0, 1));
-      read();
+      readSingle();
     };
-    document.getElementById("photo-cancel").onclick = () => { panel.hidden = true; };
-    document.getElementById("photo-apply").onclick = () => {
-      if (!got) return;
+    $("photo-cancel").onclick = () => { panel.hidden = true; };
+    $("photo-apply").onclick = () => {
+      if (!final) return;
       stopPlaying();
-      for (const [colour, b] of Object.entries(got.balls)) layout[colour] = b.at.slice();
+      for (const [colour, b] of Object.entries(final.balls)) layout[colour] = b.at.slice();
       // 펴진 사진을 바탕으로
       const c = document.createElement("canvas");
-      c.width = got.top.width; c.height = got.top.height;
-      c.getContext("2d").putImageData(new ImageData(got.top.data, got.top.width, got.top.height), 0, 0);
+      c.width = final.top.width; c.height = final.top.height;
+      c.getContext("2d").putImageData(new ImageData(final.top.data, final.top.width, final.top.height), 0, 0);
       backdrop = { url: c.toDataURL("image/jpeg", 0.75), pad: PHOTO.topFrame.pad };
       result = null; picked = null; dealt = null;
       verdicts = {}; played = null; notes = {}; renames = {}; better = null;

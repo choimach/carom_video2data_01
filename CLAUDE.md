@@ -218,7 +218,11 @@ node --check build/sim.js
 - **사진으로 공 놓기 (2026-10-03)** — `photo.js` (carom_bot_01/vision.py를 OpenCV 없이 옮김). 천의 바깥 끝 =
   쿠션 윗면(경기 면 +50 mm, 높이 37 mm)에 맞춰 펴서 공이 떠 있는 밀림을 없앤다. 재는 법:
   `python tools/synth_photos.py DIR 3 && node tools/check_photo.js DIR` (합성 18장 54공: 중앙값 26 mm, 전부 찾음).
-  ⚠️ 합성 사진은 그림자·반사가 없다 — 실제 사진으로 다시 잴 것.
+  ★**기본은 두 장** (선수: 한 장에 탁자 전체는 불가능) — 한쪽 끝 + 반대쪽 끝. `analyzeEnd`: 천 테두리에서 화면
+  가장자리 변을 버려 "장–단–장" 세 변 → 두 모서리, 화각을 훑어 **레일 다이아몬드**가 가장 많이 맞는 것으로 처음
+  추정, 짝지은 다이아몬드로 최소제곱. `python tools/synth_photos.py DIR 3 --halves && node tools/check_photo.js DIR`
+  (12쌍 36공: 중앙값 7 mm, 최대 30 mm; 다이아몬드 위치 가정을 ±20 mm 틀려도 9~14 mm).
+  ⚠️ 합성 사진은 그림자·반사가 없고, 다이아몬드 위치(쿠션 끝 +70 mm)도 장면과 인식이 같은 가정이다 — 실제 사진으로 다시 잴 것.
 - **화면은 `bash tools/screenshot_assistant.sh out.png`로 본다** — 무작위 배치 하나를 실행해 찍고
   콘솔 오류를 찍는다. sudo 없이 된다 (빠진 라이브러리를 `apt-get download`로 받아 쓴다).
   `!` 명령으로는 sudo 비밀번호를 넣을 수 없다.
