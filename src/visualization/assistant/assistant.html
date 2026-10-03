@@ -2320,7 +2320,8 @@
       copied = true;
     } catch (e) { copied = false; }
     if (sent || copied) {
-      said.textContent = sent ? "보냈습니다" + (copied ? " (복사도 됨)" : "")
+      said.textContent = sent === "queued" ? "폰에 저장했습니다 — 인터넷이 연결되면 저절로 보내집니다"
+        : sent ? "보냈습니다" + (copied ? " (복사도 됨)" : "")
         : (window.CAROM_CLOUD ? "보내기 실패 — 복사는 됐습니다. 채팅창에 붙여넣어 주세요"
            : "복사됨 — 채팅창에 붙여넣어 주세요");
       // 복사한 의견은 비운다. 남겨 두면 다음 배치의 의견에 지난 말이 섞여

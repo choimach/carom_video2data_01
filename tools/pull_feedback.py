@@ -25,6 +25,7 @@ KEY = os.environ.get("CAROM_SERVICE_ACCOUNT", "/mnt/d/Data/Billiard/carom_bot_01
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--save", action="store_true", help="새 기록을 장부에 쌓는다")
+    parser.add_argument("--count", action="store_true", help="새 기록 수만 찍는다 (tools/state.sh)")
     args = parser.parse_args(argv)
 
     from google.cloud import firestore
@@ -43,6 +44,9 @@ def main(argv=None):
         fresh.append((data.get("createdAt"), doc.reference.path, data.get("build"), record))
     fresh.sort(key=lambda row: str(row[0]))
 
+    if args.count:
+        print(len(fresh))
+        return 0
     print(f"Firestore의 새 기록 {len(fresh)}개 (장부에는 {len(ledger['rounds'])}판)")
     for created, path, build, record in fresh:
         verdicts = record.get("verdicts") or {}

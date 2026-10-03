@@ -57,6 +57,10 @@ printf "  가상 테이블 판단       %3s판  (%s)\n" \
   "$($PY -c "
 import json; d=json.load(open('data/table_feedback.json',encoding='utf-8'))
 print(sum(1 for r in d['rounds'] if r.get('candidates')))" 2>/dev/null || echo 0)" "$(age data/table_feedback.json)"
+# 폰 앱에서 보내 놓고 아직 안 가져온 판단 (Firestore). 있으면 먼저 가져온다:
+#   ~/.venvs/carom/bin/python tools/pull_feedback.py --save
+printf "  폰에서 온 새 판단      %3s개  (가져오기: tools/pull_feedback.py --save)\n" \
+  "$(timeout 30 $PY tools/pull_feedback.py --count 2>/dev/null || echo '?')"
 printf "  버린 길 (프로 배치)    %3s판  (%s)\n" \
   "$(wc -l < data/alternatives.jsonl 2>/dev/null || echo 0)" "$(age data/alternatives.jsonl)"
 
