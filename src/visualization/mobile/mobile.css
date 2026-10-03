@@ -28,10 +28,20 @@ header, .trust-note { display: none !important; }
   .table-card .bar #seed { width: 100%; box-sizing: border-box; }
   .table-card .bar #run { width: 100%; padding: 11px 8px; font-size: 15px; }
   /* 수구 · 공략 넷 · 다시 놓기 · 실행만 (선수, 2026-10-03). 나머지는 폰에서 숨긴다. */
-  .table-card .bar .label:not(:first-child), .table-card .bar #first-buttons,
+  .table-card .bar .label, .table-card .bar #first-buttons,
   .table-card .bar [data-face], #play, #again, #dice, #seed { display: none !important; }
-  #picks { display: grid; gap: 4px; width: 100%; margin: 4px 0; }
-  #picks button { text-align: left; padding: 5px 7px; font-size: 12px; line-height: 1.25; }
-  #picks button small { display: block; font-size: 10px; opacity: .75; }
-  .table-card .bar #clear { width: 100%; }
+  /* 기둥 하나(약 190 px)에 다 들어가게 촘촘히: 수구 · 겨냥 그림 · 강도 · 공략 넷 · 다시 놓기 | 실행.
+     넘치면 기둥만 스크롤한다. */
+  .table-card .bar { max-height: calc(100dvh - 12px); overflow-y: auto; gap: 4px; }
+  #mini { width: 100%; }
+  #mini .mini-aim { width: 100%; height: auto; max-height: 92px; display: block; pointer-events: none; }
+  #mini .mini-power { width: 100%; height: 18px; display: block; pointer-events: none; margin-top: 2px; }
+  #mini .mini-say { font-size: 11px; line-height: 1.3; color: var(--soft); text-align: center; }
+  #mini .mini-say b { color: var(--ink); font-weight: 600; }
+  #picks { display: grid; gap: 3px; width: 100%; margin: 2px 0; }
+  #picks button { text-align: left; padding: 5px 6px; font-size: 11px; line-height: 1.25;
+                  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  #picks button b { font-weight: 700; margin-right: 2px; }
+  .table-card .bar #clear { flex: 2 1 0; padding: 9px 4px; }
+  .table-card .bar #run { flex: 3 1 0; width: auto; padding: 9px 4px; }
 }

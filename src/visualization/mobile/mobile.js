@@ -13,6 +13,30 @@
   const box = document.createElement("div");
   box.id = "picks";
   bar.insertBefore(box, document.getElementById("clear"));
+  // ★고른 공략의 두께 · 당점 · 강도 그림도 탁자 옆에 (선수, 2026-10-03: "공략시 당점, 두께,
+  // 스트로크 강도 이미지도 table의 우측에"). 아래의 큰 그림(#aim)을 **베껴** 작게 보인다 —
+  // 그림을 두 벌로 그리지 않는다. 끌어서 바꾸는 것은 아래 큰 그림에서 (여기는 보기만).
+  const mini = document.createElement("div");
+  mini.id = "mini";
+  bar.insertBefore(mini, box);
+  const paintMini = () => {
+    mini.textContent = "";
+    const row = result && chosenRow();
+    const aim = document.querySelector("#aim .plate svg:not(.strength)");
+    const power = document.querySelector("#aim svg.strength");
+    if (!row || !aim) return;
+    const add = (node, cls) => { const n = node.cloneNode(true); n.classList.add(cls); mini.appendChild(n); };
+    add(aim, "mini-aim");
+    const say = document.createElement("div");
+    say.className = "mini-say";
+    say.innerHTML = `두께 <b>${asThickness(row.hit.thickness)}</b> · 당점 <b>${asTip(row.hit.side, row.hit.vertical || 0)}</b>`;
+    mini.appendChild(say);
+    if (power) add(power, "mini-power");
+    const said = document.createElement("div");
+    said.className = "mini-say";
+    said.innerHTML = `강도 <b>${SIM.strengthOf(row.hit.speed).toFixed(1)}</b>`;
+    mini.appendChild(said);
+  };
 
   const short = (row) => label(row);   // 카드와 같은 이름 (공략 · 1적구 면)
   const paintPicks = () => {
@@ -26,13 +50,14 @@
     for (const [row, tag] of slots) {
       const b = document.createElement("button");
       b.type = "button";
-      b.innerHTML = `<small>${tag}</small>${short(row)}`;
+      b.innerHTML = `<b>${tag}</b> ${short(row)}`;
+      b.title = `${tag} ${short(row)}`;   // 한 줄에 안 들어가면 잘린다 — 전체 이름은 아래 카드에
       b.setAttribute("aria-pressed", String(row.key === picked));
       b.onclick = () => { stopPlaying(); picked = row.key; render(); };
       box.appendChild(b);
     }
   };
   const original = render;
-  render = function () { original.apply(this, arguments); paintPicks(); };
-  paintPicks();
+  render = function () { original.apply(this, arguments); paintMini(); paintPicks(); };
+  paintMini(); paintPicks();
 })();
