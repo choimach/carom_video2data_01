@@ -46,7 +46,7 @@ def main():
     os.makedirs(os.path.join(OUT, "icons"))
     for name in ("sim.js", "route.js", "choice.js", "search.js"):
         shutil.copy(os.path.join(BUILD, name), OUT)
-    for name in ("cloud.js", "sw.js", "manifest.webmanifest"):
+    for name in ("cloud.js", "sw.js", "manifest.webmanifest", "mobile.css"):
         shutil.copy(os.path.join(MOBILE, name), OUT)
     for size in (192, 512):
         cv2.imwrite(os.path.join(OUT, "icons", f"icon-{size}.png"), icon(size))
@@ -65,6 +65,10 @@ def main():
     marker = '<title>'
     assert marker in html
     html = html.replace(marker, head + marker, 1)
+    # 폰 화면 규칙은 페이지 스타일 **뒤에** 와야 이긴다 — 첫 스크립트 앞에 넣는다.
+    first_script = '<script src="sim.js"></script>'
+    assert first_script in html
+    html = html.replace(first_script, '<link rel="stylesheet" href="./mobile.css">\n' + first_script, 1)
     html += (f'\n<script>window.CAROM_BUILD = {stamp!r};</script>\n'
              '<script type="module" src="./cloud.js"></script>\n')
     with open(os.path.join(OUT, "index.html"), "w", encoding="utf-8") as handle:

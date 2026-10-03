@@ -1,0 +1,30 @@
+/* 폰 앱 전용 화면 — 조언판(데스크톱) 위에 덧씌운다. build_mobile.py가 페이지 스타일 **뒤에** 붙인다.
+ *
+ * 선수 (2026-10-03): "UI를 간단히 합시다. 제목과 그 밑의 설명 text 제거. phone을 가로방향으로
+ * 누여서 보도록 — table 크기를 크게 할 수 있음. 수구 선택 버튼들은 table의 오른쪽 위에."
+ *
+ * 가로로 눕히면 탁자의 긴 변이 폰의 긴 변을 따라가서 화면 높이를 다 쓸 수 있다
+ * (412 px 높이 → 탁자 약 730 px 폭). 단추들은 탁자 오른쪽의 좁은 기둥으로, 수구가 맨 위.
+ * 겨냥 그림 · 공략 카드 · 판단은 그 아래로 내려 보면 된다. */
+
+header, .trust-note { display: none !important; }
+.wrap { padding: 4px 8px 16px; }
+
+@media (orientation: landscape) {
+  .wrap { max-width: none;
+          padding-left: max(8px, env(safe-area-inset-left));
+          padding-right: max(8px, env(safe-area-inset-right)); }
+  /* 폭이 900 px을 넘어 데스크톱의 두 칸(탁자 | 겨냥 그림)이 켜지는 것을 끈다 — 탁자가 먼저다. */
+  .top { grid-template-columns: minmax(0, 1fr) !important; }
+  .table-card { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: stretch; }
+  svg.table { width: auto; max-width: calc(100vw - 196px); max-height: none;
+              height: calc(100vh - 12px); height: calc(100dvh - 12px); }
+  .table-card .bar { border-top: none; border-left: 1px solid var(--line);
+                     align-content: flex-start; gap: 5px; padding: 6px; }
+  .table-card .bar > span[style*="flex"] { display: none; }      /* 빈 칸 메우개 */
+  .table-card .bar #first-buttons { display: contents !important; }
+  .table-card .bar .label { flex-basis: 100%; margin: 2px 0 0; font-size: 11px; line-height: 1.2; }
+  .table-card .bar button { padding: 6px 7px; font-size: 12px; }
+  .table-card .bar #seed { width: 100%; box-sizing: border-box; }
+  .table-card .bar #run { width: 100%; padding: 11px 8px; font-size: 15px; }
+}
