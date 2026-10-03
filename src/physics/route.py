@@ -108,7 +108,7 @@ def _subtype(rails, english=None, reached_second=False):
 
 
 def _standing(route, english):
-    """세워치기 — 앞돌리기인데 회전을 적게 주거나 역으로 주어 반사각을 좁힌 것.
+    """세워치기 — 앞돌리기·빗겨치기인데 회전을 적게 주거나 역으로 주어 반사각을 좁힌 것.
 
     그가 준 정의 (2026-09-20): *"세워치기는 앞돌리기의 하위구분이고 회전을 적게
     주거나 어느정도의 역회전을 주어서 반사각이 적게 만들어서 공이 길게 들어오게
@@ -119,7 +119,10 @@ def _standing(route, english):
     치는 타법"이라고 적고 있었는데, 그의 말은 큐가 아니라 **회전과 반사각**에
     대한 것이다.
     """
-    return (route == FRONT and english and english[0] in ("reverse", "none"))
+    # ★빗겨치기에도 붙인다 (2026-10-03). 그가 씨앗 2585225897의 빗겨치기를 "빗겨치기 세워치기"라고
+    # 불렀고 붙여 달라고 했다: "세워치기 표시도 붙게 고쳐줘". 9-20의 정의는 앞돌리기만 말했지만,
+    # 조건(1쿠션 회전이 적거나 역 → 반사각이 좁아 길게 들어옴)은 빗겨치기에도 그대로 선다.
+    return (route in (FRONT, GLANCING) and english and english[0] in ("reverse", "none"))
 
 
 def classify(events, layout_mm=None, cue_ball=None, thickness=None, turn_deg=None,

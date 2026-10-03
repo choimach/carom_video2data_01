@@ -116,7 +116,7 @@ const ROUTE = (() => {
     return tags.length ? tags : null;
   }
 
-  // 세워치기 — 앞돌리기인데 회전을 적게 주거나 역으로 주어 **반사각을 좁힌** 것.
+  // 세워치기 — 앞돌리기·빗겨치기인데 회전을 적게 주거나 역으로 주어 **반사각을 좁힌** 것.
   // 그가 준 정의 (2026-09-20): "세워치기는 앞돌리기의 하위구분이고 회전을 적게
   // 주거나 어느정도의 역회전을 주어서 반사각이 적게 만들어서 공이 길게 들어오게
   // 만드는 방법."
@@ -125,7 +125,8 @@ const ROUTE = (() => {
   // Short angle shot으로 엇갈렸다. 저장소의 ref/carom_technic.txt는 "큐를 세워
   // 치는 타법"이라 적고 있었는데, 그의 말은 큐가 아니라 회전과 반사각이다.
   function standing(route, english) {
-    return route === "앞돌리기" && !!english
+    // ★빗겨치기에도 (2026-10-03, 선수: "빗겨치기 세워치기" — route.py의 _standing과 같다).
+    return (route === "앞돌리기" || route === "빗겨치기") && !!english
       && (english[0] === "reverse" || english[0] === "none");
   }
 

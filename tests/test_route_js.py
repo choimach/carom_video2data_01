@@ -217,6 +217,8 @@ def test_standing_is_a_front_turn_played_with_the_spin_held_back():
       ROUTE.standing("앞돌리기", ["running", "running", "running"]),
       ROUTE.standing("옆돌리기", ["reverse", "running", "running"]),
       ROUTE.standing("앞돌리기", null),
+      ROUTE.standing("빗겨치기", ["reverse", "running", "running"]),
+      ROUTE.standing("빗겨치기", ["running", "running", "running"]),
     ]));
     """
     done = subprocess.run(["node", "-e", script], capture_output=True, text=True, check=True)
@@ -225,6 +227,9 @@ def test_standing_is_a_front_turn_played_with_the_spin_held_back():
     assert not got[2], "순회전을 준 앞돌리기에 붙습니다"
     assert not got[3], "앞돌리기가 아닌 것에 붙습니다"
     assert not got[4], "회전을 모를 때도 붙입니다"
+    # 빗겨치기에도 (2026-10-03, 선수가 "빗겨치기 세워치기"라고 불렀다)
+    assert got[5], "역회전 빗겨치기에 안 붙습니다"
+    assert not got[6], "순회전 빗겨치기에 붙습니다"
 
 
 @pytest.mark.skipif(not shutil.which("node"), reason="node가 없습니다")
