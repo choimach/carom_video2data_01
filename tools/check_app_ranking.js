@@ -46,7 +46,7 @@ for (const line of fs.readFileSync(path.join(ROOT, 'data', 'alternatives.jsonl')
   if (!line) continue;
   const one = JSON.parse(line);
   const rails = railsOf.get(one.id) || [];
-  if (one.reached && rails.length >= 2) all.push({ id: one.id, match: one.match.replace('soop_', ''), cue: one.cue, layout: one.layout, rails, tip: tipOf.get(one.id) || null });
+  if (one.reached && rails.length >= 2) all.push({ id: one.id, match: one.match.replace('soop_', ''), cue: one.cue, layout: one.layout, rails, tip: tipOf.get(one.id) || null, chose: (one.chose || '').split('|')[0] });
 }
 const step = Math.max(1, Math.floor(all.length / N));
 const plays = all.filter((_, i) => i % step === 0).slice(0, N);
@@ -60,6 +60,8 @@ const median = (v) => { const s = [...v].sort((x, y) => x - y); return s[Math.fl
   const top1 = [], top3 = [], started = Date.now(), perPlay = {}, english = {}, sideSame = [];
   let tipCount = 0, center = 0;
   const strengths = [];
+  // 공략 이름 집계 (2026-10-04): 선수가 3위에 올라온 뱅크샷을 세 번 다 "낮음/아니다"로 줬다 — 프로 자료로도 그런가.
+  const names = { top1: {}, top3: {}, pro: {}, n: 0 };
   let next = 0, done = 0;
   const worker = async () => {
   const page = await browser.newPage();
@@ -78,6 +80,7 @@ const median = (v) => { const s = [...v].sort((x, y) => x - y); return s[Math.fl
       excludeMatch = null;
       return {
         flipped: flips.flipX || flips.flipY,
+        names: r.routes.slice(0, 3).map((row) => row.route),
         top: r.routes.slice(0, 3).map((row) => row.hit.shot.events
           .filter((e) => e.kind === 'cushion').slice(0, 2).map((e) => e.p)),
         // 1등 줄의 회전이 도는 방향과 같은가 — 선수: "좌우가 바뀌는 것이 가장 흔한 문제".
@@ -94,6 +97,12 @@ const median = (v) => { const s = [...v].sort((x, y) => x - y); return s[Math.fl
     if (got.flipped) throw new Error(`${play.id}: 정규화된 배치인데 frameOf()가 뒤집는다 — 틀이 다르다`);
     const gaps = got.top.filter((c) => c.length >= 2).map((c) => gap(c, play.rails));
     if (got.english) english[got.english] = (english[got.english] || 0) + 1;
+    if (got.names && got.names.length) {
+      names.n++;
+      names.top1[got.names[0]] = (names.top1[got.names[0]] || 0) + 1;
+      for (const nm of new Set(got.names)) names.top3[nm] = (names.top3[nm] || 0) + 1;
+      if (play.chose) names.pro[play.chose] = (names.pro[play.chose] || 0) + 1;
+    }
     if (got.topStrength != null) strengths.push(got.topStrength);
     if (got.topTip) { tipCount++; if (Math.hypot(got.topTip[0], got.topTip[1]) < 0.5) center++; }
     // 가려 둔 프로의 당점(영상에서 되찾은 것, 믿을 만한 것만)과 1등 당점의 좌우 — 배치가
@@ -110,6 +119,12 @@ const median = (v) => { const s = [...v].sort((x, y) => x - y); return s[Math.fl
   await browser.close();
   // DUMP: 판별 (1등, 상위 3개 최선) 거리를 JSON으로 — 두 변형을 짝지어 견줄 때.
   if (process.env.DUMP) fs.writeFileSync(process.env.DUMP, JSON.stringify(perPlay));
+  {
+    const pct = (o, k) => `${Math.round(100 * (o[k] || 0) / Math.max(1, names.n))}%`;
+    const kinds = [...new Set([...Object.keys(names.pro), ...Object.keys(names.top1)])].sort((a, b) => (names.pro[b] || 0) - (names.pro[a] || 0));
+    console.log(`  공략 이름 (${names.n}판) — 프로가 고름 / 1등 / 상위 3개에 들어감`);
+    for (const k of kinds.slice(0, 9)) console.log(`    ${k.padEnd(6)} ${pct(names.pro, k).padStart(4)} / ${pct(names.top1, k).padStart(4)} / ${pct(names.top3, k).padStart(4)}`);
+  }
   const within = (v, mm) => `${Math.round(100 * v.filter((x) => x <= mm).length / v.length)}%`;
   console.log(`조언판으로 잰 순위 — ${top1.length}판 (같은 경기는 이웃에서 뺐다), 오류 ${errors.length}`);
   console.log(`  1등 후보          중앙값 ${Math.round(median(top1))} mm · 300 안 ${within(top1, 300)} · 500 안 ${within(top1, 500)}`);
