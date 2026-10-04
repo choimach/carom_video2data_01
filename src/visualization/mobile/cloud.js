@@ -40,13 +40,21 @@ const uid = async () => {
 window.CAROM_CLOUD = {
   build: window.CAROM_BUILD || null,
   // 돌려주는 값: "sent"(서버가 받음) · "queued"(폰에 저장, 연결되면 올라감).
-  async send(record, text) {
+  // photos: 사진을 함께 보낼 때 [data URL(JPEG)…] — 장마다 users/{uid}/photos 문서 하나 (2026-10-04).
+  async send(record, text, photos = []) {
     const me = await uid();
+    // Firestore는 undefined 값이 하나라도 있으면 문서 전체를 거절한다 (2026-10-04: 사진 요약의 빈 점수 하나로
+    // 보내기가 통째로 실패했다). JSON을 한 번 거치면 undefined가 빠진다.
+    record = JSON.parse(JSON.stringify(record));
     const ref = doc(collection(db, "users", me, "feedback"));   // id를 여기서 정한다 — 다시 보내도 하나
-    const written = setDoc(ref, {
+    const writes = photos.map((jpeg, slot) => setDoc(doc(collection(db, "users", me, "photos")), {
+      userId: me, schemaVersion: 1, feedbackId: ref.id, slot, at: record.at || null, jpeg, createdAt: serverTimestamp(),
+    }));
+    writes.push(setDoc(ref, {
       userId: me, schemaVersion: 1, app: "board", build: window.CAROM_BUILD || null,
-      record, text, createdAt: serverTimestamp(),
-    });
+      record, text, photos: photos.length, createdAt: serverTimestamp(),
+    }));
+    const written = Promise.all(writes);
     // 서버 응답을 4초까지만 기다린다. 그 안에 안 오면 폰에 저장된 채 연결을 기다린다.
     const late = new Promise((done) => setTimeout(() => done("queued"), 4000));
     return Promise.race([written.then(() => "sent"), late]);

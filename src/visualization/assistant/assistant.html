@@ -241,6 +241,7 @@
     <textarea id="comment" placeholder="틀린 점을 한 줄로 — 어느 공략이 왜 이상한지, 실제로는 무엇을 치시는지"></textarea>
     <div class="feedback-row">
       <button id="copy" type="button">결과 복사</button>
+      <button id="send-photos" type="button" aria-pressed="true" hidden title="사진으로 공을 놓았을 때, 그 사진도 함께 보냅니다">사진도 보내기</button>
       <span id="copied"></span>
     </div>
   </section>
@@ -313,6 +314,9 @@
   // 화면에서는 늘 null이다.
   let excludeMatch = null;
   let backdrop = null;      // 사진으로 놓았을 때 바탕에 까는 펴진 사진 {url, pad}
+  // 사진으로 놓았을 때 그 사진들(줄인 JPEG)과 인식 요약 — "결과 보내기"에 함께 싣는다 (폰 앱, 2026-10-04,
+  // 선수: "사진 processing이 안정될 때까지는 사진도 함께 보내는 버튼 만들어줘").
+  let photoPack = null;     // {jpegs: [data URL…], summary}
   let dealt = null;        // 무작위로 깔았다면 그 씨앗 — 같은 판을 다시 만들 수 있게
 
   // 선수 (2026-09-23): *"지금까지는 공배치를 내가 정했기 때문에 내가 익숙한
@@ -1616,7 +1620,19 @@
   // 후보 목록은 카드 셋에 붙은 맞다/아니다로 대신한다 (2026-09-23, 선수 요청:
   // "12가지 선택 버튼은 없애 버리고 모든 것이 한 화면에"). 여기 남은 것은 실제로
   // 쳐 본 결과뿐이다 — 그것만이 선호가 아니라 결과라서 유일하게 훈련에 쓸 수 있다.
+  function paintPhotoToggle() {
+    // 폰 앱(클라우드)에서, 사진으로 놓았을 때만
+    const b = document.getElementById("send-photos");
+    b.hidden = !(window.CAROM_CLOUD && photoPack && photoPack.jpegs.length);
+    if (!b.hidden) b.textContent = `사진도 보내기 (${photoPack.jpegs.length}장)`;
+  }
+  document.getElementById("send-photos").onclick = (event) => {
+    const b = event.currentTarget;
+    b.setAttribute("aria-pressed", String(b.getAttribute("aria-pressed") !== "true"));
+  };
+
   function paintVerdicts() {
+    paintPhotoToggle();
     const box = document.getElementById("verdicts");
     const foot = document.getElementById("played");
     if (!result || !result.routes.length) { box.hidden = true; return; }
@@ -2151,13 +2167,13 @@
 
   document.getElementById("clear").onclick = () => {
     stopPlaying();
-    backdrop = null;
+    backdrop = null; photoPack = null;
     layout = {}; result = null; picked = null; cue = "white";
     verdicts = {}; played = null; notes = {}; renames = {}; better = null; dealt = null; render();
   };
   const deal = (seed) => {
     stopPlaying();
-    backdrop = null;
+    backdrop = null; photoPack = null;
     result = null; picked = null; verdicts = {}; played = null; notes = {}; renames = {}; better = null;
     dealRandom(seed);
     render();
@@ -2288,7 +2304,17 @@
     const NAMES_KO = { white: "흰공", yellow: "노란공", red: "빨간공" };
     const COLOURS = { white: "#f4f4f0", yellow: "#f2c21b", red: "#d8332b" };
     let slot = 0;                 // 지금 찍는 장 (0 = 1장, 1 = 2장)
-    const imgs = [null, null], ends = [null, null];
+    const imgs = [null, null], ends = [null, null], jpegs = [null, null];
+    // 보낼 사진: 긴 변 1280 px JPEG — Firestore 문서 한도(1 MiB) 안에 들어간다
+    const toJpeg = (img) => {
+      const k = Math.min(1, 1280 / Math.max(img.width, img.height));
+      const c = document.createElement("canvas"), tmp = document.createElement("canvas");
+      tmp.width = img.width; tmp.height = img.height; tmp.getContext("2d").putImageData(img, 0, 0);
+      c.width = Math.round(img.width * k); c.height = Math.round(img.height * k);
+      c.getContext("2d").drawImage(tmp, 0, 0, c.width, c.height);
+      for (const q of [0.78, 0.65, 0.5]) { const u = c.toDataURL("image/jpeg", q); if (u.length < 900000) return u; }
+      return null;
+    };
     let single = null, corners = null, final = null;   // final = {balls, warnings, top(ImageData)}
     const show = (ids) => {
       for (const id of ["photo-next", "photo-again1", "photo-again2", "photo-turn"]) $(id).hidden = !ids.includes(id);
@@ -2385,6 +2411,8 @@
       const img = await toImageData(f);
       if (!img) { say.textContent = "사진을 열지 못했습니다."; return; }
       imgs[slot] = img;
+      jpegs[slot] = toJpeg(img);
+      if (slot === 0) jpegs[1] = null;
       say.textContent = "읽는 중…";
       await new Promise((go) => setTimeout(go, 30));
       const t0 = performance.now();
@@ -2463,6 +2491,18 @@
       c.width = final.top.width; c.height = final.top.height;
       c.getContext("2d").putImageData(new ImageData(final.top.data, final.top.width, final.top.height), 0, 0);
       backdrop = { url: c.toDataURL("image/jpeg", 0.75), pad: PHOTO.topFrame.pad };
+      const used = ends.filter(Boolean);
+      photoPack = {
+        jpegs: jpegs.filter(Boolean),
+        summary: {
+          // ⚠️ Firestore는 배열 안의 배열을 받지 않는다 — 모서리는 {x, y}로 (2026-10-04, 이것 때문에 보내기가 실패했다)
+          views: used.map((e) => ({ corners: (e.corners || []).map((p) => ({ x: Math.round(p[0]), y: Math.round(p[1]) })), diamonds: (e.diamonds || []).length,
+                                    score: e.score && Math.round(e.score * 100) / 100, warnings: e.warnings,
+                                    balls: Object.fromEntries(Object.entries(e.balls || {}).map(([k, b]) => [k, b.world.map(Math.round)])) })),
+          placed: Object.fromEntries(Object.entries(final.balls).map(([k, b]) => [k, b.at.map(Math.round)])),
+          warnings: final.warnings,
+        },
+      };
       result = null; picked = null; dealt = null;
       verdicts = {}; played = null; notes = {}; renames = {}; better = null;
       panel.hidden = true;
@@ -2569,6 +2609,8 @@
       // 버린 길의 기록. 프로 영상에는 없는 것이고, 순위 계산이 채점받는 근거다.
       verdicts,
       notes, renames, better,
+      // 사진으로 놓았다면 인식 요약 (사진 자체는 따로 — 아래 보내기)
+      photo: photoPack ? photoPack.summary : null,
       played,
       comment: comment.value.trim() || null,
     };
@@ -2580,7 +2622,8 @@
     let sent = false, copied = false;
     if (window.CAROM_CLOUD) {
       said.textContent = "보내는 중…";
-      try { sent = await window.CAROM_CLOUD.send(record, lines.join("\n")); } catch (e) { sent = false; }
+      const withPhotos = photoPack && document.getElementById("send-photos").getAttribute("aria-pressed") === "true";
+      try { sent = await window.CAROM_CLOUD.send(record, lines.join("\n"), withPhotos ? photoPack.jpegs : []); } catch (e) { sent = false; }
     }
     // ★복사가 조용히 실패하면 **클립보드에 남아 있던 지난 판**이 붙여넣어진다 (2026-10-03: 선수가 새 판을
     // 보냈다고 생각했는데 버전 75의 같은 기록이 왔다). 세 겹으로: 클립보드 API → execCommand → 직접 복사 상자.

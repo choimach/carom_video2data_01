@@ -60,7 +60,29 @@ def main(argv=None):
             print(f"    더 나은 공략: {record['better']}")
         if record.get("comment"):
             print("    의견: " + record["comment"].replace("\n", "\n          "))
+    # 사진 (2026-10-04): users/{uid}/photos 의 feedbackId로 짝을 지어 data/photos/feedback/ 에 저장
+    photos = {}
+    for doc in db.collection_group("photos").stream():
+        d = doc.to_dict()
+        photos.setdefault(d.get("feedbackId"), []).append((d.get("slot", 0), d.get("jpeg")))
+    for _created, path, build, record in fresh:
+        got = photos.get(path.rsplit("/", 1)[-1], [])
+        if got:
+            print(f"  {record.get('at')} — 사진 {len(got)}장")
     if args.save and fresh:
+        import base64
+        out_dir = os.path.join(ROOT, "data", "photos", "feedback")
+        os.makedirs(out_dir, exist_ok=True)
+        for _created, path, build, record in fresh:
+            saved = []
+            for slot, jpeg in sorted(photos.get(path.rsplit("/", 1)[-1], [])):
+                if not jpeg or "," not in jpeg:
+                    continue
+                name = f"{(record.get('at') or 'x').replace(':', '')}_{slot}.jpg"
+                with open(os.path.join(out_dir, name), "wb") as handle:
+                    handle.write(base64.b64decode(jpeg.split(",", 1)[1]))
+                saved.append(os.path.join("data", "photos", "feedback", name))
+            record["photo_files"] = saved or None
         for _created, path, build, record in fresh:
             # 통째로 담는다 — record_feedback.py와 같다. 후보 목록(candidates)이 있어야 판단을
             # 순위에 대고 채점할 수 있다 (2026-10-03까지 빼고 담았다).
