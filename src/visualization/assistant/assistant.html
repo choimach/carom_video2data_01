@@ -211,7 +211,7 @@
       <button data-face="right" type="button">오른쪽</button>
       <span style="flex:1 1 100%; height:0"></span>
       <button id="play" type="button" disabled>재생</button>
-      <button id="photo-btn" type="button" title="탁자를 두 장(한쪽 끝, 반대쪽 끝)으로 찍으면 세 공의 자리를 잡아 줍니다">사진</button>
+      <button id="photo-btn" type="button" title="탁자 모서리에서 한 장, 반대편 모서리에서 한 장 찍으면 세 공의 자리를 잡아 줍니다">사진</button>
       <input id="photo-file" type="file" accept="image/*" capture="environment" hidden>
       <button id="clear" type="button">다시 놓기</button>
       <button id="again" type="button" disabled title="고른 공략을 친 뒤의 자리에서 이어 칩니다. 멈춘 자리는 대략입니다 — 공 하나당 평균 0.8 m쯤 어긋납니다">계속치기</button>
@@ -250,7 +250,7 @@
     <canvas id="photo-canvas"></canvas>
     <div class="photo-side">
       <p id="photo-say">사진을 읽는 중…</p>
-      <button id="photo-next" type="button" class="run" hidden>2장 찍기 (반대쪽 끝)</button>
+      <button id="photo-next" type="button" class="run" hidden>2장 찍기 (반대편 모서리)</button>
       <button id="photo-again1" type="button" hidden>1장 다시</button>
       <button id="photo-again2" type="button" hidden>2장 다시</button>
       <button id="photo-turn" type="button" hidden title="장축과 단축을 바꿔 잡습니다">축 바꾸기</button>
@@ -2262,8 +2262,8 @@
   // 걸려. 사진을 찍어서 공 위치를 잡아야겠어." 인식은 photo.js (합성 사진 54공: 중앙값 26 mm).
   // 자동이 틀릴 수 있으니 네 모서리를 끌어서 고치게 하고, 고치면 그 모서리로 다시 읽는다.
   // ★두 장으로 나눠 찍기가 기본이다 (선수: "한 번에 테이블 전체가 나오게 찍는 건 불가능해").
-  // 1장 = 한쪽 끝, 2장 = 반대쪽 끝 (photo.js의 analyzeEnd · combineEnds). 1장에 탁자 전체가
-  // 보이면 그 한 장으로 끝내고, 그때만 네 모서리를 끌어 고칠 수 있다.
+  // 선수의 실제 사진(2026-10-04)은 탁자 모서리에 서서 대각선으로 찍은 것이었다 — 1장 = 한 모서리,
+  // 2장 = 반대편 모서리 (photo.js의 analyzeView · combineEnds). 1장으로 공 셋이 다 잡히면 바로 적용해도 된다.
   (() => {
     const panel = document.getElementById("photo-panel");
     const canvas = document.getElementById("photo-canvas");
@@ -2301,23 +2301,29 @@
       end.corners.forEach((p, i) => { g.fillStyle = i ? "#39d98a" : "#ff5a5a"; g.beginPath(); g.arc(p[0], p[1], 10 * s, 0, 7); g.fill(); });
       for (const [colour, b] of Object.entries(end.balls || {})) ring(g, PHOTO.apply(end.H, b.world), COLOURS[colour], 22, s);
     };
-    // 두 끝의 펴진 그림을 이어 붙인다 (2장은 180도 돌려 오른쪽 절반)
-    const stitch = (one, two) => {
+    // 여러 장의 펴진 그림을 이어 붙인다 — 지점마다 그 자리를 더 가까이 찍은 사진(기준 모서리가 가까운 쪽)에서.
+    // turns[k]가 참이면 그 장은 180도 돌려 놓는다 (photo.js의 combineEnds가 공이 겹치는 쪽으로 정한다).
+    const stitch = (views, turns) => {
       const { width: tw, height: th, pad, px } = PHOTO.topFrame;
-      const c = document.createElement("canvas"); c.width = tw; c.height = th;
-      const g = c.getContext("2d");
-      const half = (L / 2 + pad) * px;
-      const put = (top, flip) => {
-        const tmp = document.createElement("canvas"); tmp.width = tw; tmp.height = th;
-        tmp.getContext("2d").putImageData(new ImageData(top.data, top.width, top.height), 0, 0);
-        g.save();
-        g.beginPath(); flip ? g.rect(half, 0, tw - half, th) : g.rect(0, 0, half, th); g.clip();
-        if (flip) { g.translate(tw, th); g.rotate(Math.PI); }
-        g.drawImage(tmp, 0, 0);
-        g.restore();
-      };
-      put(one.top, false); put(two.top, true);
-      return g.getImageData(0, 0, tw, th);
+      const out = new ImageData(tw, th);
+      for (let y = 0; y < th; y++) {
+        for (let x = 0; x < tw; x++) {
+          const wx = x / px - pad, wy = W - (y / px - pad);           // 세계 (y 위로)
+          let best = -1, bd = Infinity, sx = 0, sy = 0;
+          views.forEach((v, k) => {
+            const [ax, ay] = turns[k] ? [L - wx, W - wy] : [wx, wy];
+            const tx = turns[k] ? tw - 1 - x : x, ty = turns[k] ? th - 1 - y : y;
+            const o = (ty * tw + tx) * 4;
+            if (v.top.data[o] + v.top.data[o + 1] + v.top.data[o + 2] === 0) return;   // 그 사진에 안 보이는 곳
+            const d = Math.hypot(ax - v.anchor[0], ay - v.anchor[1]);
+            if (d < bd) { bd = d; best = k; sx = tx; sy = ty; }
+          });
+          const o = (y * tw + x) * 4;
+          if (best >= 0) { const s = (sy * tw + sx) * 4, d = views[best].top.data; out.data[o] = d[s]; out.data[o + 1] = d[s + 1]; out.data[o + 2] = d[s + 2]; }
+          out.data[o + 3] = 255;
+        }
+      }
+      return out;
     };
     // 이어 붙인 위에서 본 그림 + 공
     const paintFinal = () => {
@@ -2381,14 +2387,19 @@
       }
       paintEnd(img, end);
       if (slot === 0) {
+        // 한 장으로도 공 셋이 다 잡혔으면 바로 적용할 수 있다 (멀리 있는 공은 덜 정확하다).
+        const one = PHOTO.combineEnds(end);
+        final = { balls: one.balls, warnings: end.warnings, top: end.top };
+        const all3 = Object.keys(one.balls).length === 3;
         say.innerHTML = `<b>1장</b> — 다이아몬드 ${end.diamonds.length}개, ${listBalls(end.balls)} (${took}초)<br>`
-          + `이제 <b>반대쪽 끝</b>을 찍으세요. 단쿠션과 두 모서리가 보이게.` + warn(end.warnings);
-        $("photo-apply").disabled = true;
+          + `<b>반대편 모서리</b>에서 한 장 더 찍으면 먼 쪽 공이 정확해집니다.`
+          + (all3 ? ` 이대로 적용해도 됩니다.` : "") + warn(end.warnings);
+        $("photo-apply").disabled = !all3;
         show(["photo-next", "photo-again1"]);
         return;
       }
       const both = PHOTO.combineEnds(ends[0], ends[1]);
-      final = { balls: both.balls, warnings: [...ends[0].warnings, ...end.warnings, ...both.warnings], top: stitch(ends[0], end) };
+      final = { balls: both.balls, warnings: [...ends[0].warnings, ...end.warnings, ...both.warnings], top: stitch([ends[0], end], both.turns) };
       paintFinal();
       say.innerHTML = `<b>두 장을 합쳤습니다</b> — ${listBalls(final.balls)}<br>`
         + `<small>위에서 본 그림입니다. 동그라미가 공에 맞는지 보고 적용하세요. 틀린 공은 적용한 뒤 끌어서 고치면 됩니다.</small>`

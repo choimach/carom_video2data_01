@@ -346,7 +346,16 @@ const PHOTO = (() => {
     }
     const edge = [];
     for (const [y, [a, b]] of rows) { edge.push([a, y], [b + 1, y], [a, y + 1], [b + 1, y + 1]); }
-    return { small, w, h, big, edge, mask };
+    // 칸마다 위아래 끝도 (2026-10-04: 거의 가로로 누운 변은 줄 끝 점만으로는 양 끝 두 점뿐이었다)
+    const cols = new Map();
+    for (const p of big.pixels) {
+      const x = p % w, y = (p - x) / w;
+      const c = cols.get(x);
+      if (!c) cols.set(x, [y, y]); else { if (y < c[0]) c[0] = y; if (y > c[1]) c[1] = y; }
+    }
+    const sides = [];
+    for (const [x, [a, b]] of cols) sides.push([x + 0.5, a], [x + 0.5, b + 1]);
+    return { small, w, h, big, edge, sides, mask };
   }
 
   function findTable(img) {
@@ -482,6 +491,10 @@ const PHOTO = (() => {
         }
         const k = enclosing(border);
         const r = Math.max(k.r, 0.5);
+        // 공 중심은 쿠션 안쪽에만 있을 수 있다 (2026-10-04, 실제 사진: 쿠션의 반사광을 흰공으로 잡았다,
+        // x = −65 mm). 겉보기 밀림을 생각해 공 반지름만큼은 봐준다.
+        const wpos = topToWorld(k.c);
+        if (wpos[0] < -R || wpos[0] > L + R || wpos[1] < -R || wpos[1] > W + R) continue;
         const circ = area / (Math.PI * r * r);
         if (circ < MIN_CIRC) continue;
         const ratio = r / expectR;
@@ -602,10 +615,10 @@ const PHOTO = (() => {
     return mul(mul([1 / si, 0, 0, 0, 1 / si, 0, 0, 0, 1], Hn), [sw, 0, 0, 0, sw, 0, 0, 0, 1]);
   }
   // 이 끝에서 보일 수 있는 다이아몬드 (자기 틀, y 위로)
-  const DIAMONDS = (() => {
+  const DIAMONDS = (() => {          // 탁자 전체 20개 (세계 mm, y 위로)
     const out = [];
     for (let k = 1; k <= 7; k++) { out.push([k * L / 8, -CUSHION - DIAMOND]); out.push([k * L / 8, W + CUSHION + DIAMOND]); }
-    for (let j = 1; j <= 3; j++) out.push([-CUSHION - DIAMOND, j * W / 4]);
+    for (let j = 1; j <= 3; j++) { out.push([-CUSHION - DIAMOND, j * W / 4]); out.push([L + CUSHION + DIAMOND, j * W / 4]); }
     return out;
   })();
   // 밝고 채도 낮은 작은 점 (천 밖) — 다이아몬드 후보
@@ -615,7 +628,8 @@ const PHOTO = (() => {
     for (let i = 0; i < w * h; i++) {
       if (clothMaskFull(i % w, (i - (i % w)) / w)) continue;
       const p = hsv(data[i * 4], data[i * 4 + 1], data[i * 4 + 2]);
-      mask[i] = p[2] > 160 && p[1] < 110 ? 1 : 0;
+      // 채도 60 미만: 실제 다이아몬드는 5~22, 밝은 레일은 90~110이라 110으로는 레일과 붙었다 (2026-10-04)
+      mask[i] = p[2] > 165 && p[1] < 60 ? 1 : 0;
     }
     const out = [];
     for (const c of components(mask, w, h)) {
@@ -623,56 +637,137 @@ const PHOTO = (() => {
       if (n < 3 || n > 900) continue;
       let sx = 0, sy = 0;
       for (const p of c.pixels) { sx += p % w; sy += (p - (p % w)) / w; }
-      out.push([sx / n + 0.5, sy / n + 0.5]);
+      const cx = sx / n + 0.5, cy = sy / n + 0.5;
+      // 길쭉하면 다이아몬드가 아니라 레일 모서리를 따라 생긴 반사광 줄이다 (2026-10-04, 실제 사진).
+      // 다이아몬드는 비스듬히 보여도 납작한 타원 정도 — 긴 축이 짧은 축의 3배를 넘지 않는다.
+      let xx = 0, yy = 0, xy = 0;
+      for (const p of c.pixels) { const dx = p % w + 0.5 - cx, dy = (p - (p % w)) / w + 0.5 - cy; xx += dx * dx; yy += dy * dy; xy += dx * dy; }
+      xx /= n; yy /= n; xy /= n;
+      const tr = xx + yy, det = xx * yy - xy * xy, gap = Math.sqrt(Math.max(0, tr * tr / 4 - det));
+      const major = tr / 2 + gap, minor = Math.max(1e-6, tr / 2 - gap);
+      if (n >= 6 && major / minor > 9) continue;
+      // ★둘레가 나무여야 한다 (2026-10-04, 실제 사진: 바닥 타일의 밝은 무늬가 후보로 넘쳤다). 점 둘레 여덟
+      // 군데 중 여섯 이상이 레일 색(갈색: H 4~28, 채도·밝기 있음)이어야 다이아몬드로 본다.
+      const r = Math.max(4, 2.2 * Math.sqrt(n / Math.PI));
+      let wood = 0;
+      for (let k = 0; k < 8; k++) {
+        const x = Math.round(cx + r * Math.cos(k * Math.PI / 4)), y = Math.round(cy + r * Math.sin(k * Math.PI / 4));
+        if (x < 0 || y < 0 || x >= w || y >= h) continue;
+        const i = (y * w + x) * 4, q = hsv(data[i], data[i + 1], data[i + 2]);
+        if (q[0] >= 4 && q[0] <= 28 && q[1] > 70 && q[2] > 50) wood++;
+      }
+      if (wood >= 6) out.push([cx, cy]);
     }
     return out;
   }
 
-  // 사진 한 장(탁자 한쪽 끝) → 자기 틀의 공 자리. corners를 주면 [A, D] 두 모서리로 쓴다.
-  function analyzeEnd(img, given = null, opts = {}) {
+  // 사진 한 장 → 탁자 좌표로 가는 호모그래피와 공 자리. **보이는 만큼만 있으면 된다.**
+  //
+  // ★2026-10-04, 선수의 실제 사진 두 장: 탁자 모서리에 서서 대각선으로 찍어 **모서리는 바로 앞의
+  // 하나만** 보이고, 거기서 뻗는 두 레일과 맞은편 레일 일부가 보였다. 처음 짠 "단쿠션 + 두 모서리"
+  // 가정으로는 못 읽는다. 그래서 일반형으로:
+  //   · 천 테두리에서 화면 가장자리 구간을 빼면 보이는 변들이 남는다 (끊긴 여러 토막일 수 있다).
+  //   · 가설 = (기준 모서리, 거기서 뻗는 두 변 중 어느 것이 장쿠션인가, 평행한 맞은편 변) —
+  //     맞은편 변이 소실점 하나와 축척(두 레일 사이 거리)을 준다. 다른 축의 소실점은 화각 f에서
+  //     직교 조건으로. f는 훑는다.
+  //   · 기준 모서리를 네 모서리 중 어디에 둘지 다 놓아 보고, **위에서 본 거울상이 아닌 것**만 남긴다.
+  //   · 점수 = 레일 다이아몬드 20개의 예측 자리와 찾은 밝은 점이 겹치는 정도 → 최소제곱으로 다듬기.
+  // 같은 점수의 180도 쌍둥이는 구별할 수 없다 — 두 장을 합칠 때 공이 겹치는 쪽으로 정한다.
+  function analyzeView(img, opts = {}) {
     const warnings = [];
     const region = clothRegion(img);
     if (region.error) return { error: region.error };
     const back = 1 / region.small.scale;
-    const { w, h, edge } = region;
-    const H0 = hull(edge);
+    const { w, h } = region;
+    const edge = region.edge.concat(region.sides);
+    const H0 = hull(region.edge);
     const m = 2.5;
     const onBorder = (p) => p[0] <= m || p[1] <= m || p[0] >= w - m || p[1] >= h - m;
-    // 껍질에서 화면 가장자리를 따라가는 변을 끊어 열린 사슬로
-    let cut = -1;
-    for (let i = 0; i < H0.length; i++) { if (onBorder(H0[i]) && onBorder(H0[(i + 1) % H0.length])) { cut = i; break; } }
-    if (cut < 0) return { whole: true };                    // 가장자리에 안 걸림 = 탁자 전체가 보인다
-    let chain = H0.slice(cut + 1).concat(H0.slice(0, cut + 1));
-    while (chain.length && onBorder(chain[0]) && chain.length > 1 && onBorder(chain[1])) chain.shift();
-    while (chain.length > 1 && onBorder(chain[chain.length - 1]) && onBorder(chain[chain.length - 2])) chain.pop();
-    if (chain.length < 4) return { error: "탁자의 끝(단쿠션과 두 모서리)이 보이지 않습니다. 한쪽 끝이 다 나오게 찍어 주세요." };
-    // 각 변의 직선을 테두리 점들로 다시 맞춘다
+    const sameSide = (a, b) => (a[0] <= m && b[0] <= m) || (a[1] <= m && b[1] <= m)
+      || (a[0] >= w - m && b[0] >= w - m) || (a[1] >= h - m && b[1] >= h - m);
+    // 껍질을 화면 가장자리 구간에서 끊어 토막들로
+    const n = H0.length;
+    const isBorderEdge = (i) => onBorder(H0[i]) && onBorder(H0[(i + 1) % n]) && sameSide(H0[i], H0[(i + 1) % n]);
+    let start = 0;
+    while (start < n && !isBorderEdge(start)) start++;
+    const runs = [];
+    if (start === n) runs.push(H0.concat([H0[0]]));          // 가장자리에 안 걸림 = 탁자 전체
+    else {
+      let cur = null;
+      for (let k = 1; k <= n; k++) {
+        const i = (start + k) % n;
+        if (isBorderEdge((i - 1 + n) % n) || cur === null) { if (cur && cur.length > 1) runs.push(cur); cur = [H0[i]]; }
+        if (isBorderEdge(i)) { if (cur.length > 1) runs.push(cur); cur = null; continue; }
+        cur.push(H0[(i + 1) % n]);
+      }
+      if (cur && cur.length > 1) runs.push(cur);
+    }
+    // 토막마다 꺾은선으로 → 변들과 모서리들
+    const peri = H0.reduce((s, p, i) => s + dist(p, H0[(i + 1) % n]), 0);
     const segDist = (p, a, b) => { const l = dist(a, b); return l < 1e-9 ? dist(p, a) : Math.abs(cross(a, b, p)) / l; };
-    const within = (p, a, b) => { const t = ((p[0] - a[0]) * (b[0] - a[0]) + (p[1] - a[1]) * (b[1] - a[1])) / (dist(a, b) ** 2 || 1); return t > 0.08 && t < 0.92; };
+    const within = (p, a, b) => { const t = ((p[0] - a[0]) * (b[0] - a[0]) + (p[1] - a[1]) * (b[1] - a[1])) / (dist(a, b) ** 2 || 1); return t > 0.06 && t < 0.94; };
     const lineOf = (a, b) => {
-      const near = edge.filter((p) => !onBorder(p) && segDist(p, a, b) < 3 && within(p, a, b));
+      const near = edge.filter((p) => !onBorder(p) && segDist(p, a, b) < 2.5 && within(p, a, b));
       const l = near.length >= 6 ? fitLine(near) : fitLine([a, b]);
-      return [l[0], l[1], l[2] * back];                        // 원래 크기 픽셀로 (a, b는 그대로)
+      return [l[0], l[1], l[2] * back];
     };
-    const meet = (l1, l2) => { const v = cross3(l1, l2); return [v[0] / v[2], v[1] / v[2]]; };
-    const crossDir = (u, v) => u[0] * v[1] - u[1] * v[0];
-    const big = (p) => [p[0] * back, p[1] * back];
-    // 다이아몬드 후보 (천 밖의 밝고 채도 낮은 작은 점)
+    const lines = [], corners = [];
+    for (const run of runs) {
+      const dp = (pts, eps) => {
+        if (pts.length < 3) return pts;
+        let best = 0, at = 0;
+        for (let i = 1; i < pts.length - 1; i++) { const d = segDist(pts[i], pts[0], pts[pts.length - 1]); if (d > best) { best = d; at = i; } }
+        return best <= eps ? [pts[0], pts[pts.length - 1]] : dp(pts.slice(0, at + 1), eps).slice(0, -1).concat(dp(pts.slice(at), eps));
+      };
+      const poly = dp(run, 0.012 * peri).filter((p, i, arr) => i === 0 || dist(p, arr[i - 1]) > 1);
+      const first = lines.length;
+      for (let i = 0; i + 1 < poly.length; i++) {
+        if (dist(poly[i], poly[i + 1]) < 0.04 * Math.max(w, h)) continue;    // 짧은 토막은 버린다
+        lines.push({ l: lineOf(poly[i], poly[i + 1]), a: poly[i], b: poly[i + 1], run: runs.indexOf(run) });
+      }
+      for (let i = first; i + 1 < lines.length; i++) {
+        if (lines[i].run !== lines[i + 1].run) continue;
+        const v = cross3(lines[i].l, lines[i + 1].l);
+        if (Math.abs(v[2]) < 1e-9) continue;
+        corners.push({ at: [v[0] / v[2], v[1] / v[2]], p: i, q: i + 1 });
+      }
+    }
+    if (!corners.length) return { error: "탁자 모서리가 하나도 안 보입니다. 모서리 하나와 거기서 뻗는 두 레일이 나오게 찍어 주세요." };
+    // 다이아몬드 후보와 짝짓기
     const clothSmall = region.mask;
     const inCloth = (x, y) => {
       const sx = Math.min(w - 1, Math.max(0, Math.round(x / back))), sy = Math.min(h - 1, Math.max(0, Math.round(y / back)));
       return clothSmall[sy * w + sx] === 1;
     };
-    const blobs = diamondBlobs(img, inCloth);
-    // 예측한 다이아몬드와 찾은 점 짝짓기 (하나에 하나). → [[다이아몬드, 점, 거리/문턱]…]
+    // ★다이아몬드는 레일 위에만 있다 — 천 테두리 바로 바깥 띠 안의 점만 후보로 (2026-10-04: 실제 사진에서
+    // 바닥 타일·벽·조명의 밝은 점까지 1,125개가 후보가 되어 엉뚱한 가설이 이겼다).
+    const band = (() => {
+      const reach = Math.max(3, Math.round(0.07 * Math.max(w, h)));     // 띠 폭 (줄인 그림 픽셀)
+      const d = new Int16Array(w * h).fill(-1);
+      const queue = [];
+      for (let i = 0; i < w * h; i++) if (clothSmall[i]) { d[i] = 0; queue.push(i); }
+      for (let qi = 0; qi < queue.length; qi++) {
+        const i = queue[qi], x = i % w, y = (i - x) / w;
+        if (d[i] >= reach) continue;
+        for (const j of [x > 0 ? i - 1 : -1, x < w - 1 ? i + 1 : -1, y > 0 ? i - w : -1, y < h - 1 ? i + w : -1]) {
+          if (j >= 0 && d[j] < 0) { d[j] = d[i] + 1; queue.push(j); }
+        }
+      }
+      return (x, y) => {
+        const sx = Math.min(w - 1, Math.max(0, Math.round(x / back))), sy = Math.min(h - 1, Math.max(0, Math.round(y / back)));
+        const v = d[sy * w + sx];
+        return v > 0;
+      };
+    })();
+    const blobs = diamondBlobs(img, inCloth).filter(([x, y]) => band(x, y));
+    const visible = (at) => at[0] >= 0 && at[1] >= 0 && at[0] < img.width && at[1] < img.height;
     const match = (H) => {
       const out = [], used = new Set();
       for (const d of DIAMONDS) {
         const at = apply(H, d);
-        if (!(at[0] >= 0 && at[1] >= 0 && at[0] < img.width && at[1] < img.height)) continue;
-        // 문턱 = 이웃 다이아몬드까지 화면 거리의 40%
+        if (!visible(at)) continue;
         const along = Math.abs(d[1]) > W ? [L / 8, 0] : [0, W / 4];
-        const gate = Math.max(10, 0.4 * dist(at, apply(H, [d[0] + along[0], d[1] + along[1]])));
+        const gate = Math.max(10, 0.4 * dist(at, apply(H, [d[0] + (d[0] < L / 2 ? 1 : -1) * along[0], d[1] + (d[1] < W / 2 ? 1 : -1) * along[1]])));
         let best = -1, bd = gate;
         blobs.forEach((p, k) => { const e = dist(p, at); if (e < bd && !used.has(k)) { bd = e; best = k; } });
         if (best >= 0) { used.add(best); out.push([d, blobs[best], bd / gate]); }
@@ -680,118 +775,154 @@ const PHOTO = (() => {
       return out;
     };
     const c0 = [img.width / 2, img.height / 2];
-    const span = W + 2 * CUSHION;
-    // 가설 하나: 사슬의 연속한 네 점 (앞 장쿠션 끝, 모서리, 모서리, 뒤 장쿠션 끝) → 가장 잘 맞는 H와 점수
-    const tryHypothesis = (Q0, Q1, Q2, Q3) => {
-      const lines = [lineOf(Q0, Q1), lineOf(Q1, Q2), lineOf(Q2, Q3)];
-      let c1 = meet(lines[0], lines[1]), c2 = meet(lines[1], lines[2]);
-      if (given) [c1, c2] = given.slice(0, 2).map((p) => p.slice());
-      if (![...c1, ...c2].every(Number.isFinite)) return null;
-      const s0 = big(Q0), s3 = big(Q3);
-      // 어느 모서리가 A(−C,−C)인가: 위에서 본 거울상 아닌 그림이면 cross(x방향, y방향) < 0 (화면 y가 아래로)
-      let A, D, longs, dirX;
-      const dx1 = [s0[0] - c1[0], s0[1] - c1[1]], dy1 = [c2[0] - c1[0], c2[1] - c1[1]];
-      if (crossDir(dx1, dy1) < 0) { A = c1; D = c2; longs = [lines[0], lines[2]]; dirX = dx1; }
-      else { A = c2; D = c1; longs = [lines[2], lines[0]]; dirX = [s3[0] - c2[0], s3[1] - c2[1]]; }
-      // 처음 추정 — 장쿠션 소실점 vx와, 화각 f에서 직교 조건으로 정해지는 단축 소실점 vy (AD 위).
-      // ★화각을 가정하지 않는다 (2026-10-03): 사전값 0.72W로 풀었더니 합성 사진(실제 0.64W)에서 장축
-      // 축척이 30% 틀려 다이아몬드를 엉뚱하게 짝지었다. f를 넓게 훑어 **다이아몬드 예측 자리와 찾은
-      // 밝은 점이 가장 많이 겹치는** f를 고른다.
-      const vx = cross3(longs[0], longs[1]);
-      const Ah = h3(A), Dh = h3(D), lAD = cross3(Ah, Dh);
-      const initialFor = (f) => {
-        const Kinv = [1 / f, 0, -c0[0] / f, 0, 1 / f, -c0[1] / f, 0, 0, 1];
-        const omega = mul([Kinv[0], 0, 0, 0, Kinv[4], 0, Kinv[2], Kinv[5], 1], Kinv);   // K⁻ᵀK⁻¹
-        const vy = cross3(lAD, mv(omega, vx));
-        const vyD = cross3(vy, Dh), AD = cross3(Ah, Dh);
-        const beta = -dot(vyD, AD) / (dot(vyD, vyD) || 1) / span;      // span·β·vy + A ∝ D
-        const nk = (v) => norm3(mv(Kinv, v));
-        const alpha = beta * nk(vy) / (nk(vx) || 1);
-        const build = (al) => mul([al * vx[0], beta * vy[0], Ah[0], al * vx[1], beta * vy[1], Ah[1], al * vx[2], beta * vy[2], Ah[2]],
-                                  [1, 0, CUSHION, 0, 1, CUSHION, 0, 0, 1]);   // 세계 → A 기준
-        let H = build(alpha);
-        const probe = apply(H, [-CUSHION + 400, -CUSHION]);
-        if ((probe[0] - A[0]) * dirX[0] + (probe[1] - A[1]) * dirX[1] < 0) H = build(-alpha);
-        return H;
-      };
-      let H = null, score = -Infinity;
-      for (let f = 0.35 * img.width; f <= 2.0 * img.width; f *= 1.03) {
-        const cand = initialFor(f);
-        if (!cand || !cand.every(Number.isFinite)) continue;
-        const m = match(cand);
-        const s = m.length - 0.5 * m.reduce((acc, x) => acc + x[2], 0) / Math.max(1, m.length);
-        if (s > score) { score = s; H = cand; }
+    const CORNERS = [[-CUSHION, -CUSHION], [L + CUSHION, -CUSHION], [L + CUSHION, W + CUSHION], [-CUSHION, W + CUSHION]];
+    // 기준 모서리 V(사진), 장축 방향 변 xl, 단축 방향 변 yl, 평행한 맞은편 변 (xl 쪽이면 W 만큼, yl 쪽이면 L 만큼 떨어져 있다)
+    const solve = (V, xl, yl, partner, partnerOfX, f) => {
+      const Kinv = [1 / f, 0, -c0[0] / f, 0, 1 / f, -c0[1] / f, 0, 0, 1];
+      const omega = mul([Kinv[0], 0, 0, 0, Kinv[4], 0, Kinv[2], Kinv[5], 1], Kinv);
+      const Vh = h3(V);
+      let vx, vy;
+      if (partnerOfX) { vx = cross3(xl, partner); vy = cross3(yl, mv(omega, vx)); }
+      else { vy = cross3(yl, partner); vx = cross3(xl, mv(omega, vy)); }
+      const nk = (v) => norm3(mv(Kinv, v));
+      let alpha, beta;
+      if (partnerOfX) { beta = -dot(partner, Vh) / ((W + 2 * CUSHION) * dot(partner, vy)); alpha = beta * nk(vy) / (nk(vx) || 1); }
+      else { alpha = -dot(partner, Vh) / ((L + 2 * CUSHION) * dot(partner, vx)); beta = alpha * nk(vx) / (nk(vy) || 1); }
+      if (!Number.isFinite(alpha) || !Number.isFinite(beta)) return null;
+      const out = [];
+      // α의 부호는 직교 조건이 안 정한다 — 둘 다 놓아 보고, 네 모서리 자리마다 (모서리 기준 좌표 → 세계)
+      for (const sa of [1, -1]) {
+        const Hp = [sa * alpha * vx[0], beta * vy[0], Vh[0], sa * alpha * vx[1], beta * vy[1], Vh[1], sa * alpha * vx[2], beta * vy[2], Vh[2]];
+        for (const [cx, cy] of CORNERS) {
+          const sx = cx < 0 ? 1 : -1, sy = cy < 0 ? 1 : -1;          // 모서리에서 탁자 안쪽 방향
+          const T = [sx, 0, -sx * cx, 0, sy, -sy * cy, 0, 0, 1];      // 세계 → 모서리 기준
+          const H = mul(Hp, T);
+          // 거울상 걸러내기: 위에서 본 그림이면 세계 +x, +y의 화면 방향이 cross < 0 (화면 y가 아래로)
+          const o = apply(H, [L / 2, W / 2]), ex = apply(H, [L / 2 + 100, W / 2]), ey = apply(H, [L / 2, W / 2 + 100]);
+          const cr = (ex[0] - o[0]) * (ey[1] - o[1]) - (ex[1] - o[1]) * (ey[0] - o[0]);
+          // 변 방향도 맞아야 한다: 모서리에서 탁자 안쪽으로 가면 실제 변을 따라가야 한다
+          const inward = apply(H, [cx + sx * 300, cy]);
+          if (cr < 0 && Number.isFinite(inward[0])) out.push(H);
+        }
       }
-      return H && { H, A, D, score };
+      return out;
     };
-    // 사슬을 꼭짓점 4~6개로 줄여 연속한 네 점마다 가설을 세운다. 모서리가 셋 보이는 사진(모서리에서
-    // 찍은 것)에서는 어느 둘이 같은 단쿠션인지 모른다 — 다이아몬드가 가장 잘 맞는 쪽을 고른다.
     let pick = null;
-    for (const k of [4, 5, 6]) {
-      if (chain.length < k) break;
-      const V = reduceChain(chain, k);
-      for (let s = 0; s + 3 < V.length; s++) {
-        const hyp = tryHypothesis(V[s], V[s + 1], V[s + 2], V[s + 3]);
-        if (hyp && (!pick || hyp.score > pick.score)) pick = hyp;
+    const lineAway = (ln, p) => Math.abs(ln[0] * p[0] + ln[1] * p[1] + ln[2]);
+    // ★찾은 변은 모두 탁자 테두리(쿠션 바깥 끝) 위에 있어야 한다 (2026-10-04). 다이아몬드 개수만 보니
+    // 실제 사진에서 "어느 변이 어느 변과 평행한가"를 틀린 가설도 같은 수를 맞춰 이겼다. 변마다 양 끝이
+    // 테두리 네 변 중 하나의 그림 위 직선에 가까운지 보고, 설명 안 되는 변 하나에 다이아몬드 3개만큼 깎는다.
+    const segs = lines.map((x) => [[x.a[0] * back, x.a[1] * back], [x.b[0] * back, x.b[1] * back]]);
+    const tol = 0.02 * Math.max(img.width, img.height);
+    const unexplained = (H) => {
+      const edges = [[CORNERS[0], CORNERS[1]], [CORNERS[1], CORNERS[2]], [CORNERS[2], CORNERS[3]], [CORNERS[3], CORNERS[0]]]
+        .map(([p, q]) => { const a = apply(H, p), b = apply(H, q); return cross3(h3(a), h3(b)); })
+        .map((l) => { const s = Math.hypot(l[0], l[1]) || 1; return [l[0] / s, l[1] / s, l[2] / s]; });
+      let bad = 0;
+      for (const [a, b] of segs) {
+        if (!edges.some((l) => lineAway(l, a) < tol && lineAway(l, b) < tol)) bad++;
+      }
+      return bad;
+    };
+    for (const cn of corners) {
+      const A = lines[cn.p], B = lines[cn.q];
+      for (const [xl, yl] of [[A, B], [B, A]]) {
+        for (const other of lines) {
+          if (other === A || other === B) continue;
+          // 맞은편 변: 기준 모서리를 지나지 않아야 한다
+          if (lineAway(other.l, cn.at) < 0.05 * img.width) continue;
+          for (const partnerOfX of [true, false]) {
+            for (let f = 0.35 * img.width; f <= 2.2 * img.width; f *= 1.04) {
+              const hs = solve(cn.at, xl.l, yl.l, other.l, partnerOfX, f);
+              if (!hs) continue;
+              for (const H of hs) {
+                if (!H.every(Number.isFinite)) continue;
+                const mt = match(H);
+                const s = mt.length - 0.5 * mt.reduce((acc, x) => acc + x[2], 0) / Math.max(1, mt.length) - 3 * unexplained(H);
+                if (opts.debug) opts.debug.push({ s, n: mt.length, corner: cn.at.map(Math.round), xl: lines.indexOf(xl), yl: lines.indexOf(yl), partner: lines.indexOf(other), partnerOfX, f: Math.round(f) });
+                if (!pick || s > pick.score) pick = { H, score: s, corner: cn.at };
+              }
+            }
+          }
+        }
       }
     }
-    if (!pick) return { error: "탁자의 끝(단쿠션과 두 모서리)을 읽지 못했습니다. 한쪽 끝이 다 나오게 찍어 주세요." };
-    let { H, A, D } = pick;
-    let matched = [];
-    const initial = H;
-    for (let round = 0; round < (opts.rounds ?? 3); round++) {
+    if (!pick) return { error: "맞은편 레일이 안 보여 위치를 정하지 못했습니다. 모서리 하나와 맞은편 레일이 함께 나오게 찍어 주세요." };
+    let H = pick.H, matched = [];
+    for (let round = 0; round < 3; round++) {
       matched = match(H);
-      if (matched.length < 3) break;
-      const pairs = [[[-CUSHION, -CUSHION], A, 6], [[-CUSHION, W + CUSHION], D, 6], ...matched.map(([d, p]) => [d, p, 1])];
-      const next = fitHomography(pairs);
+      if (matched.length < 4) break;
+      const anchor = [[CORNERS.reduce((b, c) => (dist(apply(H, c), pick.corner) < dist(apply(H, b), pick.corner) ? c : b)), pick.corner, 4]];
+      const next = fitHomography(anchor.concat(matched.map(([d, p]) => [d, p, 1])));
       if (!next) break;
       H = next;
     }
-    if (matched.length < 3) warnings.push("레일의 다이아몬드 점을 거의 못 찾았습니다 — 먼 쪽 공은 덜 정확합니다.");
+    if (matched.length < 4) warnings.push("레일의 다이아몬드 점을 몇 개 못 찾았습니다 — 위치가 덜 정확할 수 있습니다.");
     const top = warpWorld(img, H);
     const { found, warnings: w2 } = detectBalls(top);
     warnings.push(...w2.filter((s) => !/찾지 못했습니다/.test(s)));
-    return { H, initial, blobs, corners: [A, D], diamonds: matched.map(([, p]) => p), balls: found, warnings, top };
+    // 사진을 찍은 사람이 서 있던 쪽 = **사진 맨 아래 가운데가 가리키는 탁자 위 지점** (멀수록 펴진 그림이 성기다).
+    // 처음엔 가설의 기준 모서리를 썼는데, 실제 사진에서 그것이 맞은편(먼) 모서리로 잡혀 먼 쪽 사진을 더 믿었다.
+    const Hi = inv(H);
+    const foot = Hi ? apply(Hi, [img.width / 2, img.height - 1]) : [0, 0];
+    const anchorWorld = [Math.max(-CUSHION, Math.min(L + CUSHION, foot[0])), Math.max(-CUSHION, Math.min(W + CUSHION, foot[1]))];
+    return { H, corners: [pick.corner], diamonds: matched.map(([, p]) => p), blobs, lines: lines.map((x) => x.l),
+             balls: found, anchor: anchorWorld, warnings, top, score: pick.score };
   }
+  // 예전 이름 (화면이 쓴다)
+  const analyzeEnd = (img) => analyzeView(img);
 
-  // 두 끝을 합친다. 두 번째 장은 반대쪽 끝이므로 180도 돌린다. → analyze()와 같은 모양의 balls
-  function combineEnds(one, two) {
-    const out = {}, warnings = [];
+  // 여러 장을 합친다. 첫 장의 틀을 기준으로, 다음 장은 그대로 또는 180도 — 공이 더 잘 겹치는 쪽.
+  // 공은 자기 사진의 기준 모서리에 가까울수록 믿는다.
+  function combineEnds(...views) {
     const names = { white: "흰공", yellow: "노란공", red: "빨간공" };
+    const flip = (p) => [L - p[0], W - p[1]];
+    const placed = [];
+    views.forEach((v, k) => {
+      let turn = false;
+      if (k > 0) {
+        const cost = (t) => {
+          let s = 0, n = 0;
+          for (const c of Object.keys(v.balls)) {
+            const ref = placed[0].v.balls[c];
+            if (!ref) continue;
+            const a = t ? flip(v.balls[c].world) : v.balls[c].world;
+            s += Math.min(dist(a, ref.world), 600); n++;
+          }
+          return n ? s / n : 0;
+        };
+        turn = cost(true) < cost(false);
+      }
+      placed.push({ v, turn });
+    });
+    const out = {}, warnings = [];
     for (const colour of ["white", "yellow", "red"]) {
       const cand = [];
-      // 자기 끝에서 가까울수록 믿는다 (멀면 펴진 그림이 성기고 원근 오차가 커진다)
-      for (const [end, flip] of [[one, false], [two, true]]) {
-        const b = end && end.balls && end.balls[colour];
+      for (const { v, turn } of placed) {
+        const b = v.balls && v.balls[colour];
         if (!b) continue;
-        const [x, y] = b.world;
-        const wt = b.confidence / (1 + ((x + CUSHION) / 900) ** 2);
-        cand.push({ at: flip ? [L - x, W - y] : [x, y], wt, conf: b.confidence });
+        const at = turn ? flip(b.world) : b.world;
+        const near = turn ? flip(v.anchor) : v.anchor;
+        cand.push({ at, wt: b.confidence / (1 + (dist(at, near) / 1300) ** 2), conf: b.confidence });
       }
-      if (!cand.length) { warnings.push(`${names[colour]}을 두 사진 어디에서도 찾지 못했습니다.`); continue; }
-      let at;
-      if (cand.length === 2 && dist(cand[0].at, cand[1].at) < 200) {
-        const s = cand[0].wt + cand[1].wt;
-        at = [(cand[0].at[0] * cand[0].wt + cand[1].at[0] * cand[1].wt) / s, (cand[0].at[1] * cand[0].wt + cand[1].at[1] * cand[1].wt) / s];
-      } else {
-        if (cand.length === 2) warnings.push(`${names[colour]}이 두 사진에서 다른 자리로 잡혔습니다 — 확인해 주세요.`);
-        at = cand.reduce((a, c) => (c.wt > a.wt ? c : a)).at;
-      }
+      if (!cand.length) { warnings.push(`${names[colour]}을 사진 어디에서도 찾지 못했습니다.`); continue; }
+      const best = cand.reduce((a, c) => (c.wt > a.wt ? c : a));
+      const close = cand.filter((c) => dist(c.at, best.at) < 200);
+      if (close.length < cand.length) warnings.push(`${names[colour]}이 사진마다 다른 자리로 잡혔습니다 — 가까이 찍힌 쪽을 썼습니다.`);
+      const s = close.reduce((a, c) => a + c.wt, 0);
+      const at = [close.reduce((a, c) => a + c.at[0] * c.wt, 0) / s, close.reduce((a, c) => a + c.at[1] * c.wt, 0) / s];
       out[colour] = { at: [Math.max(R, Math.min(L - R, at[0])), Math.max(R, Math.min(W - R, W - at[1]))],
                       confidence: Math.max(...cand.map((c) => c.conf)) };
     }
-    return { balls: out, warnings };
+    return { balls: out, warnings, turns: placed.map((p) => p.turn) };
   }
 
-  // 두 장을 한 번에: 한 장에 탁자 전체가 보이면 그 장만으로 (한 장 방식), 아니면 두 끝을 합친다.
   function analyzePair(img1, img2) {
-    const ends = [analyzeEnd(img1), analyzeEnd(img2)];
-    const whole = [img1, img2].find((im, k) => ends[k].whole);
-    if (whole) { const r = analyze(whole); return { balls: r.balls, warnings: r.warnings, ends, single: true }; }
+    const ends = [analyzeView(img1), analyzeView(img2)];
     const bad = ends.find((e) => e.error);
     if (bad) return { balls: {}, warnings: [bad.error], ends };
     const r = combineEnds(ends[0], ends[1]);
-    return { balls: r.balls, warnings: [...ends.flatMap((e) => e.warnings), ...r.warnings], ends };
+    return { balls: r.balls, warnings: [...ends.flatMap((e) => e.warnings), ...r.warnings], ends, turns: r.turns };
   }
 
   // 조언판 좌표(mm, y 아래로) → 사진 픽셀. 화면이 사진 위에 공 자리를 그릴 때.
@@ -802,7 +933,7 @@ const PHOTO = (() => {
 
   // 화면이 쓰는 것: 펴진 그림 픽셀과 조언판 좌표의 관계 (배경으로 깔 때)
   const topFrame = { width: TOP_W, height: TOP_H, pad: PAD, px: PX };
-  return { analyze, analyzeEnd, analyzePair, combineEnds, warpWorld, toImage, findTable, pickAssignment, warp, detectBalls, estimateCamera, correctParallax,
+  return { analyze, analyzeView, analyzeEnd, analyzePair, combineEnds, warpWorld, toImage, findTable, pickAssignment, warp, detectBalls, estimateCamera, correctParallax,
            homography, apply, inv, orderCyclic, shrink, topFrame, L, W, R };
 })();
 
