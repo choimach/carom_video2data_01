@@ -34,3 +34,4 @@ outputs/
 data/_screen/
 build/
 alternatives.jsonl
+.firebase/

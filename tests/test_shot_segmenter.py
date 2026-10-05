@@ -755,3 +755,24 @@ def test_the_next_play_is_not_mistaken_for_a_replay():
                                        "red": (1500.0, 1100.0)}, {}, True)
     assert mark_replays([first, after], FPS) == 0
     assert after.replay_of is None
+
+
+def test_layout_is_where_the_cue_ball_sat_not_where_the_strike_was_noticed():
+    """2026-10-05: the layout was read at the onset frame, by which time the cue ball had
+    left - a median 81 mm down its own line of play. It must be the rest before the strike."""
+    import numpy as np
+    from src.segmentation.shot_segmenter import segment_shots
+    fps, n = 60.0, 600
+    t = np.arange(n) / fps
+    pos = {c: np.zeros((n, 2)) for c in ("white", "yellow", "red")}
+    pos["yellow"][:] = (2000.0, 700.0)
+    pos["red"][:] = (2400.0, 300.0)
+    pos["white"][:] = (500.0, 700.0)
+    # Struck at frame 120: 3 m/s along +x, slowing to a stop by ~frame 400.
+    k = np.clip(t - t[120], 0, None)
+    pos["white"][:, 0] = 500.0 + np.where(k > 0, 3000.0 * k - 0.5 * 2200.0 * k ** 2, 0.0).clip(max=500.0 + 3000.0 ** 2 / (2 * 2200.0) - 500.0)
+    live = np.ones(n, dtype=bool)
+    shots = segment_shots(pos, live, fps)
+    assert shots, "the strike should be found"
+    x, y = shots[0].start_positions["white"]
+    assert abs(x - 500.0) < 3 and abs(y - 700.0) < 3
