@@ -45,8 +45,11 @@ def main(argv):
             continue
         original = bundle[key]
         raw = np.array(row["layout_mm"][row["cue"]], dtype=float)
-        flip_y = bool(abs(original[0][0] - raw[0]) > 1.0)
-        flip_x = bool(abs(original[0][1] - raw[1]) > 1.0)
+        # From the recorded turn, not by matching the path's first point to the layout:
+        # since 2026-10-05 the layout is where the ball sat, and the path starts
+        # after it left, ~80 mm on - the 1 mm match picked the wrong mirror.
+        flip_x = row["turned"] in ("mirror-long", "half-turn")
+        flip_y = row["turned"] in ("mirror-short", "half-turn")
         turned = [transform(p, flip_x, flip_y) for p in original if np.isfinite(p).all()]
         marks = events.get((row["match"], row["inning"], row["shot"]), [])
         rails = rail_points(original, marks, flip_x, flip_y) or []
