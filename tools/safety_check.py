@@ -29,6 +29,23 @@ from score_probability import features, pro_branch  # noqa: E402
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 
+L, W = 2844.0, 1422.0
+
+
+def geometry(one):
+    """배치를 공 위치로: 수구-쿠션 거리, 두 적구 사이 거리, 수구-가까운 적구 거리 (mm). (2026-10-05)
+    수비가 노리는 것 — 상대 수구를 쿠션에 붙이기, 공을 흩어 놓기 — 을 확률 식보다 곧장 잰다."""
+    lay, cue = one.get("layout") or {}, one.get("cue")
+    if cue not in lay or len(lay) < 3:
+        return None
+    c = lay[cue]
+    others = [lay[k] for k in lay if k != cue]
+    d = lambda a, b: math.hypot(a[0] - b[0], a[1] - b[1])
+    return {"cushion": min(c[0], L - c[0], c[1], W - c[1]),
+            "apart": d(others[0], others[1]),
+            "near": min(d(c, o) for o in others)}
+
+
 def main():
     w = json.load(open(os.path.join(ROOT, "data", "probability_weights.json"), encoding="utf-8"))
     mean, spread = np.array(w["mean"]), np.array(w["spread"])
@@ -52,6 +69,7 @@ def main():
             "pro": chance(pro) if pro else None,
             "followed": bool(pro) and pro.get("key") == best.get("key") and pro.get("path") == best.get("path"),
             "pro_route": pro["route"] if pro else None,
+            "geo": geometry(one),
         }
 
     def next_of(pid):
@@ -104,6 +122,30 @@ def main():
         follow = np.mean([1.0 if v["followed"] else 0.0 for v in sel])
         gap = np.median([v["best"] - v["pro"] for v in sel])
         print(f"   {names[k]:<22}{len(sel):>5}판 · 최고 확률 길을 고름 {follow:.0%} · 고른 길과 최고의 확률 차 중앙값 {gap:.2f}")
+
+    # C. 공 위치로 (2026-10-05, 선수가 1번을 고름): 먼저 이 값들이 어려움의 척도인가 — 모든 판에서 득점과의 관계
+    print("\nC. 공 위치로 잰 어려움 — 먼저, 모든 판에서 이 값이 득점과 관련 있나 (사분위별 득점률)")
+    geo_all = [(v["geo"], v["scored"]) for v in info.values() if v["geo"] and v["scored"] is not None]
+    labels = {"cushion": "수구-쿠션 거리", "apart": "두 적구 사이", "near": "수구-가까운 적구"}
+    for key in ("cushion", "apart", "near"):
+        vals = np.array([g[key] for g, _ in geo_all]); hit = np.array([1.0 if s else 0.0 for _, s in geo_all])
+        q = np.percentile(vals, [25, 50, 75])
+        parts = []
+        for k in range(4):
+            m = np.searchsorted(q, vals, side="right") == k
+            parts.append(f"{hit[m].mean():.0%}")
+        print(f"   {labels[key]:<14} 사분위 경계 {q[0]:.0f}/{q[1]:.0f}/{q[2]:.0f} mm · 득점률 (짧음→김) {' · '.join(parts)}")
+    # 상대가 받은 배치의 공 위치 — 내 배치 어려움별, 그리고 모든 판과 견줘
+    print("\n   상대가 받은 배치의 공 위치 (중앙값, mm) — 내 배치 어려움별")
+    print(f"   {'모든 판':<22}{'':>5}   " + " · ".join(f"{labels[k]} {np.median([g[k] for g, _ in geo_all]):.0f}" for k in labels))
+    for k in range(4):
+        gs = [info[next_of(p)]["geo"] for p, v in misses if bucket(v["best"]) == k and info[next_of(p)]["geo"]]
+        print(f"   {names[k]:<22}{len(gs):>5}   " + " · ".join(f"{labels[x]} {np.median([g[x] for g in gs]):.0f}" for x in labels))
+    print("   어려운 배치(하위 50%)에서 실패 — 최고 확률 길을 따랐나에 따라")
+    for flag, title in ((True, "따랐다"), (False, "다른 길을 골랐다")):
+        gs = [info[next_of(p)]["geo"] for p, v in misses if bucket(v["best"]) <= 1 and v["followed"] is flag and info[next_of(p)]["geo"]]
+        if gs:
+            print(f"   {title:<22}{len(gs):>5}   " + " · ".join(f"{labels[x]} {np.median([g[x] for g in gs]):.0f}" for x in labels))
 
     print("\n   어려운 배치(하위 50%)에서 실패했을 때 — 최고 확률 길을 따랐나에 따라 상대에게 남긴 것")
     hard = [(p, v) for p, v in misses if bucket(v["best"]) <= 1]
