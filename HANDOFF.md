@@ -15,7 +15,7 @@
 
 **돌고 있는 것 (2026-10-05 11:25~): 수구 시작 위치 고치기의 연쇄.** `ref/findings.md` "시작 배치의 수구가 샷 방향으로 8 cm".
 고치기 전 점수는 `data/_before_layoutfix/` (learn_choices · app_ranking 480 · table_check, 끝나면 DONE 파일)와 옛 입력의 사본.
-**열거 도는 중 (11:44 시작, 조각 5개, ~16:30 끝 예상):** `nohup bash tools/enumerate_all.sh`, 로그 `~/.cache/carom_enum/run.log`.
+**열거 도는 중 — 남은 ~650판 (16:59 다시 시작, `HEAP=1200 bash tools/enumerate_all.sh 2`, ~20:30 끝 예상).** 앞선 실행은 2,119판에서 조각 0이 힙 1000 MB OOM 세 번으로 포기했다, 로그 `~/.cache/carom_enum/run.log`.
 옛 장부는 `~/.cache/carom_enum/old_before_layoutfix/`와 `data/_before_layoutfix/`. 죽으면 같은 명령을 다시 치면 이어서 한다.
 끝난 것: 분할기 고침(9012e5c) · export_all · model_dataset (2,788판).
 순서: 분할기 고침 → export_all → model_dataset → learn_choices · score_probability · fit_tip --export → enumerate_all.sh (몇 시간)
