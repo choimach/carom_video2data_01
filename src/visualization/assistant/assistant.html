@@ -1450,24 +1450,80 @@
   // 당점을 손으로 옮긴다. 옮기면 그 자리로 다시 쳐서 궤적을 새로 그린다 —
   // 조언판이 고른 당점이 아니라 **선수가 주는 당점**으로 공이 어디로 가는지
   // 보는 것이, 이 화면이 실제로 쓰이는 방식이다.
+  // 1적구를 먼저 맞히는 공략인가 — 두께를 끌 수 있는 것은 이때뿐이다. 쿠션을 먼저 맞는 공략은
+  // 겨냥이 곧 1쿠션 지점이라 그쪽을 끈다 (armCushionDrag).
+  function firstBall(row) {
+    const ev = (row.hit.shot && row.hit.shot.events) || [];
+    const first = ev.find((e) => e.kind === "ball" || e.kind === "cushion");
+    return !!(first && first.kind === "ball");
+  }
+
+  // 두께 → 겨냥. 수구에서 1적구 중심을 보는 방향에서, 중심 간 거리(빗나감)만큼 비껴 친다.
+  // 면은 SIM.contact와 같은 부호: 겨냥 방향 × (1적구 − 수구)가 양이면 왼쪽면.
+  function aimForThickness(row, gap, face) {
+    const from = layout[cue], to = layout[row.hit.judged.first || row.first];
+    const dx = to[0] - from[0], dy = to[1] - from[1], d = Math.hypot(dx, dy);
+    const across = Math.min(gap, d * 0.999) * (face === "left" ? 1 : -1);
+    const deg = (Math.atan2(dy, dx) - Math.asin(across / d)) * 180 / Math.PI;
+    return Math.round(deg * 100) / 100;
+  }
+
+  // 같은 길을 위해 당점을 다시 맞춘다 (선수 2026-10-05): "겨냥이 달라지니 같은 궤적을 위해서는
+  // 당점도 같이 바꿔줘야 해." 두께를 바꾸면 분리각(상하 당점)과 쿠션에서 나가는 각(좌우 당점)이
+  // 달라진다. 반 팁 눈금, 미스큐 한계 안을 모두 쳐 보고 **끌기 전 길의 쿠션 자리 셋**에 가장
+  // 가까운 것을 고른다. 득점을 잃으면 크게 벌한다. 같으면 원래 당점에 가까운 것.
+  function refitTip(row, reference) {
+    const rad = row.hit.deg * Math.PI / 180, speed = row.hit.speed;
+    const v = [Math.cos(rad) * speed, Math.sin(rad) * speed];
+    const cush = (shot) => shot.events.filter((e) => e.kind === "cushion").slice(0, 3).map((e) => e.p);
+    const ref = cush(reference.shot);
+    let best = null;
+    for (let side = -SIM.MAX_TIPS; side <= SIM.MAX_TIPS; side += 0.5) {
+      for (let up = -SIM.MAX_TIPS; up <= SIM.MAX_TIPS; up += 0.5) {
+        if (Math.hypot(side, up) > SIM.MAX_TIPS + 1e-9) continue;
+        const shot = SIM.play(layout, cue, v, side, up);
+        const got = cush(shot), judged = SIM.judge(shot);
+        let cost = 0;
+        for (let k = 0; k < ref.length; k++) {
+          cost += got[k] ? Math.hypot(got[k][0] - ref[k][0], got[k][1] - ref[k][1]) : 1500;
+        }
+        if (reference.scored && !judged.scored) cost += 2000;
+        if (judged.first !== reference.first) cost += 3000;
+        cost += 5 * Math.hypot(side - reference.side, up - reference.vertical);
+        if (!best || cost < best.cost) best = { cost, side, up, scored: judged.scored };
+      }
+    }
+    if (best) { row.hit.side = best.side; row.hit.vertical = best.up; }
+    // 당점만으로는 못 돌려놓는 두께가 있다 (프로 150판에 ±12 mm: 24%가 득점을 잃는다). 숨기지 않고 말한다.
+    row.hit.refitLost = !!(best && reference.scored && !best.scored);
+  }
+
   function armTipDrag() {
     const plate = document.querySelector(".plate svg");
     const row = chosenRow();
     if (!plate || !row) return;
+    const group = plate.querySelector(".cue-ov");
     const dot = plate.querySelector(".tip-dot");
     const grab = plate.querySelector(".tip-grab");
-    if (!dot || !grab) return;
-    const centre = parseFloat(dot.dataset.centre);
-    const scale = parseFloat(dot.dataset.scale);
+    if (!group || !dot || !grab) return;
+    const scale = parseFloat(group.dataset.scale);
+    const R = SIM.RADIUS, D = SIM.DIAMETER;
+    let offset = parseFloat(group.dataset.x);
+    const canThicken = firstBall(row);
 
-    const place = (event) => {
+    const svgPoint = (event) => {
       const ctm = plate.getScreenCTM();
-      if (!ctm) return;
+      if (!ctm) return null;
       const at = plate.createSVGPoint();
       at.x = event.clientX;
       at.y = event.clientY;
-      const here = at.matrixTransform(ctm.inverse());
-      let side = (here.x - centre) / scale;
+      return at.matrixTransform(ctm.inverse());
+    };
+
+    const placeTip = (event) => {
+      const here = svgPoint(event);
+      if (!here) return;
+      let side = (here.x - offset) / scale;
       let up = -here.y / scale;
       // 미스큐 한계 밖으로는 나갈 수 없다. 방향은 두고 길이만 줄인다.
       const out = Math.hypot(side, up);
@@ -1476,16 +1532,33 @@
       row.hit.side = Math.round(side * 2) / 2;
       row.hit.vertical = Math.round(up * 2) / 2;
       row.hit.byHand = true;
+      row.hit.refitLost = false;
       // ★점이 손을 따라온다 (2026-10-03, 선수: "당점이 잘 안 옮겨짐"). 그림은 손을 뗄 때 다시
       // 그리므로, 끄는 동안 점이 제자리에 서 있어서 안 움직이는 것처럼 보였다.
       for (const node of [dot, grab]) {
-        node.setAttribute("cx", centre + row.hit.side * scale);
+        node.setAttribute("cx", row.hit.side * scale);
         node.setAttribute("cy", -row.hit.vertical * scale);
       }
       replay(row);
     };
 
-    // 점을 정확히 잡지 않아도 된다 — 그림 어디를 눌러도 그 자리가 당점이 된다. 터치에서는
+    // 두께 끌기 (2026-10-05, 선수 요청): 수구를 옆으로 옮기거나 아래 막대(중심 간 거리)를 끈다.
+    // 끄는 동안은 당점을 그대로 두고 겨냥만 바꿔 보여 주고, 손을 떼면 같은 길이 되도록 당점을 맞춘다.
+    const placeCue = (event) => {
+      const here = svgPoint(event);
+      if (!here) return;
+      offset = Math.max(-D * 0.97, Math.min(D * 0.97, here.x));
+      const face = offset < 0 ? "left" : "right";
+      group.setAttribute("transform", `translate(${offset},0)`);
+      const clip = plate.querySelector(".clip-cue"); if (clip) clip.setAttribute("cx", offset);
+      const bar = plate.querySelector(".bar-line"); if (bar) bar.setAttribute("x2", offset);
+      const knob = plate.querySelector(".thick-knob"); if (knob) knob.setAttribute("cx", offset);
+      row.hit.deg = aimForThickness(row, Math.abs(offset), face);
+      row.hit.byHand = true;
+      replay(row);
+    };
+
+    // 점을 정확히 잡지 않아도 된다 — 수구 가운데 쪽을 누르면 그 자리가 당점이 된다. 터치에서는
     // 끄는 동작이 화면 스크롤로 새지 않게 막는다.
     plate.style.touchAction = "none";
     plate.style.cursor = "crosshair";
@@ -1493,17 +1566,25 @@
       event.preventDefault();
       plate.setPointerCapture(event.pointerId);
       stopPlaying();
-      const move = (e) => place(e);
+      const here = svgPoint(event);
+      // 수구 가운데(3팁 원 안쪽)는 당점, 그 밖(수구 가장자리 · 1적구 · 빈 곳 · 아래 막대)은 두께.
+      const onTip = !canThicken || (here && Math.hypot(here.x - offset, here.y) < R * 0.8 && here.y < 38);
+      const reference = onTip ? null : {
+        shot: row.hit.shot, scored: !!(row.hit.judged && row.hit.judged.scored),
+        first: row.hit.judged && row.hit.judged.first, side: row.hit.side || 0, vertical: row.hit.vertical || 0,
+      };
+      const move = (e) => (onTip ? placeTip(e) : placeCue(e));
       const done = () => {
         plate.removeEventListener("pointermove", move);
         plate.removeEventListener("pointerup", done);
         plate.removeEventListener("pointercancel", done);
+        if (reference && reference.shot) { refitTip(row, reference); replay(row); }
         render();
       };
       plate.addEventListener("pointermove", move);
       plate.addEventListener("pointerup", done);
       plate.addEventListener("pointercancel", done);
-      place(event);
+      move(event);
     };
   }
 
@@ -1723,7 +1804,7 @@
     // 관례이기도 하다. 점도 같은 배율로 옮긴다.
     const scale = (R * 0.88) / (SIM.MAX_TIPS * T);
     const rings = [1, 2, 3].map((n) =>
-      `<circle cx="${x}" cy="0" r="${(n * T * scale).toFixed(2)}" fill="none"
+      `<circle cx="0" cy="0" r="${(n * T * scale).toFixed(2)}" fill="none"
                stroke="rgba(0,0,0,${n === 3 ? .55 : .35})" stroke-width="${n === 3 ? .9 : .6}"
                stroke-dasharray="${n === 3 ? "" : "2.5 2"}"/>`).join("");
     return `<div class="plate">
@@ -1731,32 +1812,37 @@
       <svg viewBox="-104 -52 208 104" role="img"
            aria-label="${NAMES[row.first]}을 ${asThickness(row.hit.thickness)} 두께로,
                        당점 ${asTip(side, vertical)}">
-        <defs><clipPath id="${id}"><circle cx="${x}" cy="0" r="${R}"/></clipPath></defs>
+        <defs><clipPath id="${id}"><circle class="clip-cue" cx="${x}" cy="0" r="${R}"/></clipPath></defs>
         <circle cx="0" cy="0" r="${R}" fill="${firstColour}"
                 stroke="rgba(0,0,0,.45)" stroke-width="1.2"/>
         <circle cx="0" cy="0" r="${R}" clip-path="url(#${id})"
                 fill="var(--cloth)" opacity=".5"/>
-        <circle cx="${x}" cy="0" r="${R}" fill="${cueColour}" fill-opacity=".55"
-                stroke="rgba(0,0,0,.6)" stroke-width="1.2"/>
-        ${rings}
-        <line x1="${x - R * 0.9}" y1="0" x2="${x + R * 0.9}" y2="0"
-              stroke="rgba(0,0,0,.28)" stroke-width=".6"/>
-        <line x1="${x}" y1="${-R * 0.9}" x2="${x}" y2="${R * 0.9}"
-              stroke="rgba(0,0,0,.28)" stroke-width=".6"/>
-        <circle class="tip-dot" cx="${x + side * T * scale}" cy="${-vertical * T * scale}" r="5"
-                fill="var(--cloth)" stroke="#fff" stroke-width="1.2"
-                style="cursor:grab" data-centre="${x}" data-scale="${T * scale}"/>
-        <circle class="tip-grab" cx="${x + side * T * scale}" cy="${-vertical * T * scale}" r="11"
-                fill="transparent" style="cursor:grab"/>
-        ${Math.abs(x) > 2 ? `<line x1="0" y1="44" x2="${x}" y2="44"
+        <g class="cue-ov" transform="translate(${x},0)" data-x="${x}" data-scale="${T * scale}">
+          <circle cx="0" cy="0" r="${R}" fill="${cueColour}" fill-opacity=".55"
+                  stroke="rgba(0,0,0,.6)" stroke-width="1.2"/>
+          ${rings}
+          <line x1="${-R * 0.9}" y1="0" x2="${R * 0.9}" y2="0"
+                stroke="rgba(0,0,0,.28)" stroke-width=".6"/>
+          <line x1="0" y1="${-R * 0.9}" x2="0" y2="${R * 0.9}"
+                stroke="rgba(0,0,0,.28)" stroke-width=".6"/>
+          <circle class="tip-dot" cx="${side * T * scale}" cy="${-vertical * T * scale}" r="5"
+                  fill="var(--cloth)" stroke="#fff" stroke-width="1.2" style="cursor:grab"/>
+          <circle class="tip-grab" cx="${side * T * scale}" cy="${-vertical * T * scale}" r="11"
+                  fill="transparent" style="cursor:grab"/>
+        </g>
+        <line x1="0" y1="44" x2="${x}" y2="44" class="bar-line"
               stroke="var(--ink)" stroke-width="1.4"/>
-          <line x1="0" y1="40" x2="0" y2="48" stroke="var(--ink)" stroke-width="1"/>
-          <line x1="${x}" y1="40" x2="${x}" y2="48" stroke="var(--ink)" stroke-width="1"/>` : ""}
+        <line x1="0" y1="40" x2="0" y2="48" stroke="var(--ink)" stroke-width="1"/>
+        ${firstBall(row) ? `<circle class="thick-knob" cx="${x}" cy="44" r="4.5" fill="var(--ink)"
+                stroke="#fff" stroke-width="1" style="cursor:ew-resize"/>` : `<line class="bar-end" x1="${x}" y1="40" x2="${x}" y2="48" stroke="var(--ink)" stroke-width="1"/>`}
       </svg>
       <span class="said">두께 <b>${asThickness(row.hit.thickness)}</b>
         (${NAMES[row.first]} ${row.hit.face === "left" ? "왼쪽" : "오른쪽"}면,
         빗나감 ${Math.round(gap)} mm) · 당점 <b>${asTip(side, vertical)}</b>
-        <span style="color:var(--faint)">— 바깥 원이 3팁(미스큐 한계)</span></span>
+        <span style="color:var(--faint)">— 바깥 원이 3팁(미스큐 한계)${firstBall(row)
+          ? " · 수구 가장자리나 아래 막대를 끌면 두께가 바뀌고, 같은 길이 되도록 당점을 다시 맞춥니다" : ""}</span></span>
+      ${row.hit.refitLost ? `<span class="said" style="color:var(--warn, #b5462f)">이 두께로는 당점만으로 같은 길을
+        만들지 못했습니다 — 가장 가까운 당점을 골랐지만 득점하지 않습니다. 강도를 바꾸거나 두께를 되돌려 보세요.</span>` : ""}
       ${row.band ? `<span class="said" style="color:var(--soft)">${row.band.wide
         ? `전체 프로 ${row.band.n}명` : `가까운 프로 ${row.band.n}명`}은 ${row.route}를
         <b>${asThickness(row.band.mid)}</b>로 쳤습니다
