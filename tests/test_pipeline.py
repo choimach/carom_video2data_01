@@ -169,3 +169,24 @@ def test_a_flickering_inning_number_does_not_break_a_settled_board():
     found = final_board(rows)
     assert (found["white"], found["yellow"]) == (50, 49)
     assert found["held"] == 4
+
+
+def test_rest_is_found_after_the_window_and_a_new_stroke_stops_the_search():
+    import numpy as np
+    from src.pipeline import first_still, _next_strike
+    fps, n = 60.0, 600
+    pos = {c: np.zeros((n, 2)) for c in ("white", "yellow", "red")}
+    pos["yellow"][:] = (500.0, 500.0)
+    pos["red"][:] = (1500.0, 700.0)
+    # White rolls at 0.2 m/s from frame 0 to 120, then stands still - the
+    # window would have closed at frame 0 (below 0.25 m/s).
+    t = np.arange(n) / fps
+    pos["white"][:, 0] = 1000.0 + 200.0 * np.minimum(t, 2.0)
+    pos["white"][:, 1] = 300.0
+    live = np.ones(n, dtype=bool)
+    frame, rest = first_still(pos, live, 0, n, fps)
+    assert 115 <= frame <= 125
+    assert abs(rest["white"][0] - 1400.0) < 5
+    # A stroke at frame 300 sends yellow off at 2 m/s: the search must stop there.
+    pos["yellow"][300:, 0] = 500.0 + 2000.0 * (t[300:] - t[300])
+    assert 295 <= _next_strike(pos, 0, n, fps) <= 305

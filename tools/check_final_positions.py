@@ -3,16 +3,16 @@
 Safety and position play are both judged on where the balls came to rest, so
 this is the ruler for them (2026-10-05).
 
-Each play records `final_mm` at the frame its window closed. The window closes
-when every ball is below REST_SPEED_MS (0.25 m/s) for 0.35 s - right for
-splitting plays, but a ball at 0.2 m/s still rolls on. This follows the scan
-past the window to where the balls really stood still (each ball within
-STILL_MM over STILL_SECONDS) and compares:
+`final_mm` is where the balls were when the play's window closed - below
+0.25 m/s, still rolling. `rest_mm` (src/pipeline.py `settle`) follows the scan
+until they really stood still; `rest_basis` says how it was seen:
+  watched   the camera stayed until they stopped
+  returned  seen still after a cut, checked (balls already still did not
+            move, moving balls could reach, no new stroke)
+  None      not known
 
-  final_mm <-> true rest   how wrong the stored end position is
-
-The next play's layout is NOT a usable answer: in 2026-10-05 runs the plays the
-numbering called adjacent often had another, unscanned play between them.
+The next play's layout is NOT a usable answer: plays the numbering calls
+adjacent often had another, unscanned play between them.
 
     ~/.venvs/carom/bin/python tools/check_final_positions.py
 """
@@ -20,110 +20,58 @@ import glob
 import json
 import math
 import os
+import re
 import sys
+from collections import defaultdict
 
 import numpy as np
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-sys.path.insert(0, ROOT)
-from src.pipeline import load_scan  # noqa: E402
-
 COLOURS = ("white", "yellow", "red")
-STILL_MM = 5.0
-STILL_SECONDS = 0.5
-
-
-def true_rest(pos, live, start, stop, fps):
-    """First stretch after `start` where all three balls are seen and still.
-
-    Returns (frame, {colour: (x, y)}) or (None, None) if the camera never
-    showed them still before `stop`.
-    """
-    span = max(2, int(STILL_SECONDS * fps))
-    xy = np.stack([pos[c][start:stop] for c in COLOURS], axis=1)       # (n, 3, 2)
-    ok = live[start:stop] & np.isfinite(xy).all(axis=(1, 2))
-    n = len(ok)
-    i = 0
-    while i + span <= n:
-        if not ok[i:i + span].all():
-            i += 1
-            continue
-        win = xy[i:i + span]
-        if (np.linalg.norm(win - win[0], axis=2) <= STILL_MM).all():
-            med = np.median(win, axis=0)
-            return start + i, {c: tuple(med[k]) for k, c in enumerate(COLOURS)}
-        i += 1
-    return None, None
-
-
-def still_at(pos, frame, fps):
-    """Balls that had not moved in the half second before `frame`."""
-    w = int(0.5 * fps)
-    out = []
-    for c in COLOURS:
-        seg = pos[c][max(0, frame - w):frame + 1]
-        seg = seg[np.isfinite(seg).all(axis=1)]
-        if len(seg) > 3 and np.linalg.norm(seg - seg[0], axis=1).max() < STILL_MM:
-            out.append(c)
-    return out
 
 
 def main():
     rows = []
     for path in sorted(glob.glob(os.path.join(ROOT, "data", "dataset", "*.json"))):
         name = os.path.basename(path)[:-5]
-        scan = os.path.join(ROOT, "data", "scans", name + ".npz")
-        if name == "index" or not os.path.exists(scan):
+        if name == "index":
             continue
-        s = load_scan(scan)
-        pos, live, fps = s["positions"], s["live"], s["fps"]
-        plays = sorted(json.load(open(path, encoding="utf-8"))["plays"], key=lambda p: int(p["start_frame"]))
-        starts = [int(p["start_frame"]) for p in plays]
-        for a in plays:
-            end, fa = int(a["end_frame"]), a.get("final_mm") or {}
-            if not all(c in fa for c in COLOURS):
+        event = re.sub(r"^soop_\d+_", "", name)
+        for p in json.load(open(path, encoding="utf-8"))["plays"]:
+            if str(p.get("inferred")) == "True":
                 continue
-            later = [x for x in starts if x > end]
-            stop = min(len(live), end + int(60 * fps), later[0] if later else len(live))
-            frame, rest = true_rest(pos, live, end, stop, fps)
-            still = still_at(pos, end, fps)
-            cut = frame is not None and (~live[end:frame]).sum() / fps >= 0.5
-            # After a cut another play may have happened unseen. Balls that were
-            # already still when the window closed must not have moved.
-            agrees = None if frame is None or not still else all(math.dist(fa[c], rest[c]) <= 20 for c in still)
-            rows.append(dict(
-                complete=str(a.get("complete")) == "True" and str(a.get("inferred")) != "True",
-                found=frame is not None, cut=cut, still=len(still), agrees=agrees,
-                err=max(math.dist(fa[c], rest[c]) for c in COLOURS) if rest else None,
-                late=(frame - end) / fps if frame is not None else None,
-            ))
+            fa, rest = p.get("final_mm") or {}, p.get("rest_mm")
+            usable = not p.get("rejected_for")
+            err = None
+            if rest and all(c in fa for c in COLOURS):
+                err = max(math.dist(fa[c], rest[c]) for c in COLOURS)
+            rows.append(dict(event=event, basis=p.get("rest_basis"), usable=usable, err=err,
+                             complete=str(p.get("complete")) == "True", scored=str(p.get("success")) == "True"))
 
     n = len(rows)
-    found = [r for r in rows if r["found"]]
-    direct = [r for r in found if not r["cut"]]
-    after = [r for r in found if r["cut"]]
-    print(f"플레이 {n}")
-    print(f"다음 판 전에 세 공이 멈춘 것이 보인다: {len(found) / n:.0%}  "
-          f"(카메라가 끊기지 않고: {len(direct) / n:.0%} · 중계가 다른 화면으로 갔다 돌아와서: {len(after) / n:.0%})")
-    for k in (0, 1, 2):
-        rk = [r for r in after if r["still"] == k]
-        if rk and k:
-            print(f"  끊긴 뒤, 창이 닫힐 때 멈춰 있던 공 {k}개: {len(rk)}판 — 그 공이 그대로인 판 "
-                  f"{np.mean([bool(r['agrees']) for r in rk]):.0%} (아니면 사이에 놓친 판)")
-        elif rk:
-            print(f"  끊긴 뒤, 창이 닫힐 때 세 공 다 움직이던 판: {len(rk)} — 이 방법으로는 확인할 수 없다")
-    trusted = direct + [r for r in after if r["agrees"]]
-    e = np.array([r["err"] for r in trusted])
-    print(f"믿을 수 있는 진짜 멈춤: {len(trusted) / n:.0%}")
-    print(f"  거기서 저장된 final_mm의 오차 (가장 먼 공): 중앙값 {np.median(e):.0f} mm · ≤20 {np.mean(e <= 20):.0%}"
-          f" · >100 {np.mean(e > 100):.0%} · >300 {np.mean(e > 300):.0%}")
-    for name, sel in (("complete", lambda r: r["complete"]), ("멈춤 못 봄", lambda r: not r["complete"])):
+    print(f"플레이 {n} (화면에 나온 것)")
+    for label, sel in (("전체", lambda r: True), ("쓸 수 있는 판", lambda r: r["usable"])):
         rs = [r for r in rows if sel(r)]
-        d = [r for r in rs if r["found"] and not r["cut"]]
-        if d:
-            de = np.array([r["err"] for r in d])
-            print(f"  [{name}] {len(rs)}판, 카메라가 멈출 때까지 머문 판 {len(d) / len(rs):.0%} — 저장 오차 중앙값 "
-                  f"{np.median(de):.0f} mm, 창이 닫히고 {np.median([r['late'] for r in d]):.1f}초 뒤에 멈춤")
+        w = sum(r["basis"] == "watched" for r in rs)
+        t = sum(r["basis"] == "returned" for r in rs)
+        print(f"  {label:<10} {len(rs):5d}판 — 멈춘 자리를 안다 {(w + t) / len(rs):4.0%}"
+              f"  (끝까지 봄 {w / len(rs):.0%} · 돌아와서 봄 {t / len(rs):.0%})")
+    for label, sel in (("득점", lambda r: r["scored"]), ("실패", lambda r: not r["scored"])):
+        rs = [r for r in rows if r["usable"] and sel(r)]
+        print(f"  쓸 수 있는 {label} {len(rs):5d}판 — 안다 {np.mean([r['basis'] is not None for r in rs]):.0%}")
+    e = np.array([r["err"] for r in rows if r["err"] is not None])
+    print(f"\n저장된 final_mm과 멈춘 자리의 차이 (가장 먼 공): 중앙값 {np.median(e):.0f} mm · ≤20 {np.mean(e <= 20):.0%}"
+          f" · >100 {np.mean(e > 100):.0%} · >300 {np.mean(e > 300):.0%}")
+    for b in ("watched", "returned"):
+        eb = np.array([r["err"] for r in rows if r["basis"] == b and r["err"] is not None])
+        print(f"  {b:<9} 중앙값 {np.median(eb):5.0f} mm · ≤20 {np.mean(eb <= 20):.0%}")
+
+    by = defaultdict(list)
+    for r in rows:
+        by[r["event"]].append(r["basis"] is not None)
+    print("\n대회별 (중계 연출이 다르다):")
+    for ev, v in sorted(by.items(), key=lambda kv: -np.mean(kv[1])):
+        print(f"  {ev:<12} {len(v):5d}판  안다 {np.mean(v):4.0%}")
 
 
 if __name__ == "__main__":

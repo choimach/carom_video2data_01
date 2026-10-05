@@ -418,6 +418,144 @@ def label_from_inning_shape(result_innings, turns):
                 shot.success = scored
 
 
+REST_STILL_MM = 5.0          # every ball within this of where the stretch began
+REST_STILL_SECONDS = 0.5     # ... for this long, on the overhead camera
+REST_SEARCH_SECONDS = 60.0
+REST_REPLAY_MM = 25.0        # a "rest" this close to the play's own layout is a replay's lead-in
+
+
+def first_still(positions, live, start, stop, fps, still_mm=REST_STILL_MM,
+                seconds=REST_STILL_SECONDS):
+    """First frame from `start` where all three balls are seen and still.
+
+    Returns (frame, {colour: (x, y)}), or (None, None) if the camera never
+    showed them still before `stop`.
+    """
+    span = max(2, int(seconds * fps))
+    if stop - start < span:
+        return None, None
+    xy = np.stack([positions[c][start:stop] for c in BALL_ORDER], axis=1)   # (n, 3, 2)
+    ok = live[start:stop] & np.isfinite(xy).all(axis=(1, 2))
+    # A window can only qualify where it is fully seen: count unseen frames.
+    bad = np.r_[0, np.cumsum(~ok)]
+    for i in range(len(ok) - span + 1):
+        if bad[i + span] - bad[i]:
+            continue
+        win = xy[i:i + span]
+        if (np.linalg.norm(win - win[0], axis=2) <= still_mm).all():
+            med = np.median(win, axis=0)
+            return start + i, {c: (float(med[k][0]), float(med[k][1])) for k, c in enumerate(BALL_ORDER)}
+    return None, None
+
+
+def _reachable(xy, end, rest, fps, slack=1.5, margin_mm=50.0):
+    """Could a ball last seen moving at `end` have rolled to `rest`?"""
+    from src.physics.spin import ROLLING_FRICTION, GRAVITY_MM_S2
+    seen = np.flatnonzero(np.isfinite(xy[max(0, end - int(0.4 * fps)):end + 1]).all(axis=1))
+    if len(seen) < 2:
+        return True                      # nothing to judge by
+    base = max(0, end - int(0.4 * fps))
+    a, b = base + seen[0], base + seen[-1]
+    if b - a < int(0.1 * fps):
+        return True
+    speed = np.hypot(*(xy[b] - xy[a])) / ((b - a) / fps)        # mm/s
+    reach = speed ** 2 / (2 * ROLLING_FRICTION * GRAVITY_MM_S2)
+    return np.hypot(rest[0] - xy[b][0], rest[1] - xy[b][1]) <= slack * reach + margin_mm
+
+
+def _next_strike(positions, end, stop, fps, step_s=0.1, slack=1.2, noise_mm_s=300.0):
+    """First frame after `end` where some ball moves faster than anything at `end` could make it.
+
+    After the window closes the balls only slow down - a ball knocked by
+    another cannot leave faster than the one that hit it. A sudden rise is
+    the next stroke, which the segmenter does not always catch (ANWC2025: a
+    1.75 m "rest" was the next play's ending).
+    """
+    k = max(1, int(step_s * fps))
+
+    def speeds(a, b):
+        out = []
+        for c in BALL_ORDER:
+            xy = positions[c][a:b]
+            d = np.hypot(*(xy[k:] - xy[:-k]).T) * fps / k if len(xy) > k else np.array([])
+            out.append(d)
+        return out
+
+    before = [v[np.isfinite(v)] for v in speeds(max(0, end - int(0.3 * fps)), end + 1)]
+    v_end = max((v.max() for v in before if v.size), default=0.0)
+    bound = slack * v_end + noise_mm_s
+    after = speeds(end, stop)
+    first = stop
+    # Sustained, not a single reading: a stray detection as the camera comes
+    # back reads as 14 m/s for a frame or two.
+    need = max(2, int(0.2 * fps))
+    for v in after:
+        over = np.nan_to_num(v, nan=0.0) > bound
+        run = np.convolve(over.astype(int), np.ones(need, dtype=int), mode="valid")
+        hit = np.flatnonzero(run == need)
+        if hit.size:
+            first = min(first, end + int(hit[0]))
+    return first
+
+
+def settle(shots, every_shot, positions, live, fps):
+    """Where the balls really came to rest after each play.
+
+    A play's window closes when every ball is below REST_SPEED_MS, and at that
+    speed a ball still rolls 100-300 mm - so `end_positions` is where they were
+    rolling, not where they stopped (median 300 mm off, 2026-10-05). Safety and
+    position play are judged on the rest, so follow the scan past the window.
+
+    The broadcast usually cuts away before the balls stop (12% of plays are
+    watched to the end); the rest is then read when the overhead camera comes
+    back, which is only trusted if the balls already still at the window's end
+    have not moved. Sets shot.rest_positions / rest_basis / rest_after_s:
+      "watched"  the camera stayed until they stopped
+      "returned" seen still after a cut, the still balls agree
+      None       not seen, or what was seen cannot be this play's rest
+    """
+    starts = sorted(s.start_frame for s in every_shot)
+    n = len(live)
+    for shot in shots:
+        shot.rest_positions, shot.rest_basis, shot.rest_after_s = None, None, None
+        if shot.inferred:
+            continue
+        end = shot.end_frame
+        later = [f for f in starts if f > end]
+        stop = min(n, end + int(REST_SEARCH_SECONDS * fps), later[0] if later else n)
+        stop = min(stop, _next_strike(positions, end, stop, fps))
+        frame, rest = first_still(positions, live, end, stop, fps)
+        if rest is None:
+            continue
+        layout = shot.start_positions or {}
+        if all(c in layout for c in BALL_ORDER) and all(
+                np.hypot(rest[c][0] - layout[c][0], rest[c][1] - layout[c][1]) < REST_REPLAY_MM
+                for c in BALL_ORDER):
+            continue
+        # A ball hidden behind the player is as unseen as a cut to a replay.
+        seen = live[end:frame] & np.all([np.isfinite(positions[c][end:frame]).all(axis=1)
+                                          for c in BALL_ORDER], axis=0)
+        cut = (~seen).sum() >= int(0.5 * fps)
+        if cut:
+            w = int(REST_STILL_SECONDS * fps)
+            still = []
+            for c in BALL_ORDER:
+                seg = positions[c][max(0, end - w):end + 1]
+                seg = seg[np.isfinite(seg).all(axis=1)]
+                if len(seg) > 3 and np.linalg.norm(seg - seg[0], axis=1).max() < REST_STILL_MM:
+                    still.append((c, seg[-1]))
+            if not still or any(np.hypot(rest[c][0] - xy[0], rest[c][1] - xy[1]) > 20.0 for c, xy in still):
+                continue
+            # A ball still moving cannot roll further than its speed allows
+            # (rolling friction, src/physics/spin.py). Without this a play
+            # missed during the cut, which left the still ball alone, passed.
+            if not all(_reachable(positions[c], end, rest[c], fps) for c in BALL_ORDER):
+                continue
+        shot.rest_positions = rest
+        shot.rest_basis = "returned" if cut else "watched"
+        shot.rest_after_s = (frame - end) / fps
+
+
 def analyse(scan_data, recover=True):
     """The cheap pass: plays, innings, verdicts, and an account of what was lost."""
     live = scan_data["live"]
@@ -497,6 +635,7 @@ def analyse(scan_data, recover=True):
         shot.success = verdicts[id(shot)]
 
     label_from_inning_shape(result_innings=innings, turns=turns)
+    settle(ordered, shots, positions, live, fps)
 
     for shot in ordered:
         shot.rejections = play_rejections(shot, fps)
@@ -883,6 +1022,11 @@ def export_json(result, path):
                            for e in verdict.get("events") or []],
                 "layout_mm": shot.start_positions,
                 "final_mm": shot.end_positions,
+                # Where they really stopped - final_mm is where they were still
+                # rolling when the window closed. None when it was not seen.
+                "rest_mm": getattr(shot, "rest_positions", None),
+                "rest_basis": getattr(shot, "rest_basis", None),
+                "rest_after_s": getattr(shot, "rest_after_s", None),
                 "cue_speed_ms": getattr(shot, "cue_speed", None),
                 "thickness": getattr(shot, "thickness", None),
                 "spin_y": getattr(shot, "spin_y", None),
