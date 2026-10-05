@@ -41,6 +41,9 @@ def main(argv=None):
         record = data.get("record") or {}
         if (record.get("at"), record.get("seed")) in have:
             continue
+        if record.get("kind") == "photos-only" and os.path.exists(os.path.join(
+                ROOT, "data", "photos", "feedback", f"{(record.get('at') or 'x').replace(':', '')}.json")):
+            continue        # 이미 받아 둔 사진만 보내기
         fresh.append((data.get("createdAt"), doc.reference.path, data.get("build"), record))
     fresh.sort(key=lambda row: str(row[0]))
 
@@ -84,6 +87,12 @@ def main(argv=None):
                 saved.append(os.path.join("data", "photos", "feedback", name))
             record["photo_files"] = saved or None
         for _created, path, build, record in fresh:
+            # "사진만 보내기"(2026-10-05)는 판단이 아니다 — 채점 장부에 넣지 않고 사진 옆에 적어 둔다.
+            if record.get("kind") == "photos-only":
+                note = os.path.join(out_dir, f"{(record.get('at') or 'x').replace(':', '')}.json")
+                with open(note, "w", encoding="utf-8") as handle:
+                    json.dump(dict(record, note=f"폰 앱 사진만 (빌드 {build}, {path})"), handle, ensure_ascii=False, indent=1)
+                continue
             # 통째로 담는다 — record_feedback.py와 같다. 후보 목록(candidates)이 있어야 판단을
             # 순위에 대고 채점할 수 있다 (2026-10-03까지 빼고 담았다).
             keep = dict(record)
@@ -91,7 +100,9 @@ def main(argv=None):
             ledger["rounds"].append(keep)
         with open(LEDGER, "w", encoding="utf-8") as handle:
             json.dump(ledger, handle, ensure_ascii=False, indent=1)
-        print(f"\n{len(fresh)}개를 장부에 쌓았습니다 → {LEDGER}")
+        only = sum(1 for *_x, r in fresh if r.get("kind") == "photos-only")
+        print(f"\n{len(fresh) - only}개를 장부에 쌓았습니다 → {LEDGER}"
+              + (f" · 사진만 {only}건은 data/photos/feedback/에" if only else ""))
     return 0
 
 

@@ -255,6 +255,7 @@
       <button id="photo-again1" type="button" hidden>1장 다시</button>
       <button id="photo-again2" type="button" hidden>2장 다시</button>
       <button id="photo-turn" type="button" hidden title="장축과 단축을 바꿔 잡습니다">축 바꾸기</button>
+      <button id="photo-send-only" type="button" hidden title="판단 없이 찍은 사진만 올립니다 — 인식이 틀려도 됩니다">사진만 보내기</button>
       <button id="photo-cancel" type="button">취소</button>
       <button id="photo-apply" type="button" class="run">적용</button>
     </div>
@@ -2333,6 +2334,15 @@
     let single = null, corners = null, final = null;   // final = {balls, warnings, top(ImageData)}
     const show = (ids) => {
       for (const id of ["photo-next", "photo-again1", "photo-again2", "photo-turn"]) $(id).hidden = !ids.includes(id);
+      paintSendOnly();
+    };
+    // 사진만 보내기 (2026-10-05, 선수 요청): 당구장에서 찍은 두 장이 "결과 보내기"를 거치지 않아
+    // 폰을 떠나지 않았다. 폰 앱(클라우드)에서, 한 장이라도 찍었으면 언제든 — 적용도 판단도 없이.
+    const paintSendOnly = () => {
+      const b = $("photo-send-only");
+      const n = jpegs.filter(Boolean).length;
+      b.hidden = !(window.CAROM_CLOUD && n);
+      if (!b.hidden && !b.disabled) b.textContent = `사진만 보내기 (${n}장)`;
     };
     const toImageData = async (f) => {
       const bitmap = await createImageBitmap(f, { imageOrientation: "from-image" }).catch(() => null);
@@ -2497,6 +2507,29 @@
       readSingle();
     };
     $("photo-cancel").onclick = () => { panel.hidden = true; };
+    $("photo-send-only").onclick = async () => {
+      const b = $("photo-send-only");
+      const pics = jpegs.filter(Boolean);
+      if (!pics.length || !window.CAROM_CLOUD) return;
+      b.disabled = true; b.textContent = "보내는 중…";
+      // 인식이 된 만큼만 요약으로 — 틀렸어도 사진과 대 보면 어디가 틀렸는지 안다.
+      // ⚠️ Firestore는 배열 안의 배열을 받지 않는다 → 공 자리는 {x, y}로.
+      const xy = (balls) => Object.fromEntries(Object.entries(balls || {})
+        .map(([k, v]) => [k, v.at || v.world || null]).filter(([, p]) => p)
+        .map(([k, p]) => [k, { x: Math.round(p[0]), y: Math.round(p[1]) }]));
+      const record = {
+        at: new Date().toISOString().slice(0, 19),
+        kind: "photos-only",
+        photos: pics.length,
+        recognised: final ? xy(final.balls) : null,
+        warnings: final ? final.warnings || null : null,
+      };
+      let sent;
+      try { sent = await window.CAROM_CLOUD.send(record, `사진만 ${pics.length}장`, pics); } catch (e) { sent = false; }
+      b.disabled = false;
+      b.textContent = sent === "queued" ? "폰에 저장 — 연결되면 올라갑니다"
+        : sent ? `보냈습니다 (${pics.length}장)` : "보내기 실패 — 다시 눌러 주세요";
+    };
     $("photo-apply").onclick = () => {
       if (!final) return;
       stopPlaying();
