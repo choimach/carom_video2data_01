@@ -332,6 +332,23 @@ def _positions_at(positions, frame, live, search=30):
     return out
 
 
+def _layout_before(positions, start, last_rest_frame, live, window):
+    """Where the balls sat before the strike: the median of the rest before it.
+
+    `start` is the frame the cue ball was first clearly moving - the speed is
+    averaged over SPEED_BASELINE_FRAMES, so by then it has already left. Reading
+    the layout there put the cue ball a median 81 mm down its own line of play
+    (0% within 20 mm, 2026-10-05): the answer leaking into the question. The
+    object balls were right either way; they had not been touched yet.
+    """
+    out = _positions_at(positions, start, live)
+    for colour, xy in positions.items():
+        rest = _rest_position(xy, last_rest_frame, window)
+        if rest is not None:
+            out[colour] = (float(rest[0]), float(rest[1]))
+    return out
+
+
 def segment_shots(positions, live, fps):
     """Split a tracked stretch into shots.
 
@@ -414,7 +431,7 @@ def segment_shots(positions, live, fps):
                 start_frame=start,
                 end_frame=end,
                 cue_ball=cue,
-                start_positions=_positions_at(positions, start, live),
+                start_positions=_layout_before(positions, start, last_rest_frame, live, min_rest),
                 end_positions=_positions_at(positions, end, live),
                 complete=complete,
             )
@@ -832,9 +849,36 @@ def _object_ball_layout(shot):
     return np.array([shot.start_positions[c] for c in others], dtype=float)
 
 
+REPLAY_PATH_TOLERANCE_MM = 80.0
+REPLAY_PATH_TIMES = (0.25, 0.5, 0.75, 1.0)
+
+
+def _cue_path(positions, shot, fps):
+    """The cue ball's place at a few fixed times after the strike (NaN if unseen)."""
+    xy = positions[shot.cue_ball]
+    out = []
+    for t in REPLAY_PATH_TIMES:
+        f = shot.start_frame + int(t * fps)
+        seg = xy[max(0, f - 3):f + 4]
+        seg = seg[np.isfinite(seg).all(axis=1)]
+        out.append(np.median(seg, axis=0) if len(seg) else (np.nan, np.nan))
+    return np.array(out, dtype=float)
+
+
+def _same_path(positions, shot, earlier, fps):
+    """A replay draws the same line again. None when too little was seen to say."""
+    if shot.cue_ball != earlier.cue_ball:
+        return False
+    d = np.linalg.norm(_cue_path(positions, shot, fps) - _cue_path(positions, earlier, fps), axis=1)
+    d = d[np.isfinite(d)]
+    if len(d) < 2:
+        return None
+    return bool(d.max() <= REPLAY_PATH_TOLERANCE_MM)
+
+
 def mark_replays(shots, fps, tolerance_mm=REPLAY_LAYOUT_TOLERANCE_MM,
                  max_gap_seconds=REPLAY_MAX_GAP_SECONDS,
-                 object_tolerance_mm=REPLAY_OBJECT_TOLERANCE_MM):
+                 object_tolerance_mm=REPLAY_OBJECT_TOLERANCE_MM, positions=None):
     """Flag plays that are a second showing of one already seen.
 
     A replay is tracked exactly like live play and there is nothing in the
@@ -869,6 +913,12 @@ def mark_replays(shots, fps, tolerance_mm=REPLAY_LAYOUT_TOLERANCE_MM,
                 same = (shot.cue_ball == earlier.cue_ball
                         and np.linalg.norm(objects - earlier_objects, axis=1).max()
                         < object_tolerance_mm)
+            if same and positions is not None and _same_path(positions, shot, earlier, fps) is False:
+                # Same layout, different line: the real stroke after a false
+                # start or a fragment. Once the layout was read from the rest
+                # before the strike (2026-10-05) these matched to the
+                # millimetre, and 7 of BOWC2025's plays - real ones - vanished.
+                same = False
             if same:
                 shot.replay_of = earlier
                 replays += 1

@@ -567,7 +567,7 @@ def analyse(scan_data, recover=True):
 
     turns = reconciled_turns(scan_data["boards"])
     shots = segment_shots(positions, live, fps)
-    replays = mark_replays(shots, fps)
+    replays = mark_replays(shots, fps, positions=positions)
     distinct = [s for s in shots if s.replay_of is None]
 
     innings = innings_from_turns(turns, distinct)
