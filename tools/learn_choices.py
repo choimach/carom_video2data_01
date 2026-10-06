@@ -75,13 +75,38 @@ def features(branch, layout=None, cue=None):
         # 더 약했다). 이름 표만으로는 구석 근처에서 레일 이름이 갈려 표를 잃는다.
         # 짝지어: 1등 후보가 프로 길 300 mm 안으로 +47 / −17판 (3.8 SD). σ 150·600은 더 약했다.
         math.log1p(branch.get("path_sim", 0.0)),
-    ] + ([math.log1p(branch.get("path_sim3", 0.0))] if SIM3 else []) + [
+    ] + ([math.log1p(branch.get("path_sim3", 0.0))] if SIM3 else []) + bank_terms(branch, layout, cue) + [
         1.0,                                 # 기준선
     ]
 
 
+BANK_NEAR_MM, BANK_FAR_MM = 250.0, 600.0
+
+
+def bank_terms(branch, layout=None, cue=None):
+    """뱅크샷 × 두 적구가 모였나 / 멀리 떨어졌나 (2026-10-06).
+
+    선수: "프로들은 가능하면 제1적구를 맞히는 걸 선호해. 그러나 공 2개가 모여 있거나 뱅크샷으로
+    득점할 확률이 더 높은 경우에, 또는 safety해야 할 경우에는 뱅크샷을 선택." 프로 2,788판:
+    두 적구 사이 150 mm 안이면 뱅크샷을 81% 고르고(득점 77%, 다른 길 33%), 400 mm 넘으면 10~14%.
+    모양을 넷 견줬다 (exp(−d/250) · 구간 · log 거리 · 문). 전체 적중은 같고(3등 안 56.6~57.1%),
+    **문**만이 모인 배치의 뱅크샷을 지켰다 — 프로가 뱅크샷을 친 판에서 3등 안: 250 mm 안 28% (특징 없을 때 30%,
+    exp 모양 18%), 250~600 mm 11% (11%, 4%). 나머지 모양은 뱅크샷 전체를 깎았다.
+    거리는 `apart`가 있으면 그것, 없으면 배치에서.
+    """
+    bank = 1.0 if branch.get("route") == "뱅크샷" else 0.0
+    apart = branch.get("apart")
+    if apart is None and layout and cue:
+        others = [layout[c] for c in layout if c != cue]
+        apart = math.dist(others[0], others[1]) if len(others) == 2 else None
+    if apart is None:
+        return [0.0, 0.0]
+    return [bank * (apart < BANK_NEAR_MM), bank * (apart >= BANK_FAR_MM)]
+
+
 NAMES = ["여유", "두께", "세기", "쿠션수", "1적구이동", "줄두께", "회전량", "상단당점",
-         "이웃프로수", "이웃득점률", "유형빈도", "이웃길수", "이웃길득점률", "이웃길닮음", "기준"]
+         "이웃프로수", "이웃득점률", "유형빈도", "이웃길수", "이웃길득점률", "이웃길닮음",
+         "뱅크샷<250", "뱅크샷>=600", "기준"]
 
 # 유형을 한 번도 못 본 경우의 바닥값. 2,000판쯤에서 "한 번 봤다"보다 낮다.
 LOG_FLOOR = math.log(1 / 2000.0)

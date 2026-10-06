@@ -21,7 +21,10 @@ const CHOICE = (() => {
   // learn_choices.py의 NAMES와 같은 차례.
   const NAMES = ["여유", "두께", "세기", "쿠션수", "1적구이동",
                  "줄두께", "회전량", "상단당점", "이웃프로수", "이웃득점률",
-                 "유형빈도", "이웃길수", "이웃길득점률", "이웃길닮음", "기준"];
+                 "유형빈도", "이웃길수", "이웃길득점률", "이웃길닮음",
+                 "뱅크샷<250", "뱅크샷>=600", "기준"];
+  // learn_choices.py의 BANK_NEAR_MM · BANK_FAR_MM과 같다.
+  const BANK_NEAR_MM = 250, BANK_FAR_MM = 600;
 
   // 유형을 한 번도 못 본 경우의 바닥값 — learn_choices.py의 LOG_FLOOR와 같다.
   const LOG_FLOOR = Math.log(1 / 2000);
@@ -38,8 +41,9 @@ const CHOICE = (() => {
   // prior  : 이 유형을 프로가 얼마나 자주 치는가 (로그 비율)
   // chosen_path, rate_path : 이웃 프로의 **길**(가까운공|면|첫 2쿠션 레일)로 센 표와
   //   득점률 (2026-09-30). 이름 표와 같이 쓴다 — learn_choices.py 참조.
+  // route : 공략 이름, apart : 두 적구 사이 거리(mm) — 뱅크샷 두 특징 (2026-10-06, learn_choices.py bank_terms)
   function features({ room, thickness, strength, rails, pushed, lines, side, up,
-                      chosen, rate, prior, chosen_path, rate_path, path_sim }) {
+                      chosen, rate, prior, chosen_path, rate_path, path_sim, route, apart }) {
     const tips = Math.hypot(side || 0, up || 0);
     return [
       Math.log1p(room),
@@ -68,6 +72,11 @@ const CHOICE = (() => {
       rate_path == null ? 0.5 : rate_path,
       // 이웃 프로 길과의 연속 닮음 — learn_choices.py 참조.
       Math.log1p(path_sim || 0),
+      // 선수 (2026-10-06): 프로는 가능하면 1적구를 먼저 맞히고, 두 공이 모였거나 뱅크샷이 더 나을 때
+      // 뱅크샷을 고른다. 프로 2,788판: 두 적구 150 mm 안이면 81%가 뱅크샷, 400 mm 넘으면 10~14%.
+      // 모양은 "문" — 250 mm 안 / 600 mm 넘음 (learn_choices.py bank_terms의 비교).
+      route === "뱅크샷" && apart != null && apart < BANK_NEAR_MM ? 1 : 0,
+      route === "뱅크샷" && apart != null && apart >= BANK_FAR_MM ? 1 : 0,
       1,
     ];
   }

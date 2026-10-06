@@ -1929,7 +1929,14 @@
     strength: SIM.strengthOf(hit.speed), rails: hit.judged.rails.length,
     pushed: hit.pushed, lines: hit.lines, side: hit.side, up: hit.vertical,
     chosen, rate, prior: ROUTE_PRIOR.get(hit.route), chosen_path, rate_path, path_sim,
+    route: hit.route, apart: objectsApart(),
   }, CHOICE_WEIGHTS);
+  // 두 적구 사이 거리 — 뱅크샷 특징 (choice.js). 수구가 아닌 두 공.
+  function objectsApart() {
+    const others = ORDER.filter((c) => c !== cue && layout[c]);
+    return others.length === 2
+      ? Math.hypot(layout[others[0]][0] - layout[others[1]][0], layout[others[0]][1] - layout[others[1]][1]) : null;
+  }
 
   // 더블은 앞에 세운다 (2026-10-02) — 선수: "명칭은 그냥 더블이 좋을 듯" (씨앗 2030585427).
   // 자료 안의 이름은 바탕 유형 그대로다 (더블은 꼬리표 — 2026-09-20의 결정). 화면 표기만.
