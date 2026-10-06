@@ -265,7 +265,7 @@ node --check build/sim.js
 
 | 무엇을 고쳤나 | 무엇으로 재나 |
 |---|---|
-| 순위 | `tools/table_check.py` (선수 판단), `tools/learn_choices.py` (프로 선택), **`node tools/check_app_ranking.js`** (조언판 자신 — 조언판에서만 나는 버그를 잡는다) |
+| 순위 | `tools/table_check.py` (선수 판단 — **그때의** 순위), **`node tools/check_verdicts.js`** (선수가 판단한 배치를 **지금의** 조언판으로 다시 풀어 "맞다" 줄이 3등 안에 남는가, 3분), `tools/learn_choices.py` (프로 선택), **`node tools/check_app_ranking.js`** (조언판 자신 — 조언판에서만 나는 버그를 잡는다) |
 | 유형 규칙 | `tools/rules_check.py` |
 | 물리 | `tools/fit_spin.py`, `tools/validate_simulator.py` |
 | 좌우 회전 부호 | `tools/check_side_sign.py`, `tools/check_side_vs_circuit.py` |
@@ -273,6 +273,9 @@ node --check build/sim.js
 측정에 쓰는 자를 맞춘 값으로 만들지 말 것. 한 번 이동거리에 맞춰 감쇠곡선을
 다시 잡았다가 테이블이 2.5배 느려진 적이 있다 — 영상 창이 닫힐 때 아직 구르던
 공을 "다 간 거리"로 읽은 탓이었다.
+
+★**순위를 바꾸면 `check_verdicts.js`를 전·후로 돌린다** (2026-10-07, 선수: *"맞다로 결과 나온 것도 중요한 것 아니야?"*). 불평이
+고쳐졌는지만 보고 올리면, 예전에 맞다를 받은 줄이 밀려난 것을 아무도 모른다.
 
 ★**고친 쪽만 재지 말고 나빠진 쪽도 재라.** 전방위 훑기를 넣어 걸어치기 재현율을
 0/7 → 6/6으로 고치고 **그것만** 확인한 채 올렸는데, 같은 변경이 조언판 실행을
