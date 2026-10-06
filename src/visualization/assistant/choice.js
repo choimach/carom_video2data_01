@@ -22,7 +22,7 @@ const CHOICE = (() => {
   const NAMES = ["여유", "두께", "세기", "쿠션수", "1적구이동",
                  "줄두께", "회전량", "상단당점", "이웃프로수", "이웃득점률",
                  "유형빈도", "이웃길수", "이웃길득점률", "이웃길닮음",
-                 "뱅크샷<250", "뱅크샷>=600", "기준"];
+                 "뱅크샷<250", "뱅크샷>=600", "역회전", "기준"];
   // learn_choices.py의 BANK_NEAR_MM · BANK_FAR_MM과 같다.
   const BANK_NEAR_MM = 250, BANK_FAR_MM = 600;
 
@@ -43,7 +43,7 @@ const CHOICE = (() => {
   //   득점률 (2026-09-30). 이름 표와 같이 쓴다 — learn_choices.py 참조.
   // route : 공략 이름, apart : 두 적구 사이 거리(mm) — 뱅크샷 두 특징 (2026-10-06, learn_choices.py bank_terms)
   function features({ room, thickness, strength, rails, pushed, lines, side, up,
-                      chosen, rate, prior, chosen_path, rate_path, path_sim, route, apart }) {
+                      chosen, rate, prior, chosen_path, rate_path, path_sim, route, apart, english }) {
     const tips = Math.hypot(side || 0, up || 0);
     return [
       Math.log1p(room),
@@ -77,6 +77,9 @@ const CHOICE = (() => {
       // 모양은 "문" — 250 mm 안 / 600 mm 넘음 (learn_choices.py bank_terms의 비교).
       route === "뱅크샷" && apart != null && apart < BANK_NEAR_MM ? 1 : 0,
       route === "뱅크샷" && apart != null && apart >= BANK_FAR_MM ? 1 : 0,
+      // 1적구 뒤 첫 쿠션에서 역회전인가 (2026-10-07) — 프로가 고른 줄 21% · 버린 줄 43%. 선수의 "당점 좌우 반대"
+      // 다섯 번이 모두 역회전 줄이었다. 값은 tools/alternatives_english.js와 같은 방식(시뮬레이터의 쿠션 판정).
+      english === "reverse" ? 1 : 0,
       1,
     ];
   }

@@ -1929,8 +1929,15 @@
     strength: SIM.strengthOf(hit.speed), rails: hit.judged.rails.length,
     pushed: hit.pushed, lines: hit.lines, side: hit.side, up: hit.vertical,
     chosen, rate, prior: ROUTE_PRIOR.get(hit.route), chosen_path, rate_path, path_sim,
-    route: hit.route, apart: objectsApart(),
+    route: hit.route, apart: objectsApart(), english: englishAfterFirst(hit),
   }, CHOICE_WEIGHTS);
+  // 1적구 뒤 첫 쿠션의 회전 — 대표 줄은 이미 다시 쳐서 shot이 있다 (tools/alternatives_english.js와 같은 판정).
+  function englishAfterFirst(hit) {
+    if (Math.abs(hit.side || 0) < 0.5 || !hit.shot) return "none";
+    const ball = hit.shot.events.find((e) => e.kind === "ball");
+    const c = hit.shot.events.find((e) => e.kind === "cushion" && (!ball || e.at > ball.at));
+    return c ? c.english : "none";
+  }
   // 두 적구 사이 거리 — 뱅크샷 특징 (choice.js). 수구가 아닌 두 공.
   function objectsApart() {
     const others = ORDER.filter((c) => c !== cue && layout[c]);

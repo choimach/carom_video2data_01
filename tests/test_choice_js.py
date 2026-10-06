@@ -34,6 +34,10 @@ BRANCHES = [
      "side": -2.0, "up": 0.0, "chosen": 3, "rate": 0.6, "prior": -1.9, "route": "뱅크샷", "apart": 1100.0},
     {"room": 0.4, "thickness": 0.2, "strength": 4.4, "rails": 3, "pushed": 1600, "lines": 5,
      "side": -2.0, "up": 0.0, "chosen": 3, "rate": 0.6, "prior": -1.9, "route": "뒤돌리기", "apart": 140.0},
+    {"room": 0.4, "thickness": 0.2, "strength": 4.4, "rails": 3, "pushed": 1600, "lines": 5,
+     "side": -2.0, "up": 0.0, "chosen": 3, "rate": 0.6, "prior": -1.9, "route": "뒤돌리기", "english": "reverse"},
+    {"room": 0.4, "thickness": 0.2, "strength": 4.4, "rails": 3, "pushed": 1600, "lines": 5,
+     "side": 2.0, "up": 0.0, "chosen": 3, "rate": 0.6, "prior": -1.9, "route": "뒤돌리기", "english": "running"},
 ]   # 마지막 하나는 prior 없이 — 바닥값으로 떨어지는지 본다
 
 

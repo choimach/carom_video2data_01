@@ -76,6 +76,9 @@ def features(branch, layout=None, cue=None):
         # 짝지어: 1등 후보가 프로 길 300 mm 안으로 +47 / −17판 (3.8 SD). σ 150·600은 더 약했다.
         math.log1p(branch.get("path_sim", 0.0)),
     ] + ([math.log1p(branch.get("path_sim3", 0.0))] if SIM3 else []) + bank_terms(branch, layout, cue) + [
+        # ★역회전 (2026-10-07). 1적구 뒤 첫 쿠션에서 회전이 진행을 거스르는가. 선수의 "당점 좌우 반대"
+        # 다섯 번이 모두 역회전 줄이었다. 프로가 고른 줄 21% · 버린 줄 43% (모든 유형에서 같은 방향).
+        1.0 if branch.get("english") == "reverse" else 0.0,
         1.0,                                 # 기준선
     ]
 
@@ -106,7 +109,7 @@ def bank_terms(branch, layout=None, cue=None):
 
 NAMES = ["여유", "두께", "세기", "쿠션수", "1적구이동", "줄두께", "회전량", "상단당점",
          "이웃프로수", "이웃득점률", "유형빈도", "이웃길수", "이웃길득점률", "이웃길닮음",
-         "뱅크샷<250", "뱅크샷>=600", "기준"]
+         "뱅크샷<250", "뱅크샷>=600", "역회전", "기준"]
 
 # 유형을 한 번도 못 본 경우의 바닥값. 2,000판쯤에서 "한 번 봤다"보다 낮다.
 LOG_FLOOR = math.log(1 / 2000.0)
@@ -119,10 +122,15 @@ def route_prior(routes):
     return {r: math.log((n + 1) / (total + kinds)) for r, n in routes.items()}
 
 
+ENGLISH = os.path.join(ROOT, "data", "alternatives_english.json")
+
+
 def load(limit=None):
     rounds = []
     if not os.path.exists(FOUND):
         return rounds
+    # 줄마다 1적구 뒤 첫 쿠션의 회전 (`tools/alternatives_english.js`가 다시 쳐서 적는다, 2026-10-07).
+    english = json.load(open(ENGLISH, encoding="utf-8")) if os.path.exists(ENGLISH) else {}
     with open(FOUND, encoding="utf-8") as handle:
         for line in handle:
             if not line.strip():
@@ -135,6 +143,10 @@ def load(limit=None):
             # 것이 아니라 우리가 놓친 것이라, 버림의 근거가 되지 못한다.
             if not one.get("reached") or len(one.get("found") or []) < 2:
                 continue
+            spins = english.get(one["id"])
+            if spins and len(spins) == len(one["found"]):
+                for branch, spin in zip(one["found"], spins):
+                    branch["english"] = spin
             rounds.append(one)
             if limit and len(rounds) >= limit:
                 break
