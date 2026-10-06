@@ -15892,6 +15892,1193 @@
    "photo": null,
    "played": null,
    "comment": null
+  },
+  {
+   "at": "2026-10-06T22:05:44",
+   "table": [
+    2844,
+    1422
+   ],
+   "cue": "white",
+   "layout": {
+    "white": [
+     2197,
+     1168
+    ],
+    "yellow": [
+     2342,
+     442
+    ],
+    "red": [
+     1845,
+     1154
+    ]
+   },
+   "want": {
+    "first": "any",
+    "face": "any"
+   },
+   "origin": "random",
+   "seed": 2664270955,
+   "picked": "뒤돌리기|red|left|bottom-left-top@4,3",
+   "kisses": 121,
+   "candidates": [
+    {
+     "key": "뒤돌리기|red|right|top-left-bottom@1,0",
+     "route": "뒤돌리기",
+     "first": "red",
+     "face": "right",
+     "thickness": 0.33,
+     "tips": [
+      -1,
+      1.73
+     ],
+     "strength": 4.4,
+     "deg": 189,
+     "room": 1.34,
+     "rails": 3,
+     "chosen": 12,
+     "scored": 8,
+     "total": 40,
+     "band": [
+      6,
+      0.267
+     ]
+    },
+    {
+     "key": "옆돌리기|yellow|right|top-right-bottom@6,0",
+     "route": "옆돌리기",
+     "first": "yellow",
+     "face": "right",
+     "thickness": 0.07,
+     "tips": [
+      0,
+      1
+     ],
+     "strength": 2.6,
+     "deg": 285.75,
+     "room": 0.282,
+     "rails": 3,
+     "chosen": 8,
+     "scored": 6,
+     "total": 40,
+     "band": [
+      7,
+      0.433
+     ]
+    },
+    {
+     "key": "뒤돌리기|red|left|bottom-left-top@4,3",
+     "route": "뒤돌리기",
+     "first": "red",
+     "face": "left",
+     "thickness": 0.351,
+     "tips": [
+      1,
+      1.73
+     ],
+     "strength": 6.3,
+     "deg": 176,
+     "room": 1.358,
+     "rails": 5,
+     "chosen": 9,
+     "scored": 7,
+     "total": 40,
+     "band": [
+      3,
+      0.314
+     ]
+    },
+    {
+     "key": "뒤돌리기|red|left|bottom-left-top@3,3",
+     "route": "뒤돌리기",
+     "first": "red",
+     "face": "left",
+     "thickness": 0.057,
+     "tips": [
+      1,
+      1.73
+     ],
+     "strength": 2.6,
+     "deg": 173,
+     "room": 0.382,
+     "rails": 3,
+     "chosen": 9,
+     "scored": 7,
+     "total": 40,
+     "band": [
+      3,
+      0.314
+     ]
+    },
+    {
+     "key": "뒤돌리기|red|right|top-left-bottom@3,0",
+     "route": "뒤돌리기",
+     "first": "red",
+     "face": "right",
+     "thickness": 0.366,
+     "tips": [
+      -1.73,
+      -1
+     ],
+     "strength": 5.6,
+     "deg": 188.75,
+     "room": 0.461,
+     "rails": 4,
+     "chosen": 12,
+     "scored": 8,
+     "total": 40,
+     "band": [
+      6,
+      0.267
+     ]
+    },
+    {
+     "key": "뒤돌리기|red|left|bottom-left-top@2,3",
+     "route": "뒤돌리기",
+     "first": "red",
+     "face": "left",
+     "thickness": 0.011,
+     "tips": [
+      0,
+      2
+     ],
+     "strength": 2.6,
+     "deg": 172.5,
+     "room": 0.124,
+     "rails": 4,
+     "chosen": 9,
+     "scored": 7,
+     "total": 40,
+     "band": [
+      3,
+      0.314
+     ]
+    },
+    {
+     "key": "뒤돌리기|red|right|top-left-bottom@0,0",
+     "route": "뒤돌리기",
+     "first": "red",
+     "face": "right",
+     "thickness": 0.113,
+     "tips": [
+      0,
+      2
+     ],
+     "strength": 5,
+     "deg": 191.25,
+     "room": 0.27,
+     "rails": 4,
+     "chosen": 12,
+     "scored": 8,
+     "total": 40,
+     "band": [
+      6,
+      0.267
+     ]
+    },
+    {
+     "key": "옆돌리기|red|left|bottom-top-left@4,3",
+     "route": "옆돌리기",
+     "first": "red",
+     "face": "left",
+     "thickness": 0.426,
+     "tips": [
+      -1.73,
+      1
+     ],
+     "strength": 5.6,
+     "deg": 176.75,
+     "room": 1.24,
+     "rails": 4,
+     "chosen": 1,
+     "scored": 1,
+     "total": 40,
+     "band": [
+      7,
+      0.433
+     ]
+    },
+    {
+     "key": "뒤돌리기|yellow|left|top-bottom-left@5,0",
+     "route": "뒤돌리기",
+     "first": "yellow",
+     "face": "left",
+     "thickness": 0.182,
+     "tips": [
+      -1,
+      1.73
+     ],
+     "strength": 4.4,
+     "deg": 277.5,
+     "room": 0.266,
+     "rails": 4,
+     "chosen": 2,
+     "scored": 2,
+     "total": 40,
+     "band": [
+      10,
+      0.314
+     ]
+    },
+    {
+     "key": "옆돌리기|yellow|left|top-left-bottom@3,0",
+     "route": "옆돌리기",
+     "first": "yellow",
+     "face": "left",
+     "thickness": 0.507,
+     "tips": [
+      -1,
+      -1.73
+     ],
+     "strength": 5.6,
+     "deg": 279,
+     "room": 0.06,
+     "rails": 3,
+     "chosen": 1,
+     "scored": 1,
+     "total": 40,
+     "band": [
+      7,
+      0.433
+     ]
+    },
+    {
+     "key": "뱅크샷|red|left|bottom-left-top@5,3",
+     "route": "뱅크샷",
+     "first": "red",
+     "face": "left",
+     "thickness": 0.385,
+     "tips": [
+      -2,
+      0
+     ],
+     "strength": 4.4,
+     "deg": 125,
+     "room": 0.516,
+     "rails": 3,
+     "chosen": 2,
+     "scored": 1,
+     "total": 40,
+     "band": [
+      213,
+      0.335
+     ]
+    },
+    {
+     "key": "뱅크샷|red|left|top-left-bottom@1,0",
+     "route": "뱅크샷",
+     "first": "red",
+     "face": "left",
+     "thickness": 0.204,
+     "tips": [
+      0,
+      2
+     ],
+     "strength": 4.4,
+     "deg": 214,
+     "room": 0.224,
+     "rails": 3,
+     "chosen": 2,
+     "scored": 1,
+     "total": 40,
+     "band": [
+      213,
+      0.335
+     ]
+    },
+    {
+     "key": "걸어치기|yellow|left|right-top-left@7,2",
+     "route": "걸어치기",
+     "first": "yellow",
+     "face": "left",
+     "thickness": 0.189,
+     "tips": [
+      2,
+      0
+     ],
+     "strength": 5,
+     "deg": 334.75,
+     "room": 0.134,
+     "rails": 3,
+     "chosen": 0,
+     "scored": 0,
+     "total": 40,
+     "band": [
+      51,
+      0.227
+     ]
+    },
+    {
+     "key": "뱅크샷|yellow|left|right-top-bottom@7,0",
+     "route": "뱅크샷",
+     "first": "yellow",
+     "face": "left",
+     "thickness": 0.123,
+     "tips": [
+      0,
+      2
+     ],
+     "strength": 4.4,
+     "deg": 302,
+     "room": 0.139,
+     "rails": 3,
+     "chosen": 0,
+     "scored": 0,
+     "total": 40,
+     "band": [
+      213,
+      0.335
+     ]
+    },
+    {
+     "key": "뱅크샷|red|left|right-top-bottom@7,0",
+     "route": "뱅크샷",
+     "first": "red",
+     "face": "left",
+     "thickness": 0.552,
+     "tips": [
+      0,
+      2
+     ],
+     "strength": 7,
+     "deg": 301,
+     "room": 0.213,
+     "rails": 3,
+     "chosen": 2,
+     "scored": 1,
+     "total": 40,
+     "band": [
+      213,
+      0.335
+     ]
+    },
+    {
+     "key": "뱅크샷|yellow|left|bottom-left-top@2,3",
+     "route": "뱅크샷",
+     "first": "yellow",
+     "face": "left",
+     "thickness": 0.431,
+     "tips": [
+      0,
+      2
+     ],
+     "strength": 5,
+     "deg": 167.75,
+     "room": 0.253,
+     "rails": 5,
+     "chosen": 0,
+     "scored": 0,
+     "total": 40,
+     "band": [
+      213,
+      0.335
+     ]
+    },
+    {
+     "key": "앞돌리기|red|right|left-top-right@0,2",
+     "route": "앞돌리기",
+     "first": "red",
+     "face": "right",
+     "thickness": 0.915,
+     "tips": [
+      -1,
+      1.73
+     ],
+     "strength": 7,
+     "deg": 183.25,
+     "room": 0.057,
+     "rails": 3,
+     "chosen": 1,
+     "scored": 0,
+     "total": 40,
+     "band": [
+      174,
+      0.299
+     ]
+    },
+    {
+     "key": "뱅크샷|red|left|right-bottom-bottom@7,3",
+     "route": "뱅크샷",
+     "first": "red",
+     "face": "left",
+     "thickness": 0.209,
+     "tips": [
+      0,
+      2
+     ],
+     "strength": 7,
+     "deg": 8.25,
+     "room": 0.064,
+     "rails": 4,
+     "chosen": 2,
+     "scored": 1,
+     "total": 40,
+     "band": [
+      213,
+      0.335
+     ]
+    },
+    {
+     "key": "뱅크샷|yellow|right|bottom-left-right@1,3",
+     "route": "뱅크샷",
+     "first": "yellow",
+     "face": "right",
+     "thickness": 0.387,
+     "tips": [
+      0,
+      2
+     ],
+     "strength": 5.6,
+     "deg": 172.25,
+     "room": 0.206,
+     "rails": 3,
+     "chosen": 0,
+     "scored": 0,
+     "total": 40,
+     "band": [
+      213,
+      0.335
+     ]
+    },
+    {
+     "key": "뱅크샷|yellow|right|bottom-right-top@5,3",
+     "route": "뱅크샷",
+     "first": "yellow",
+     "face": "right",
+     "thickness": 0.318,
+     "tips": [
+      2,
+      0
+     ],
+     "strength": 4.4,
+     "deg": 53.5,
+     "room": 0.245,
+     "rails": 3,
+     "chosen": 0,
+     "scored": 0,
+     "total": 40,
+     "band": [
+      213,
+      0.335
+     ]
+    },
+    {
+     "key": "뱅크샷|red|left|top-right-bottom@6,0",
+     "route": "뱅크샷",
+     "first": "red",
+     "face": "left",
+     "thickness": 0.47,
+     "tips": [
+      2,
+      0
+     ],
+     "strength": 6.3,
+     "deg": 286.25,
+     "room": 0.003,
+     "rails": 5,
+     "chosen": 2,
+     "scored": 1,
+     "total": 40,
+     "band": [
+      213,
+      0.335
+     ]
+    },
+    {
+     "key": "뱅크샷|yellow|left|bottom-right-top@5,3",
+     "route": "뱅크샷",
+     "first": "yellow",
+     "face": "left",
+     "thickness": 0.299,
+     "tips": [
+      -2,
+      0
+     ],
+     "strength": 4.4,
+     "deg": 54.5,
+     "room": 0.454,
+     "rails": 5,
+     "chosen": 0,
+     "scored": 0,
+     "total": 40,
+     "band": [
+      213,
+      0.335
+     ]
+    },
+    {
+     "key": "빗겨치기|red|right|left-right-top@0,2",
+     "route": "빗겨치기",
+     "first": "red",
+     "face": "right",
+     "thickness": 0.915,
+     "tips": [
+      -1.5,
+      2.6
+     ],
+     "strength": 7,
+     "deg": 183.25,
+     "room": 0.001,
+     "rails": 3,
+     "chosen": 1,
+     "scored": 0,
+     "total": 40,
+     "band": [
+      147,
+      0.293
+     ]
+    },
+    {
+     "key": "뱅크샷|yellow|right|bottom-top-right@5,3",
+     "route": "뱅크샷",
+     "first": "yellow",
+     "face": "right",
+     "thickness": 0.103,
+     "tips": [
+      0,
+      2
+     ],
+     "strength": 4.4,
+     "deg": 86,
+     "room": 0.073,
+     "rails": 4,
+     "chosen": 0,
+     "scored": 0,
+     "total": 40,
+     "band": [
+      213,
+      0.335
+     ]
+    },
+    {
+     "key": "뱅크샷|yellow|left|top-left-bottom@2,0",
+     "route": "뱅크샷",
+     "first": "yellow",
+     "face": "left",
+     "thickness": 0.227,
+     "tips": [
+      -2,
+      0
+     ],
+     "strength": 6.3,
+     "deg": 221,
+     "room": 0.088,
+     "rails": 6,
+     "chosen": 0,
+     "scored": 0,
+     "total": 40,
+     "band": [
+      213,
+      0.335
+     ]
+    },
+    {
+     "key": "뱅크샷|red|left|right-top-left@7,2",
+     "route": "뱅크샷",
+     "first": "red",
+     "face": "left",
+     "thickness": 0.28,
+     "tips": [
+      0,
+      2
+     ],
+     "strength": 4.4,
+     "deg": 346.25,
+     "room": 0.172,
+     "rails": 4,
+     "chosen": 2,
+     "scored": 1,
+     "total": 40,
+     "band": [
+      213,
+      0.335
+     ]
+    },
+    {
+     "key": "뱅크샷|red|left|top-bottom-right@5,0",
+     "route": "뱅크샷",
+     "first": "red",
+     "face": "left",
+     "thickness": 0.16,
+     "tips": [
+      0,
+      -2
+     ],
+     "strength": 6.3,
+     "deg": 266,
+     "room": 0.071,
+     "rails": 4,
+     "chosen": 2,
+     "scored": 1,
+     "total": 40,
+     "band": [
+      213,
+      0.335
+     ]
+    },
+    {
+     "key": "뱅크샷|yellow|right|bottom-left-top@2,3",
+     "route": "뱅크샷",
+     "first": "yellow",
+     "face": "right",
+     "thickness": 0.189,
+     "tips": [
+      -2,
+      0
+     ],
+     "strength": 5.6,
+     "deg": 168,
+     "room": 0.023,
+     "rails": 6,
+     "chosen": 0,
+     "scored": 0,
+     "total": 40,
+     "band": [
+      213,
+      0.335
+     ]
+    },
+    {
+     "key": "뱅크샷|yellow|left|bottom-left-top@1,3",
+     "route": "뱅크샷",
+     "first": "yellow",
+     "face": "left",
+     "thickness": 0.061,
+     "tips": [
+      1,
+      -1.73
+     ],
+     "strength": 4.4,
+     "deg": 171.25,
+     "room": 0.11,
+     "rails": 4,
+     "chosen": 0,
+     "scored": 0,
+     "total": 40,
+     "band": [
+      213,
+      0.335
+     ]
+    },
+    {
+     "key": "뱅크샷|yellow|left|bottom-top-bottom@5,3",
+     "route": "뱅크샷",
+     "first": "yellow",
+     "face": "left",
+     "thickness": 0.235,
+     "tips": [
+      0,
+      2
+     ],
+     "strength": 5.6,
+     "deg": 88,
+     "room": 0.036,
+     "rails": 5,
+     "chosen": 0,
+     "scored": 0,
+     "total": 40,
+     "band": [
+      213,
+      0.335
+     ]
+    },
+    {
+     "key": "뱅크샷|yellow|right|top-bottom-right@5,0",
+     "route": "뱅크샷",
+     "first": "yellow",
+     "face": "right",
+     "thickness": 0.2,
+     "tips": [
+      -2,
+      0
+     ],
+     "strength": 4.4,
+     "deg": 276.25,
+     "room": 0.045,
+     "rails": 4,
+     "chosen": 0,
+     "scored": 0,
+     "total": 40,
+     "band": [
+      213,
+      0.335
+     ]
+    },
+    {
+     "key": "뱅크샷|yellow|left|right-left-top@7,2",
+     "route": "뱅크샷",
+     "first": "yellow",
+     "face": "left",
+     "thickness": 0.494,
+     "tips": [
+      0,
+      2
+     ],
+     "strength": 5.6,
+     "deg": 333.75,
+     "room": 0.065,
+     "rails": 4,
+     "chosen": 0,
+     "scored": 0,
+     "total": 40,
+     "band": [
+      213,
+      0.335
+     ]
+    },
+    {
+     "key": "뱅크샷|yellow|right|left-top-right@0,1",
+     "route": "뱅크샷",
+     "first": "yellow",
+     "face": "right",
+     "thickness": 0.018,
+     "tips": [
+      0,
+      2
+     ],
+     "strength": 5,
+     "deg": 194,
+     "room": 0.031,
+     "rails": 4,
+     "chosen": 0,
+     "scored": 0,
+     "total": 40,
+     "band": [
+      213,
+      0.335
+     ]
+    },
+    {
+     "key": "뱅크샷|yellow|left|left-top-right@0,1",
+     "route": "뱅크샷",
+     "first": "yellow",
+     "face": "left",
+     "thickness": 0.001,
+     "tips": [
+      0,
+      -2
+     ],
+     "strength": 4.4,
+     "deg": 192.5,
+     "room": 0.014,
+     "rails": 3,
+     "chosen": 0,
+     "scored": 0,
+     "total": 40,
+     "band": [
+      213,
+      0.335
+     ]
+    },
+    {
+     "key": "뱅크샷|red|left|bottom-top-left@5,3",
+     "route": "뱅크샷",
+     "first": "red",
+     "face": "left",
+     "thickness": 0.057,
+     "tips": [
+      2,
+      0
+     ],
+     "strength": 5,
+     "deg": 123,
+     "room": 0.276,
+     "rails": 6,
+     "chosen": 2,
+     "scored": 1,
+     "total": 40,
+     "band": [
+      213,
+      0.335
+     ]
+    },
+    {
+     "key": "뱅크샷|red|right|bottom-left-top@4,3",
+     "route": "뱅크샷",
+     "first": "red",
+     "face": "right",
+     "thickness": 0.008,
+     "tips": [
+      -2,
+      0
+     ],
+     "strength": 4.4,
+     "deg": 139.5,
+     "room": 0.032,
+     "rails": 5,
+     "chosen": 0,
+     "scored": 0,
+     "total": 40,
+     "band": [
+      213,
+      0.335
+     ]
+    },
+    {
+     "key": "뱅크샷|red|right|right-bottom-top@7,3",
+     "route": "뱅크샷",
+     "first": "red",
+     "face": "right",
+     "thickness": 0.138,
+     "tips": [
+      0,
+      2
+     ],
+     "strength": 7,
+     "deg": 12.5,
+     "room": 0.105,
+     "rails": 5,
+     "chosen": 0,
+     "scored": 0,
+     "total": 40,
+     "band": [
+      213,
+      0.335
+     ]
+    },
+    {
+     "key": "뱅크샷|yellow|right|bottom-top-bottom@5,3",
+     "route": "뱅크샷",
+     "first": "yellow",
+     "face": "right",
+     "thickness": 0.242,
+     "tips": [
+      2,
+      0
+     ],
+     "strength": 5.6,
+     "deg": 87.25,
+     "room": 0.034,
+     "rails": 3,
+     "chosen": 0,
+     "scored": 0,
+     "total": 40,
+     "band": [
+      213,
+      0.335
+     ]
+    },
+    {
+     "key": "뱅크샷|yellow|left|right-bottom-left@7,3",
+     "route": "뱅크샷",
+     "first": "yellow",
+     "face": "left",
+     "thickness": 0.153,
+     "tips": [
+      0,
+      -2
+     ],
+     "strength": 4.4,
+     "deg": 4,
+     "room": 0.032,
+     "rails": 5,
+     "chosen": 0,
+     "scored": 0,
+     "total": 40,
+     "band": [
+      213,
+      0.335
+     ]
+    },
+    {
+     "key": "뱅크샷|red|right|top-bottom-top@5,0",
+     "route": "뱅크샷",
+     "first": "red",
+     "face": "right",
+     "thickness": 0.532,
+     "tips": [
+      2,
+      0
+     ],
+     "strength": 5.6,
+     "deg": 266,
+     "room": 0.056,
+     "rails": 3,
+     "chosen": 0,
+     "scored": 0,
+     "total": 40,
+     "band": [
+      213,
+      0.335
+     ]
+    },
+    {
+     "key": "뱅크샷|red|left|right-bottom-top@7,3",
+     "route": "뱅크샷",
+     "first": "red",
+     "face": "left",
+     "thickness": 0.743,
+     "tips": [
+      2,
+      0
+     ],
+     "strength": 7,
+     "deg": 13,
+     "room": 0.096,
+     "rails": 5,
+     "chosen": 2,
+     "scored": 1,
+     "total": 40,
+     "band": [
+      213,
+      0.335
+     ]
+    },
+    {
+     "key": "뱅크샷|red|right|right-top-left@7,2",
+     "route": "뱅크샷",
+     "first": "red",
+     "face": "right",
+     "thickness": 0.02,
+     "tips": [
+      2,
+      0
+     ],
+     "strength": 4.4,
+     "deg": 347,
+     "room": 0.034,
+     "rails": 5,
+     "chosen": 0,
+     "scored": 0,
+     "total": 40,
+     "band": [
+      213,
+      0.335
+     ]
+    },
+    {
+     "key": "뒤돌리기|red|right|top-left-bottom@2,0",
+     "route": "뒤돌리기",
+     "first": "red",
+     "face": "right",
+     "thickness": 0.366,
+     "tips": [
+      -1,
+      1.73
+     ],
+     "strength": 5.6,
+     "deg": 188.75,
+     "room": 1.34,
+     "rails": 5,
+     "chosen": 12,
+     "scored": 8,
+     "total": 40,
+     "band": [
+      6,
+      0.267
+     ]
+    },
+    {
+     "key": "뒤돌리기|yellow|right|top-right-bottom@6,0",
+     "route": "뒤돌리기",
+     "first": "yellow",
+     "face": "right",
+     "thickness": 0.065,
+     "tips": [
+      1.73,
+      1
+     ],
+     "strength": 5.6,
+     "deg": 285.75,
+     "room": 0.162,
+     "rails": 6,
+     "chosen": 0,
+     "scored": 0,
+     "total": 40,
+     "band": [
+      10,
+      0.314
+     ]
+    },
+    {
+     "key": "앞돌리기|yellow|right|right-top-bottom@7,0",
+     "route": "앞돌리기",
+     "first": "yellow",
+     "face": "right",
+     "thickness": 0.217,
+     "tips": [
+      -1.73,
+      1
+     ],
+     "strength": 5.6,
+     "deg": 285,
+     "room": 0.392,
+     "rails": 5,
+     "chosen": 0,
+     "scored": 0,
+     "total": 40,
+     "band": [
+      174,
+      0.299
+     ]
+    },
+    {
+     "key": "빗겨치기|red|right|left-top-bottom@0,0",
+     "route": "빗겨치기",
+     "first": "red",
+     "face": "right",
+     "thickness": 0.072,
+     "tips": [
+      1.73,
+      1
+     ],
+     "strength": 3.8,
+     "deg": 191.75,
+     "room": 0.134,
+     "rails": 4,
+     "chosen": 1,
+     "scored": 0,
+     "total": 40,
+     "band": [
+      147,
+      0.293
+     ]
+    },
+    {
+     "key": "뱅크샷|yellow|left|bottom-left-top@3,3",
+     "route": "뱅크샷",
+     "first": "yellow",
+     "face": "left",
+     "thickness": 0.078,
+     "tips": [
+      0,
+      -2
+     ],
+     "strength": 5,
+     "deg": 167.25,
+     "room": 0.131,
+     "rails": 4,
+     "chosen": 0,
+     "scored": 0,
+     "total": 40,
+     "band": [
+      213,
+      0.335
+     ]
+    },
+    {
+     "key": "뱅크샷|red|left|right-bottom-left@7,3",
+     "route": "뱅크샷",
+     "first": "red",
+     "face": "left",
+     "thickness": 0.05,
+     "tips": [
+      -2,
+      0
+     ],
+     "strength": 7,
+     "deg": 8.75,
+     "room": 0.091,
+     "rails": 4,
+     "chosen": 2,
+     "scored": 1,
+     "total": 40,
+     "band": [
+      213,
+      0.335
+     ]
+    },
+    {
+     "key": "뱅크샷|red|left|top-bottom-left@5,0",
+     "route": "뱅크샷",
+     "first": "red",
+     "face": "left",
+     "thickness": 0.35,
+     "tips": [
+      2,
+      0
+     ],
+     "strength": 7,
+     "deg": 265.5,
+     "room": 0.019,
+     "rails": 6,
+     "chosen": 2,
+     "scored": 1,
+     "total": 40,
+     "band": [
+      213,
+      0.335
+     ]
+    },
+    {
+     "key": "뱅크샷|red|left|top-bottom-top@5,0",
+     "route": "뱅크샷",
+     "first": "red",
+     "face": "left",
+     "thickness": 0.043,
+     "tips": [
+      3,
+      0
+     ],
+     "strength": 7,
+     "deg": 265,
+     "room": 0.004,
+     "rails": 3,
+     "chosen": 2,
+     "scored": 1,
+     "total": 40,
+     "band": [
+      213,
+      0.335
+     ]
+    },
+    {
+     "key": "뱅크샷|red|right|bottom-top-left@5,3",
+     "route": "뱅크샷",
+     "first": "red",
+     "face": "right",
+     "thickness": 0.019,
+     "tips": [
+      2,
+      0
+     ],
+     "strength": 6.3,
+     "deg": 126.75,
+     "room": 0.131,
+     "rails": 5,
+     "chosen": 0,
+     "scored": 0,
+     "total": 40,
+     "band": [
+      213,
+      0.335
+     ]
+    },
+    {
+     "key": "뱅크샷|yellow|left|right-top-left@7,2",
+     "route": "뱅크샷",
+     "first": "yellow",
+     "face": "left",
+     "thickness": 0.864,
+     "tips": [
+      -2,
+      0
+     ],
+     "strength": 7,
+     "deg": 339.75,
+     "room": 0.091,
+     "rails": 4,
+     "chosen": 0,
+     "scored": 0,
+     "total": 40,
+     "band": [
+      213,
+      0.335
+     ]
+    }
+   ],
+   "verdicts": {
+    "뒤돌리기|red|right|top-left-bottom@1,0": "good",
+    "옆돌리기|yellow|right|top-right-bottom@6,0": "good",
+    "뒤돌리기|red|left|bottom-left-top@4,3": "good"
+   },
+   "notes": {},
+   "renames": {},
+   "better": null,
+   "photo": null,
+   "played": null,
+   "comment": null
   }
  ]
 }
