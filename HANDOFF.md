@@ -13,7 +13,13 @@
 
 ## 지금
 
-**돌고 있는 것: 없음.** (2026-10-05 수구 시작 위치 수정의 연쇄는 끝났다 — `ref/findings.md`.)
+**돌고 있는 것 (2026-10-07~): 경기 더 받기 — `nohup bash tools/keep_up.sh`**, 로그 `data/_keep_up_20261007.log`.
+스크리닝 통과 미수신 15경기 (경기당 받기 ~30분 + 스캔 30~40분, 한 번에 하나씩). 목적: 드문 경우의 표본
+(두 적구 150 mm 안 64판, 실패한 뱅크샷 32판, 앞돌리기/빗겨치기 경계).
+**끝나면:** ① `python tools/retire_videos.py --delete` (주소를 먼저 적는다) ② `bash tools/enumerate_all.sh` (새 판만 이어서,
+조각 3개) ③ `node tools/alternatives_english.js` ④ 전: `node tools/check_verdicts.js --save data/_verdicts_before_more.json`
+⑤ `learn_choices.py` · `score_probability.py` · `fit_tip.js --export` → `app_data.py` → `build_assistant.py`
+⑥ 후: check_verdicts · `check_app_ranking.js 160` · learn_choices 짝 비교 ⑦ 나빠지지 않으면 두 곳 게시. 끝나면 이 절을 지운다.
 
 **뱅크샷이 상위 3개에 너무 자주 (10-04).** 선수 판단: 뱅크샷 10건 중 맞다 3 (그 외 61건 중 51), 3위 뱅크샷은 3번 다
 낮음/아니다. 프로 자료로도 그렇다 (`check_app_ranking.js 240`의 공략 이름 집계): 프로가 고름 / 1등 / 상위 3개 —
