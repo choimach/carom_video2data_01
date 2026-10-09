@@ -27,6 +27,8 @@ import re
 import subprocess
 import sys
 import tempfile
+import time
+import urllib.error
 import urllib.request
 
 import cv2
@@ -82,9 +84,16 @@ def playlist_url(url, fmt=STREAM_FORMAT):
     return lines[-1].strip() if result.returncode == 0 and lines else None
 
 
-def _get(url, timeout=60):
-    with urllib.request.urlopen(url, timeout=timeout) as response:
-        return response.read()
+def _get(url, timeout=60, attempts=3):
+    # 서버가 잠깐 502를 낸다 (2026-10-09) — 곧바로 다시 하면 된다.
+    for attempt in range(attempts):
+        try:
+            with urllib.request.urlopen(url, timeout=timeout) as response:
+                return response.read()
+        except (urllib.error.URLError, TimeoutError):
+            if attempt == attempts - 1:
+                raise
+            time.sleep(5 * (attempt + 1))
 
 
 def segment_index(playlist):

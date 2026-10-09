@@ -16,8 +16,14 @@ for vid, ev, title in rows:
     if vid in done:
         print(f"  seen {ev}", flush=True)
         continue
-    result = screen(f"https://vod.sooplive.com/player/{vid}",
-                    workdir=os.path.join(ROOT, "data", "_screen"))
+    # 한 경기의 서버 오류(502 등)로 목록 전체가 멈추지 않게 (2026-10-09 — 첫 경기에서 죽어 뒤의 받기까지 헛돌았다).
+    # 실패한 것은 장부에 적지 않으므로 다음 실행에서 다시 본다.
+    try:
+        result = screen(f"https://vod.sooplive.com/player/{vid}",
+                        workdir=os.path.join(ROOT, "data", "_screen"))
+    except Exception as error:  # noqa: BLE001
+        print(f"  FAILED {ev} {vid}: {error}", flush=True)
+        continue
     result["event"], result["vod_id"] = ev, vid
     out.append(result)
     json.dump(out, open(os.path.join(ROOT, "data", "_screening.json"), "w"),
