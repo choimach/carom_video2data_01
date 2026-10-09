@@ -56,8 +56,9 @@ def test_the_ledger_on_disk_still_parses():
 
 def test_the_page_carries_the_verdicts_and_the_outcome():
     page = PAGE.read_text(encoding="utf-8")
-    for field in ("verdicts,", "played,"):
-        assert field in page, f"기록 덩어리에 {field}가 없습니다"
+    # 판단은 끌어 고친 줄의 열쇠를 지금 면으로 옮겨 싣는다 (verdicts: rekey(verdicts), 2026-10-09).
+    for field in ("verdicts", "played"):
+        assert re.search(rf"\b{field}[,:]", page), f"기록 덩어리에 {field}가 없습니다"
     assert 'data-say="good"' in page or 'dataset.say = say' in page, \
         "후보마다 누를 버튼이 사라졌습니다"
 

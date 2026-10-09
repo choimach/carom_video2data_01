@@ -29,7 +29,7 @@
     add(aim, "mini-aim");
     const say = document.createElement("div");
     say.className = "mini-say";
-    say.innerHTML = `두께 <b>${asThickness(row.hit.thickness)}</b> · 당점 <b>${asTip(row.hit.side, row.hit.vertical || 0)}</b>`;
+    say.innerHTML = `${aimWords(row).replace(/^(두께|1쿠션) /, "$1 <b>")}</b> · 당점 <b>${asTip(row.hit.side, row.hit.vertical || 0)}</b>`;
     mini.appendChild(say);
     if (power) add(power, "mini-power");
     const said = document.createElement("div");
