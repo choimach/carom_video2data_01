@@ -1287,6 +1287,15 @@
         x2: from[0] + Math.cos(rad) * 420, y2: from[1] + Math.sin(rad) * 420,
         stroke: "var(--track)", "stroke-width": 5, "stroke-dasharray": "18 14", opacity: .5,
       });
+      // ★뱅크샷·걸어치기는 1쿠션을 겨냥하는 선을 보인다 (선수, 2026-10-09: "뱅크샷을 할 때 수구가
+      // 1쿠션에 대해 겨냥하는 선을 보여주는 것은 좋아"). 수구에서 1쿠션
+      // 닿는 자리까지 곧게 긋는다. 포인트 수는 그 자리의 끌기 고리 글에 붙는다 (asPoint와 같은 수).
+      const bankAt = firstCushion(row);
+      if (bankAt) {
+        el(svg, "line", { x1: from[0], y1: from[1], x2: bankAt.p[0], y2: bankAt.p[1],
+                          stroke: "var(--warn)", "stroke-width": 11, "stroke-dasharray": "22 14",
+                          "stroke-linecap": "round", opacity: .9 });
+      }
       for (const e of shot.events.filter((e) => e.kind === "cushion")) {
         el(svg, "circle", { cx: e.p[0], cy: e.p[1], r: 13, fill: "var(--track)", opacity: .75 });
       }
@@ -1375,12 +1384,17 @@
     const first = ev.find((e) => e.kind === "ball" || e.kind === "cushion");
     return first && first.kind === "cushion" ? first : null;
   }
+  function pointsOf(e) {
+    const along = e.detail === "top" || e.detail === "bottom";
+    const at = along ? e.p[0] : e.p[1], span = along ? SIM.L : SIM.W;
+    return Math.round(Math.min(at, span - at) / (SIM.L / 8) * 10) / 10;
+  }
   function asPoint(e) {
     const along = e.detail === "top" || e.detail === "bottom";
     const at = along ? e.p[0] : e.p[1], span = along ? SIM.L : SIM.W;
     const near = at <= span / 2;
     const end = along ? (near ? "왼쪽" : "오른쪽") : (near ? "위" : "아래");
-    const points = Math.round((near ? at : span - at) / (SIM.L / 8) * 10) / 10;
+    const points = pointsOf(e);
     return `${RAIL_NAMES[e.detail] || e.detail} ${end} 끝에서 ${points}포인트`;
   }
   // 두께 또는 1쿠션 — 한 곳에서 정해 모든 글이 같은 말을 하게.
@@ -1703,7 +1717,7 @@
     const rails = (row.hit.judged.rails || []).length;
     mark.textContent = row.hit.byHand
       ? (row.hit.judged.scored ? `득점 · 쿠션 ${rails}개` : "안 들어감")
-      : "1쿠션 — 끌어 보세요";
+      : `1쿠션 ${pointsOf(first)}P — 끌어 보세요`;
     if (row.hit.byHand && !row.hit.judged.scored) mark.setAttribute("fill", "var(--warn)");
 
     let waiting = false, want = null;
