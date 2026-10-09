@@ -27,9 +27,10 @@
    "title": "[AKR2025_FINAL] E. MERCKX vs Q.C TRAN (한국어 중계)",
    "event": "AKR2025",
    "duration": 15536,
-   "gigabytes": 14.36,
+   "gigabytes": 13.45,
    "scanned": true,
-   "retired": "2026-09-20"
+   "plays": 36,
+   "retired": "2026-10-09"
   },
   "soop_174692373_ANWC2025": {
    "vod_id": "174692373",
@@ -109,7 +110,8 @@
    "duration": 7779,
    "gigabytes": 6.96,
    "scanned": true,
-   "retired": "2026-09-20"
+   "plays": 22,
+   "retired": "2026-10-09"
   },
   "soop_188321085_T3WC2026": {
    "vod_id": "188321085",
@@ -119,7 +121,8 @@
    "duration": 8011,
    "gigabytes": 7.14,
    "scanned": true,
-   "retired": "2026-09-20"
+   "plays": 35,
+   "retired": "2026-10-09"
   },
   "soop_188333555_T3WC2026": {
    "vod_id": "188333555",
@@ -129,7 +132,8 @@
    "duration": 9991,
    "gigabytes": 8.92,
    "scanned": true,
-   "retired": "2026-09-20"
+   "plays": 42,
+   "retired": "2026-10-09"
   },
   "soop_188440707_T3WC2026": {
    "vod_id": "188440707",
@@ -139,7 +143,8 @@
    "duration": 10181,
    "gigabytes": 9.2,
    "scanned": true,
-   "retired": "2026-09-20"
+   "plays": 25,
+   "retired": "2026-10-09"
   },
   "soop_196529377_HCMC2026": {
    "vod_id": "196529377",
@@ -339,7 +344,8 @@
    "duration": 9260,
    "gigabytes": 8.84,
    "scanned": true,
-   "retired": "2026-09-20"
+   "plays": 87,
+   "retired": "2026-10-09"
   },
   "soop_206333263_zanetti_vs_bao": {
    "vod_id": "206333263",
@@ -599,6 +605,204 @@
    "scanned": true,
    "plays": 39,
    "retired": "2026-09-24"
+  },
+  "soop_163210563_AKR2025": {
+   "vod_id": "163210563",
+   "url": "https://vod.sooplive.com/player/163210563",
+   "title": "[AKR2025_SEMI FINAL] Q. C. TRAN vs S. SIDHOM (한국어 중계)",
+   "event": "AKR2025",
+   "duration": 7978,
+   "gigabytes": 6.59,
+   "scanned": true,
+   "plays": 24,
+   "retired": "2026-10-09"
+  },
+  "soop_188224321_T3WC2026": {
+   "vod_id": "188224321",
+   "url": "https://vod.sooplive.com/player/188224321",
+   "title": "[T3WC2026_Q] N. POLYCHRO. vs T. BLOMDAHL (한국어 중계)",
+   "event": "T3WC2026",
+   "duration": 6384,
+   "gigabytes": 5.77,
+   "scanned": true,
+   "plays": 20,
+   "retired": "2026-10-09"
+  },
+  "soop_188277307_T3WC2026": {
+   "vod_id": "188277307",
+   "url": "https://vod.sooplive.com/player/188277307",
+   "title": "[T3WC2026_Q] Q.C. TRAN vs J. BURY (한국어 중계)",
+   "event": "T3WC2026",
+   "duration": 7057,
+   "gigabytes": 6.22,
+   "scanned": true,
+   "plays": 34,
+   "retired": "2026-10-09"
+  },
+  "soop_206030491_LIWC2026": {
+   "vod_id": "206030491",
+   "url": "https://vod.sooplive.com/player/206030491",
+   "title": "[LIWC2026_PQ] M. PEKER vs Y.S. JEONG (한국어 중계)",
+   "event": "LIWC2026",
+   "duration": 5400,
+   "gigabytes": 5.16,
+   "scanned": true,
+   "plays": 50,
+   "retired": "2026-10-09"
+  },
+  "soop_206046099_LIWC2026": {
+   "vod_id": "206046099",
+   "url": "https://vod.sooplive.com/player/206046099",
+   "title": "[LIWC2026_PQ] D. SELEVENTAS vs I. ESEN (한국어 중계)",
+   "event": "LIWC2026",
+   "duration": 8214,
+   "gigabytes": 7.84,
+   "scanned": true,
+   "plays": 65,
+   "retired": "2026-10-09"
+  },
+  "soop_206058489_LIWC2026": {
+   "vod_id": "206058489",
+   "url": "https://vod.sooplive.com/player/206058489",
+   "title": "[LIWC2026_PQ] L. STAMM vs A. SAEIJS (한국어 중계)",
+   "event": "LIWC2026",
+   "duration": 6582,
+   "gigabytes": 6.29,
+   "scanned": true,
+   "plays": 53,
+   "retired": "2026-10-09"
+  },
+  "soop_206068499_LIWC2026": {
+   "vod_id": "206068499",
+   "url": "https://vod.sooplive.com/player/206068499",
+   "title": "[LIWC2026_PQ] M. RAHMET vs K. PRASSAS (한국어 중계)",
+   "event": "LIWC2026",
+   "duration": 6730,
+   "gigabytes": 6.43,
+   "scanned": true,
+   "plays": 60,
+   "retired": "2026-10-09"
+  },
+  "soop_206107841_LIWC2026": {
+   "vod_id": "206107841",
+   "url": "https://vod.sooplive.com/player/206107841",
+   "title": "[LIWC2026_Q] Y.S. JEONG vs K. KOKKORIS (한국어 중계)",
+   "event": "LIWC2026",
+   "duration": 5238,
+   "gigabytes": 5.0,
+   "scanned": true,
+   "plays": 44,
+   "retired": "2026-10-09"
+  },
+  "soop_206119299_LIWC2026": {
+   "vod_id": "206119299",
+   "url": "https://vod.sooplive.com/player/206119299",
+   "title": "[LIWC2026_Q] J.I. KANG vs J. Maria MAS (한국어 중계)",
+   "event": "LIWC2026",
+   "duration": 7694,
+   "gigabytes": 7.35,
+   "scanned": true,
+   "plays": 59,
+   "retired": "2026-10-09"
+  },
+  "soop_206131187_LIWC2026": {
+   "vod_id": "206131187",
+   "url": "https://vod.sooplive.com/player/206131187",
+   "title": "[LIWC2026_Q] G. SALMAN vs D.H. KIM (한국어 중계)",
+   "event": "LIWC2026",
+   "duration": 6318,
+   "gigabytes": 6.03,
+   "scanned": true,
+   "plays": 51,
+   "retired": "2026-10-09"
+  },
+  "soop_206144479_LIWC2026": {
+   "vod_id": "206144479",
+   "url": "https://vod.sooplive.com/player/206144479",
+   "title": "[LIWC2026_Q] S. JIMENEZ vs S.Y. PARK (한국어 중계)",
+   "event": "LIWC2026",
+   "duration": 6768,
+   "gigabytes": 6.46,
+   "scanned": true,
+   "plays": 54,
+   "retired": "2026-10-09"
+  },
+  "soop_206154865_LIWC2026": {
+   "vod_id": "206154865",
+   "url": "https://vod.sooplive.com/player/206154865",
+   "title": "[LIWC2026_Q] H.J. KIM vs N.C. LONG (한국어 중계)",
+   "event": "LIWC2026",
+   "duration": 6492,
+   "gigabytes": 6.2,
+   "scanned": true,
+   "plays": 62,
+   "retired": "2026-10-09"
+  },
+  "soop_206196981_LIWC2026": {
+   "vod_id": "206196981",
+   "url": "https://vod.sooplive.com/player/206196981",
+   "title": "[LIWC2026_L32] M.W. CHO vs M.J. CHA (한국어 중계)",
+   "event": "LIWC2026",
+   "duration": 5696,
+   "gigabytes": 5.44,
+   "scanned": true,
+   "plays": 63,
+   "retired": "2026-10-09"
+  },
+  "soop_206206473_LIWC2026": {
+   "vod_id": "206206473",
+   "url": "https://vod.sooplive.com/player/206206473",
+   "title": "[LIWC2026_L32] F. CAUDRON vs W.Y. CHOI (한국어 중계)",
+   "event": "LIWC2026",
+   "duration": 6918,
+   "gigabytes": 6.61,
+   "scanned": true,
+   "plays": 44,
+   "retired": "2026-10-09"
+  },
+  "soop_206220585_LIWC2026": {
+   "vod_id": "206220585",
+   "url": "https://vod.sooplive.com/player/206220585",
+   "title": "[LIWC2026_L32] M. ZANETTI vs J.H. HEO (한국어 중계)",
+   "event": "LIWC2026",
+   "duration": 8008,
+   "gigabytes": 7.65,
+   "scanned": true,
+   "plays": 55,
+   "retired": "2026-10-09"
+  },
+  "soop_206232633_LIWC2026": {
+   "vod_id": "206232633",
+   "url": "https://vod.sooplive.com/player/206232633",
+   "title": "[LIWC2026_L32] P.V. BAO vs B. KARAKURT (한국어 중계)",
+   "event": "LIWC2026",
+   "duration": 6178,
+   "gigabytes": 5.9,
+   "scanned": true,
+   "plays": 26,
+   "retired": "2026-10-09"
+  },
+  "soop_206244355_LIWC2026": {
+   "vod_id": "206244355",
+   "url": "https://vod.sooplive.com/player/206244355",
+   "title": "[LIWC2026_L32] E. MERCKX vs G. HOFMAN (한국어 중계)",
+   "event": "LIWC2026",
+   "duration": 7424,
+   "gigabytes": 7.09,
+   "scanned": true,
+   "plays": 52,
+   "retired": "2026-10-09"
+  },
+  "soop_206251655_LIWC2026": {
+   "vod_id": "206251655",
+   "url": "https://vod.sooplive.com/player/206251655",
+   "title": "[LIWC2026_L32] H.J. KIM vs S. SIDHOM (한국어 중계)",
+   "event": "LIWC2026",
+   "duration": 7202,
+   "gigabytes": 6.88,
+   "scanned": true,
+   "plays": 59,
+   "retired": "2026-10-09"
   }
  }
 }
