@@ -24359,6 +24359,181 @@
    "photo": null,
    "played": null,
    "comment": null
+  },
+  {
+   "at": "2026-10-09T07:31:19",
+   "table": [
+    2844,
+    1422
+   ],
+   "cue": "yellow",
+   "layout": {
+    "white": [
+     2121,
+     851
+    ],
+    "yellow": [
+     2635,
+     159
+    ],
+    "red": [
+     1434,
+     983
+    ]
+   },
+   "want": {
+    "first": "any",
+    "face": "any"
+   },
+   "origin": "random",
+   "seed": 373954402,
+   "picked": "빗겨치기|red|right|left-bottom-right@0,2",
+   "kisses": 50,
+   "candidates": [
+    {
+     "key": "옆돌리기|white|left|bottom-right-top@6,3",
+     "route": "옆돌리기",
+     "first": "white",
+     "face": "left",
+     "thickness": 0.541,
+     "tips": [
+      0,
+      1
+     ],
+     "strength": 6.3,
+     "deg": 124.75,
+     "room": 0.189,
+     "rails": 3,
+     "chosen": 4,
+     "scored": 1,
+     "total": 40,
+     "band": [
+      4,
+      0.532
+     ]
+    },
+    {
+     "key": "옆돌리기|white|right|bottom-left-top@2,3",
+     "route": "옆돌리기",
+     "first": "white",
+     "face": "right",
+     "thickness": 0.097,
+     "tips": [
+      0,
+      1
+     ],
+     "strength": 6.3,
+     "deg": 130.25,
+     "room": 0.149,
+     "rails": 5,
+     "chosen": 6,
+     "scored": 4,
+     "total": 40,
+     "band": [
+      6,
+      0.35
+     ]
+    },
+    {
+     "key": "빗겨치기|red|right|left-bottom-right@0,2",
+     "route": "빗겨치기",
+     "first": "red",
+     "face": "right",
+     "thickness": 0.278,
+     "tips": [
+      -1,
+      1.73
+     ],
+     "strength": 7,
+     "deg": 147.25,
+     "room": 0.097,
+     "rails": 3,
+     "chosen": 1,
+     "scored": 0,
+     "total": 40,
+     "band": [
+      3,
+      0.192
+     ]
+    },
+    {
+     "key": "앞돌리기|red|right|left-bottom-top@0,3",
+     "route": "앞돌리기",
+     "first": "red",
+     "face": "right",
+     "thickness": 0.076,
+     "tips": [
+      -1.73,
+      -1
+     ],
+     "strength": 4.4,
+     "deg": 147.75,
+     "room": 0.063,
+     "rails": 4,
+     "chosen": 1,
+     "scored": 1,
+     "total": 40,
+     "band": [
+      232,
+      0.299
+     ]
+    },
+    {
+     "key": "뒤돌리기|red|right|top-left-bottom@0,0",
+     "route": "뒤돌리기",
+     "first": "red",
+     "face": "right",
+     "thickness": 0.588,
+     "tips": [
+      1.73,
+      -1
+     ],
+     "strength": 7,
+     "deg": 146.5,
+     "room": 0.05,
+     "rails": 3,
+     "chosen": 6,
+     "scored": 5,
+     "total": 40,
+     "band": [
+      6,
+      0.41
+     ]
+    },
+    {
+     "key": "뒤돌리기|red|left|bottom-top-right@3,3",
+     "route": "뒤돌리기",
+     "first": "red",
+     "face": "left",
+     "thickness": 0.458,
+     "tips": [
+      -1,
+      -1.73
+     ],
+     "strength": 6.3,
+     "deg": 144.25,
+     "room": 0.02,
+     "rails": 4,
+     "chosen": 5,
+     "scored": 4,
+     "total": 40,
+     "band": [
+      5,
+      0.39
+     ]
+    }
+   ],
+   "verdicts": {
+    "옆돌리기|white|left|bottom-right-top@6,3": "good",
+    "옆돌리기|white|right|bottom-left-top@2,3": "good",
+    "빗겨치기|red|right|left-bottom-right@0,2": "good"
+   },
+   "notes": {},
+   "renames": {},
+   "better": null,
+   "photo": null,
+   "played": null,
+   "comment": null
   }
  ]
 }
