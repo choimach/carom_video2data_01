@@ -13,6 +13,11 @@
 
 ## 지금
 
+**돌고 있는 것 (2026-10-09 오후~): 경기 더 — 스크리닝 `tools/next30.txt` (2025~26 수율 좋은 대회 10곳 × 3) → `keep_up.sh`**, 로그 `data/_screen_20261009.log` · `data/_keep_up_20261009.log`.
+**끝나면:** ① `retire_videos.py --delete` ② `enumerate_all.sh` (조각 3) ③ `node tools/alternatives_english.js` ④ 전: `check_verdicts.js --save data/_verdicts_before_more2.json`
+⑤ `learn_choices.py` · `score_probability.py` · `fit_tip.js --export` → `app_data.py` → `build_assistant.py` ⑥ 후: check_verdicts · `check_app_ranking.js 160` (PAGE=옛 빌드와) ⑦ 나빠지지 않으면 두 곳 게시 (`build_mobile.py` + firebase, 아티팩트). 끝나면 이 절을 지운다.
+덤: 온 두께 밀어치기 열린 문제 (`ref/findings.md`) — 두께 0.8 이상 판이 늘면 `rest_mm`으로 다시 잰다.
+
 **뱅크샷이 상위 3개에 너무 자주 (10-04).** 선수 판단: 뱅크샷 10건 중 맞다 3 (그 외 61건 중 51), 3위 뱅크샷은 3번 다
 낮음/아니다. 프로 자료로도 그렇다 (`check_app_ranking.js 240`의 공략 이름 집계): 프로가 고름 / 1등 / 상위 3개 —
 뒤돌리기 33/38/62% · 옆돌리기 30/38/62% · **뱅크샷 17/10/55%** · 앞돌리기 10/8/18% · 빗겨치기 9/5/16%.
