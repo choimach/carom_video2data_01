@@ -24534,6 +24534,183 @@
    "photo": null,
    "played": null,
    "comment": null
+  },
+  {
+   "at": "2026-10-09T07:34:20",
+   "table": [
+    2844,
+    1422
+   ],
+   "cue": "white",
+   "layout": {
+    "white": [
+     1961,
+     243
+    ],
+    "yellow": [
+     79,
+     1201
+    ],
+    "red": [
+     133,
+     1103
+    ]
+   },
+   "want": {
+    "first": "any",
+    "face": "any"
+   },
+   "origin": "random",
+   "seed": 195766926,
+   "picked": "뱅크샷|red|left|bottom-right-top@6,3",
+   "kisses": 276,
+   "candidates": [
+    {
+     "key": "뱅크샷|red|left|top-right-bottom@6,0",
+     "route": "뱅크샷",
+     "first": "red",
+     "face": "left",
+     "thickness": 0.758,
+     "tips": [
+      0,
+      2
+     ],
+     "strength": 6.3,
+     "deg": 340.25,
+     "room": 0.943,
+     "rails": 3,
+     "chosen": 8,
+     "scored": 2,
+     "total": 40,
+     "band": [
+      7,
+      0.636
+     ]
+    },
+    {
+     "key": "뱅크샷|yellow|right|top-right-bottom@6,0",
+     "route": "뱅크샷",
+     "first": "yellow",
+     "face": "right",
+     "thickness": 0.171,
+     "tips": [
+      -2,
+      0
+     ],
+     "strength": 6.3,
+     "deg": 341,
+     "room": 0.579,
+     "rails": 3,
+     "chosen": 5,
+     "scored": 3,
+     "total": 40,
+     "band": [
+      3,
+      0.329
+     ]
+    },
+    {
+     "key": "뱅크샷|red|left|bottom-right-top@6,3",
+     "route": "뱅크샷",
+     "first": "red",
+     "face": "right",
+     "thickness": 0.391,
+     "tips": [
+      -1,
+      1
+     ],
+     "strength": 4.4,
+     "deg": 61.36702204951513,
+     "room": 0.914,
+     "rails": 4,
+     "chosen": 8,
+     "scored": 2,
+     "total": 40,
+     "band": [
+      7,
+      0.636
+     ]
+    },
+    {
+     "key": "뱅크샷|red|right|right-top-left@7,0",
+     "route": "뱅크샷",
+     "first": "red",
+     "face": "right",
+     "thickness": 0.406,
+     "tips": [
+      0,
+      2
+     ],
+     "strength": 5,
+     "deg": 347.25,
+     "room": 0.582,
+     "rails": 3,
+     "chosen": 5,
+     "scored": 2,
+     "total": 40,
+     "band": [
+      5,
+      0.379
+     ]
+    },
+    {
+     "key": "뱅크샷|red|left|bottom-top-bottom@4,3",
+     "route": "뱅크샷",
+     "first": "red",
+     "face": "left",
+     "thickness": 0.562,
+     "tips": [
+      0,
+      2
+     ],
+     "strength": 4.4,
+     "deg": 97.25,
+     "room": 0.574,
+     "rails": 3,
+     "chosen": 8,
+     "scored": 2,
+     "total": 40,
+     "band": [
+      7,
+      0.636
+     ]
+    },
+    {
+     "key": "뱅크샷|yellow|right|bottom-right-top@6,3",
+     "route": "뱅크샷",
+     "first": "yellow",
+     "face": "right",
+     "thickness": 0.556,
+     "tips": [
+      0,
+      2
+     ],
+     "strength": 4.4,
+     "deg": 56.5,
+     "room": 0.955,
+     "rails": 4,
+     "chosen": 5,
+     "scored": 3,
+     "total": 40,
+     "band": [
+      3,
+      0.329
+     ]
+    }
+   ],
+   "verdicts": {
+    "뱅크샷|red|left|bottom-right-top@6,3": "good"
+   },
+   "notes": {
+    "뱅크샷|red|left|bottom-right-top@6,3": [
+     "tip_other"
+    ]
+   },
+   "renames": {},
+   "better": null,
+   "photo": null,
+   "played": null,
+   "comment": null
   }
  ]
 }
