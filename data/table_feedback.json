@@ -24929,11 +24929,13 @@
      "tip_other"
     ]
    },
-   "renames": {},
+   "renames": {
+    "빗겨치기|red|right|right-bottom-top@7,3": "뒤돌리기"
+   },
    "better": null,
    "photo": null,
    "played": null,
-   "comment": null
+   "comment": "3위: 빗겨치기 (대회전)이 아니라 뒤돌리기 (대회전). 당점은 화면에 보인 그대로 (10시 반 2팁, 두께 3/8, 강도 7.0) — 기록의 tips [-1.5,1.5]가 그것. (선수, 2026-10-09)"
   }
  ]
 }
