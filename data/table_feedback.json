@@ -24185,6 +24185,180 @@
    "photo": null,
    "played": null,
    "comment": null
+  },
+  {
+   "at": "2026-10-09T07:29:22",
+   "table": [
+    2844,
+    1422
+   ],
+   "cue": "white",
+   "layout": {
+    "white": [
+     2015,
+     1189
+    ],
+    "yellow": [
+     950,
+     348
+    ],
+    "red": [
+     1430,
+     37
+    ]
+   },
+   "want": {
+    "first": "any",
+    "face": "any"
+   },
+   "origin": "random",
+   "seed": 750983235,
+   "picked": "뱅크샷|yellow|left|bottom-left-top@4,3",
+   "kisses": 84,
+   "candidates": [
+    {
+     "key": "뒤돌리기|yellow|right|top-left-bottom@2,0",
+     "route": "뒤돌리기",
+     "first": "yellow",
+     "face": "right",
+     "thickness": 0.629,
+     "tips": [
+      -1.73,
+      1
+     ],
+     "strength": 5,
+     "deg": 219.25,
+     "room": 0.201,
+     "rails": 3,
+     "chosen": 6,
+     "scored": 5,
+     "total": 40,
+     "band": [
+      5,
+      0.387
+     ]
+    },
+    {
+     "key": "옆돌리기|red|right|top-right-bottom@3,0",
+     "route": "옆돌리기",
+     "first": "red",
+     "face": "right",
+     "thickness": 0.845,
+     "tips": [
+      1.73,
+      1
+     ],
+     "strength": 7,
+     "deg": 243.5,
+     "room": 0.038,
+     "rails": 3,
+     "chosen": 9,
+     "scored": 4,
+     "total": 40,
+     "band": [
+      4,
+      0.566
+     ]
+    },
+    {
+     "key": "뱅크샷|yellow|left|bottom-left-top@4,3",
+     "route": "뱅크샷",
+     "first": "yellow",
+     "face": "left",
+     "thickness": 0.182,
+     "tips": [
+      0,
+      2
+     ],
+     "strength": 6.3,
+     "deg": 122.25,
+     "room": 0.134,
+     "rails": 5,
+     "chosen": 4,
+     "scored": 0,
+     "total": 40,
+     "band": [
+      3,
+      0.195
+     ]
+    },
+    {
+     "key": "걸어치기|red|left|top-bottom-left@3,0",
+     "route": "걸어치기",
+     "first": "red",
+     "face": "left",
+     "thickness": 0.007,
+     "tips": [
+      0,
+      2
+     ],
+     "strength": 4.4,
+     "deg": 246.5,
+     "room": 0.029,
+     "rails": 4,
+     "chosen": 1,
+     "scored": 0,
+     "total": 40,
+     "band": [
+      62,
+      0.254
+     ]
+    },
+    {
+     "key": "앞돌리기|yellow|left|left-top-bottom@0,0",
+     "route": "앞돌리기",
+     "first": "yellow",
+     "face": "left",
+     "thickness": 0.097,
+     "tips": [
+      1,
+      1.73
+     ],
+     "strength": 4.4,
+     "deg": 216,
+     "room": 0.145,
+     "rails": 4,
+     "chosen": 2,
+     "scored": 0,
+     "total": 40,
+     "band": [
+      232,
+      0.299
+     ]
+    },
+    {
+     "key": "옆돌리기|red|left|top-left-bottom@3,0",
+     "route": "옆돌리기",
+     "first": "red",
+     "face": "left",
+     "thickness": 0.322,
+     "tips": [
+      1.73,
+      1
+     ],
+     "strength": 7,
+     "deg": 241.25,
+     "room": 0.15,
+     "rails": 5,
+     "chosen": 1,
+     "scored": 1,
+     "total": 40,
+     "band": [
+      5,
+      0.433
+     ]
+    }
+   ],
+   "verdicts": {
+    "뒤돌리기|yellow|right|top-left-bottom@2,0": "good",
+    "뱅크샷|yellow|left|bottom-left-top@4,3": "thin"
+   },
+   "notes": {},
+   "renames": {},
+   "better": null,
+   "photo": null,
+   "played": null,
+   "comment": null
   }
  ]
 }
