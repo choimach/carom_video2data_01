@@ -2617,7 +2617,7 @@
       if (slot === 0) {
         // 한 장으로도 공 셋이 다 잡혔으면 바로 적용할 수 있다 (멀리 있는 공은 덜 정확하다).
         const one = PHOTO.combineEnds(end);
-        final = { balls: one.balls, warnings: end.warnings, top: end.top };
+        final = { balls: one.balls, warnings: end.warnings, top: one.turns[0] ? stitch([end], [true]) : end.top };
         const all3 = Object.keys(one.balls).length === 3;
         say.innerHTML = `<b>1장</b> — 다이아몬드 ${end.diamonds.length}개, ${listBalls(end.balls)} (${took}초)<br>`
           + `<b>반대편 모서리</b>에서 한 장 더 찍으면 먼 쪽 공이 정확해집니다.`

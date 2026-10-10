@@ -895,6 +895,11 @@ const PHOTO = (() => {
       }
       placed.push({ v, turn });
     });
+    // 찍은 사람이 선 쪽을 화면 아래로 (2026-10-10, 선수: "180도 회전해서 나와"). 틀은 기준 모서리가 정하므로
+    // 사진과 뒤집혀 나올 수 있었다. 화면 y = W − 틀 y이므로 첫 장의 선 자리(anchor)가 틀 y < W/2에 오게 돌린다.
+    // 단쿠션 쪽에서 찍어 가운데 가까우면 (W의 10% 안) 그대로 둔다 — 어느 쪽도 "아래"가 아니다.
+    const a0 = placed[0].v.anchor;
+    if (a0 && Math.abs(a0[1] - W / 2) > 0.1 * W && a0[1] > W / 2) placed.forEach((p) => { p.turn = !p.turn; });
     const out = {}, warnings = [];
     for (const colour of ["white", "yellow", "red"]) {
       const cand = [];
