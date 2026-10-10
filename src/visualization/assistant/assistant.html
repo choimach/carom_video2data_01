@@ -37,8 +37,7 @@
   .top { display: grid; gap: 12px; align-items: start; }
   @media (min-width: 900px) {
     .top { grid-template-columns: minmax(0, 1fr) 320px; }
-    .top .side { grid-column: 2; grid-row: 1 / span 2; }
-    .top .choices { grid-column: 1; grid-row: 2; margin-top: 0; }
+    .top .choices { grid-column: 1 / -1; margin-top: 0; }
   }
   .side { display: grid; gap: 10px; align-content: start; }
   .side .detail { margin-top: 0; font-size: 12.5px; max-height: 40vh; overflow-y: auto; }
@@ -85,7 +84,8 @@
 
   .choices { display: grid; gap: 10px; margin-top: 12px; align-items: stretch; }
   /* 첫째가 답이고 나머지 둘은 곁이다 — 넓이로도 그렇게 보이게. */
-  @media (min-width: 720px) { .choices { grid-template-columns: 1.5fr 1fr 1fr; } }
+  /* 카드 넷을 한 줄에 (선수, 2026-10-10). */
+  @media (min-width: 720px) { .choices { grid-template-columns: 1.25fr 1fr 1fr 1fr; } }
   .best { position: relative; border-width: 2px; border-color: var(--cloth); }
   .best .badge {
     font: 700 10.5px/1 "Noto Sans KR", sans-serif; letter-spacing: .04em;
@@ -228,12 +228,13 @@
 
   <aside class="side">
     <div id="aim"></div>
-    <div class="detail" id="detail"></div>
   </aside>
-  <!-- 넓은 화면에서는 탁자 바로 아래 왼쪽에 둔다 — 오른쪽 설명이 길어 탁자 밑이 비어 있었다
-       (선수, 2026-10-10: "좀 더 compact하게"). 좁은 화면에서는 여전히 설명 다음. -->
+  <!-- 넓은 화면에서는 탁자·겨냥 바로 아래 한 줄에 카드 넷 (선수, 2026-10-10: "좀 더 compact하게",
+       "설명 칸이랑 쳐본 결과 칸은 아래로 내리고 카드 4개는 한 줄에"). 긴 설명은 카드 아래로. -->
   <div class="choices" id="choices"></div>
   </div>
+
+  <div class="detail" id="detail"></div>
 
   <section class="verdicts" id="verdicts" hidden>
     <!-- 맞다/아니다는 위 카드 셋에 붙어 있다. 여기 남은 것은 실제로 쳐 본 결과다. -->
