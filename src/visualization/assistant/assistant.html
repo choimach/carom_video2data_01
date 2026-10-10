@@ -35,7 +35,11 @@
   h1 { font-family: "Gothic A1", "Noto Sans KR", sans-serif; font-weight: 700;
        font-size: clamp(18px, 2.4vw, 23px); margin: 0; letter-spacing: -.02em; }
   .top { display: grid; gap: 12px; align-items: start; }
-  @media (min-width: 900px) { .top { grid-template-columns: minmax(0, 1fr) 320px; } }
+  @media (min-width: 900px) {
+    .top { grid-template-columns: minmax(0, 1fr) 320px; }
+    .top .side { grid-column: 2; grid-row: 1 / span 2; }
+    .top .choices { grid-column: 1; grid-row: 2; margin-top: 0; }
+  }
   .side { display: grid; gap: 10px; align-content: start; }
   .side .detail { margin-top: 0; font-size: 12.5px; max-height: 40vh; overflow-y: auto; }
   .step { margin: 0; color: var(--soft); font-size: 13px; }
@@ -99,7 +103,7 @@
   }
   .choice {
     background: var(--surface); border: 1px solid var(--line); border-radius: 9px;
-    box-shadow: var(--shadow); padding: 9px 11px; display: grid; gap: 4px;
+    box-shadow: var(--shadow); padding: 9px 11px; display: grid; gap: 4px; align-content: start;
     cursor: pointer; text-align: left; font-family: inherit;
   }
   .choice[aria-pressed="true"] { border-color: var(--ink); border-width: 2px; padding: 8px 10px; }
@@ -226,9 +230,10 @@
     <div id="aim"></div>
     <div class="detail" id="detail"></div>
   </aside>
-  </div>
-
+  <!-- 넓은 화면에서는 탁자 바로 아래 왼쪽에 둔다 — 오른쪽 설명이 길어 탁자 밑이 비어 있었다
+       (선수, 2026-10-10: "좀 더 compact하게"). 좁은 화면에서는 여전히 설명 다음. -->
   <div class="choices" id="choices"></div>
+  </div>
 
   <section class="verdicts" id="verdicts" hidden>
     <!-- 맞다/아니다는 위 카드 셋에 붙어 있다. 여기 남은 것은 실제로 쳐 본 결과다. -->
