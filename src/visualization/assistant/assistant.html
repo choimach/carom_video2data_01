@@ -217,6 +217,7 @@
       <button id="play" type="button" disabled>재생</button>
       <button id="photo-btn" type="button" title="탁자 모서리에서 한 장, 반대편 모서리에서 한 장 찍으면 세 공의 자리를 잡아 줍니다">사진</button>
       <input id="photo-file" type="file" accept="image/*" capture="environment" hidden>
+      <input id="photo-pick" type="file" accept="image/*" hidden>
       <button id="clear" type="button">다시 놓기</button>
       <button id="again" type="button" disabled title="고른 공략을 친 뒤의 자리에서 이어 칩니다. 멈춘 자리는 대략입니다 — 공 하나당 평균 0.8 m쯤 어긋납니다">계속치기</button>
       <button id="dice" type="button">무작위 배치</button>
@@ -261,6 +262,7 @@
       <button id="photo-again1" type="button" hidden>1장 다시</button>
       <button id="photo-again2" type="button" hidden>2장 다시</button>
       <button id="photo-turn" type="button" hidden title="장축과 단축을 바꿔 잡습니다">축 바꾸기</button>
+      <button id="photo-gallery" type="button" title="카메라 앱으로 먼저 찍어 두고 여기서 고릅니다 — 폰이 앱을 다시 열어 사진을 잃을 때">갤러리에서 고르기</button>
       <button id="photo-send-only" type="button" hidden title="판단 없이 찍은 사진만 올립니다 — 인식이 틀려도 됩니다">사진만 보내기</button>
       <button id="photo-cancel" type="button">취소</button>
       <button id="photo-apply" type="button" class="run">적용</button>
@@ -2512,6 +2514,7 @@
       c.width = Math.round(bitmap.width * k); c.height = Math.round(bitmap.height * k);
       const g = c.getContext("2d");
       g.drawImage(bitmap, 0, 0, c.width, c.height);
+      bitmap.close();             // 12 MP 원본(약 50 MB)을 바로 놓는다 — 폰 메모리가 모자라면 탭이 내려간다
       return g.getImageData(0, 0, c.width, c.height);
     };
     const drawImage = (img) => {
@@ -2592,6 +2595,7 @@
     // ── 사진이 들어왔을 때 ──
     const read = async (f) => {
       panel.hidden = false;
+      $("photo-apply").disabled = true;     // 읽기 전에 눌리면 아무 일도 안 생긴다
       say.textContent = "사진을 여는 중…";
       const img = await toImageData(f);
       if (!img) { say.textContent = "사진을 열지 못했습니다."; return; }
@@ -2635,8 +2639,34 @@
       $("photo-apply").disabled = !Object.keys(final.balls).length;
       show(["photo-again1", "photo-again2"]);
     };
-    const take = (k) => { slot = k; file.value = ""; file.click(); };
-    file.onchange = () => { const f = file.files && file.files[0]; if (f) read(f); };
+    // 사진을 기다리는 동안 폰이 탭을 내리면 (카메라 앱이 메모리를 가져가 — 안드로이드에서 흔하다) 돌아올 때
+    // 페이지가 새로 열리고 찍은 사진은 없다. 선수 (2026-10-10): "사진만 찍은 다음 공 위치를 보여주지 않아".
+    // 기다린다는 표시를 남겨 두었다가, 새로 열렸을 때 그것이 있으면 알리고 갤러리에서 고르게 한다.
+    const PENDING = "carom-photo-pending";
+    const mark = (k) => { try { sessionStorage.setItem(PENDING, JSON.stringify({ at: Date.now(), slot: k })); } catch (e) { /* 없어도 된다 */ } };
+    const unmark = () => { try { sessionStorage.removeItem(PENDING); } catch (e) { /* 없어도 된다 */ } };
+    const take = (k) => { slot = k; file.value = ""; mark(k); file.click(); };
+    const pick = document.getElementById("photo-pick");
+    file.onchange = () => { unmark(); const f = file.files && file.files[0]; if (f) read(f); };
+    pick.onchange = () => { unmark(); const f = pick.files && pick.files[0]; if (f) read(f); };
+    $("photo-gallery").onclick = () => { pick.value = ""; pick.click(); };
+    // 카메라를 닫고 그냥 돌아왔으면 (탭이 살아 있으면) 표시를 지운다.
+    document.addEventListener("visibilitychange", () => {
+      if (document.visibilityState === "visible") setTimeout(() => { if (!(file.files && file.files.length)) unmark(); }, 2500);
+    });
+    (() => {
+      let p = null;
+      try { p = JSON.parse(sessionStorage.getItem(PENDING) || "null"); } catch (e) { p = null; }
+      unmark();
+      if (!p || Date.now() - p.at > 10 * 60 * 1000) return;
+      slot = p.slot === 1 && ends[0] ? 1 : 0;
+      panel.hidden = false;
+      canvas.width = canvas.height = 1;
+      say.innerHTML = "<b>사진을 받지 못했습니다.</b> 카메라가 열린 사이 폰이 이 앱을 다시 열었습니다 (메모리가 모자랄 때 그렇습니다).<br>"
+        + "방금 찍은 사진은 갤러리에 있습니다 — <b>갤러리에서 고르기</b>를 누르세요.";
+      $("photo-apply").disabled = true;
+      show(["photo-again1"]);
+    })();
     $("photo-btn").onclick = () => { ends[0] = ends[1] = null; single = null; corners = null; final = null; take(0); };
     $("photo-next").onclick = () => take(1);
     $("photo-again1").onclick = () => { ends[1] = null; final = null; take(0); };
