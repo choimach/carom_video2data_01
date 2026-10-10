@@ -2305,6 +2305,8 @@
       // 조언은 그 수구의 것이었다. 씨앗의 배치도 수구까지 포함이므로 더는 그 판이 아니다.
       stopPlaying(); result = null; picked = null; dealt = null;
       render();
+      // 사진은 수구를 모른다 (흰공으로 놓는다) — 바꾸면 바로 다시 푼다 (2026-10-10).
+      if (placed().length === 3) document.getElementById("run").click();
     };
   });
   document.querySelectorAll("[data-face]").forEach((button) => {
@@ -2713,6 +2715,8 @@
       verdicts = {}; played = null; notes = {}; renames = {}; better = null;
       panel.hidden = true;
       render();
+      // 공 셋이 놓였으면 바로 푼다 (2026-10-10, 선수: "적용했는데 아무 일도 안 생기네") — 무작위 배치와 같이.
+      if (placed().length === 3) document.getElementById("run").click();
     };
   })();
 
