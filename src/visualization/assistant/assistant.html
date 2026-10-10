@@ -2493,7 +2493,7 @@
       for (const q of [0.78, 0.65, 0.5]) { const u = c.toDataURL("image/jpeg", q); if (u.length < 900000) return u; }
       return null;
     };
-    let single = null, corners = null, final = null;   // final = {balls, warnings, top(ImageData)}
+    let single = null, corners = null, final = null;   // final = {balls, warnings}
     const show = (ids) => {
       for (const id of ["photo-next", "photo-again1", "photo-again2", "photo-turn"]) $(id).hidden = !ids.includes(id);
       paintSendOnly();
@@ -2523,42 +2523,24 @@
       return canvas.getContext("2d");
     };
     const ring = (g, at, colour, r, s) => { g.lineWidth = 3 * s; g.strokeStyle = colour; g.beginPath(); g.arc(at[0], at[1], r * s, 0, 7); g.stroke(); };
-    // 한쪽 끝 사진 위에: 두 모서리, 짝지은 다이아몬드, 찾은 공
-    const paintEnd = (img, end) => {
-      const g = drawImage(img), s = img.width / 1000;
-      for (const d of end.diamonds || []) { g.fillStyle = "#39d98a"; g.beginPath(); g.arc(d[0], d[1], 6 * s, 0, 7); g.fill(); }
-      end.corners.forEach((p, i) => { g.fillStyle = i ? "#39d98a" : "#ff5a5a"; g.beginPath(); g.arc(p[0], p[1], 10 * s, 0, 7); g.fill(); });
-      for (const [colour, b] of Object.entries(end.balls || {})) ring(g, PHOTO.apply(end.H, b.world), COLOURS[colour], 22, s);
-    };
-    // 여러 장의 펴진 그림을 이어 붙인다 — 지점마다 그 자리를 더 가까이 찍은 사진(기준 모서리가 가까운 쪽)에서.
-    // turns[k]가 참이면 그 장은 180도 돌려 놓는다 (photo.js의 combineEnds가 공이 겹치는 쪽으로 정한다).
-    const stitch = (views, turns) => {
-      const { width: tw, height: th, pad, px } = PHOTO.topFrame;
-      const out = new ImageData(tw, th);
-      for (let y = 0; y < th; y++) {
-        for (let x = 0; x < tw; x++) {
-          const wx = x / px - pad, wy = W - (y / px - pad);           // 세계 (y 위로)
-          let best = -1, bd = Infinity, sx = 0, sy = 0;
-          views.forEach((v, k) => {
-            const [ax, ay] = turns[k] ? [L - wx, W - wy] : [wx, wy];
-            const tx = turns[k] ? tw - 1 - x : x, ty = turns[k] ? th - 1 - y : y;
-            const o = (ty * tw + tx) * 4;
-            if (v.top.data[o] + v.top.data[o + 1] + v.top.data[o + 2] === 0) return;   // 그 사진에 안 보이는 곳
-            const d = Math.hypot(ax - v.anchor[0], ay - v.anchor[1]);
-            if (d < bd) { bd = d; best = k; sx = tx; sy = ty; }
-          });
-          const o = (y * tw + x) * 4;
-          if (best >= 0) { const s = (sy * tw + sx) * 4, d = views[best].top.data; out.data[o] = d[s]; out.data[o + 1] = d[s + 1]; out.data[o + 2] = d[s + 2]; }
-          out.data[o + 3] = 255;
-        }
+    // 인식한 공을 사진이 아니라 가상 탁자 위에 (2026-10-10, 선수: "사진 위에 공 그림을 그리지 말고 virtual table 위에
+    // virtual 공을 그려줘"). balls = {colour: {at: [x, y]}} — 조언판 좌표 (mm, y 아래로), 적용하면 놓일 자리 그대로.
+    const paintVirtual = (balls) => {
+      const s = 0.5, pad = 110;
+      canvas.width = Math.round((L + 2 * pad) * s); canvas.height = Math.round((W + 2 * pad) * s);
+      const g = canvas.getContext("2d"), css = getComputedStyle(document.documentElement);
+      const v = (name, fb) => css.getPropertyValue(name).trim() || fb;
+      g.setTransform(s, 0, 0, s, pad * s, pad * s);
+      g.fillStyle = v("--wood", "#6f5334"); g.beginPath(); g.roundRect(-pad, -pad, L + 2 * pad, W + 2 * pad, 50); g.fill();
+      g.fillStyle = v("--cloth", "#2f6b52"); g.fillRect(0, 0, L, W);
+      g.fillStyle = v("--cloth-line", "#58917a");
+      for (let i = 1; i < 8; i++) { const x = (L * i) / 8; for (const y of [-55, W + 55]) { g.beginPath(); g.arc(x, y, 15, 0, 7); g.fill(); } }
+      for (let i = 1; i < 4; i++) { const y = (W * i) / 4; for (const x of [-55, L + 55]) { g.beginPath(); g.arc(x, y, 15, 0, 7); g.fill(); } }
+      for (const [colour, b] of Object.entries(balls || {})) {
+        g.fillStyle = COLOURS[colour]; g.strokeStyle = "rgba(0,0,0,.55)"; g.lineWidth = 5;
+        g.beginPath(); g.arc(b.at[0], b.at[1], R * 1.6, 0, 7); g.fill(); g.stroke();
       }
-      return out;
-    };
-    // 이어 붙인 위에서 본 그림 + 공
-    const paintFinal = () => {
-      const g = drawImage(final.top), s = final.top.width / 1000;
-      const { pad, px } = PHOTO.topFrame;
-      for (const [colour, b] of Object.entries(final.balls)) ring(g, [(b.at[0] + pad) * px, (b.at[1] + pad) * px], COLOURS[colour], 26, s);
+      g.setTransform(1, 0, 0, 1, 0, 0);
     };
     const listBalls = (balls) => {
       const found = Object.keys(balls);
@@ -2574,16 +2556,12 @@
         g.beginPath(); corners.forEach((p, i) => (i ? g.lineTo(p[0], p[1]) : g.moveTo(p[0], p[1]))); g.closePath(); g.stroke();
         corners.forEach((p, i) => { g.fillStyle = i === 0 ? "#ff5a5a" : "#39d98a"; g.beginPath(); g.arc(p[0], p[1], 9 * s, 0, 7); g.fill(); });
       }
-      for (const [colour, b] of Object.entries((single && single.balls) || {})) {
-        const at = PHOTO.toImage(corners, b.at);
-        if (at) ring(g, at, COLOURS[colour], 22, s);
-      }
-    };
+    };   // 공은 사진에 그리지 않는다 — 적용하면 가상 탁자에 놓인다 (2026-10-10). 여기서는 모서리 맞추기만.
     const readSingle = () => {
       const t0 = performance.now();
       try { single = PHOTO.analyze(imgs[0], corners); } catch (e) { single = null; console.error(e); }
       if (single && single.corners) corners = single.corners;
-      final = single && single.corners ? { balls: single.balls, warnings: single.warnings, top: single.top } : null;
+      final = single && single.corners ? { balls: single.balls, warnings: single.warnings } : null;
       say.innerHTML = !final ? "탁자를 찾지 못했습니다. 다시 찍어 주세요."
         : `탁자 전체가 한 장에 나왔습니다 — ${listBalls(final.balls)} (${((performance.now() - t0) / 1000).toFixed(1)}초)<br>`
           + `<small>초록 테두리가 천의 바깥 끝(쿠션 포함)에 안 맞으면 모서리 점을 끌어 옮기세요.</small>` + warn(final.warnings);
@@ -2617,11 +2595,11 @@
         show([slot === 0 ? "photo-again1" : "photo-again2"]);
         return;
       }
-      paintEnd(img, end);
       if (slot === 0) {
         // 한 장으로도 공 셋이 다 잡혔으면 바로 적용할 수 있다 (멀리 있는 공은 덜 정확하다).
         const one = PHOTO.combineEnds(end);
-        final = { balls: one.balls, warnings: end.warnings, top: one.turns[0] ? stitch([end], [true]) : end.top };
+        final = { balls: one.balls, warnings: end.warnings };
+        paintVirtual(final.balls);
         const all3 = Object.keys(one.balls).length === 3;
         say.innerHTML = `<b>1장</b> — 다이아몬드 ${end.diamonds.length}개, ${listBalls(end.balls)} (${took}초)<br>`
           + `<b>반대편 모서리</b>에서 한 장 더 찍으면 먼 쪽 공이 정확해집니다.`
@@ -2631,10 +2609,10 @@
         return;
       }
       const both = PHOTO.combineEnds(ends[0], ends[1]);
-      final = { balls: both.balls, warnings: [...ends[0].warnings, ...end.warnings, ...both.warnings], top: stitch([ends[0], end], both.turns) };
-      paintFinal();
+      final = { balls: both.balls, warnings: [...ends[0].warnings, ...end.warnings, ...both.warnings] };
+      paintVirtual(final.balls);
       say.innerHTML = `<b>두 장을 합쳤습니다</b> — ${listBalls(final.balls)}<br>`
-        + `<small>위에서 본 그림입니다. 동그라미가 공에 맞는지 보고 적용하세요. 틀린 공은 적용한 뒤 끌어서 고치면 됩니다.</small>`
+        + `<small>탁자의 공과 같은 자리인지 보고 적용하세요. 틀린 공은 적용한 뒤 끌어서 고치면 됩니다.</small>`
         + warn(final.warnings);
       $("photo-apply").disabled = !Object.keys(final.balls).length;
       show(["photo-again1", "photo-again2"]);
@@ -2724,11 +2702,7 @@
       if (!final) return;
       stopPlaying();
       for (const [colour, b] of Object.entries(final.balls)) layout[colour] = b.at.slice();
-      // 펴진 사진을 바탕으로
-      const c = document.createElement("canvas");
-      c.width = final.top.width; c.height = final.top.height;
-      c.getContext("2d").putImageData(new ImageData(final.top.data, final.top.width, final.top.height), 0, 0);
-      backdrop = { url: c.toDataURL("image/jpeg", 0.75), pad: PHOTO.topFrame.pad };
+      backdrop = null;   // 바탕은 가상 탁자 그대로 (2026-10-10, 선수 요청) — 펴진 사진을 깔지 않는다
       const used = ends.filter(Boolean);
       photoPack = {
         jpegs: jpegs.filter(Boolean),
