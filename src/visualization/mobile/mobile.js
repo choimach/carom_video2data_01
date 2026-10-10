@@ -61,3 +61,47 @@
   render = function () { original.apply(this, arguments); paintMini(); paintPicks(); };
   paintMini(); paintPicks();
 })();
+
+// 오른쪽 끝의 큰 스크롤 손잡이 (2026-10-10, 선수: "앱 화면 우측에 scroller를 크게"). 가로 화면에서는
+// 탁자가 높이를 다 차지하고, 탁자를 쓸면 공이 끌려서 아래의 카드로 내려가기 어렵다. 폰의 기본
+// 스크롤 막대는 가늘고 꾸밀 수 없으므로 따로 둔다 — 손잡이를 끌거나 홈을 누르면 페이지가 따라간다.
+(() => {
+  const track = document.createElement("div");
+  track.id = "page-scroller";
+  const thumb = document.createElement("div");
+  thumb.className = "thumb";
+  track.appendChild(thumb);
+  document.body.appendChild(track);
+  const room = () => document.documentElement.scrollHeight - window.innerHeight;
+  const paint = () => {
+    const max = room();
+    track.hidden = max < 8;
+    if (track.hidden) return;
+    const h = track.clientHeight;
+    const th = Math.max(90, h * window.innerHeight / document.documentElement.scrollHeight);
+    thumb.style.height = th + "px";
+    thumb.style.transform = `translateY(${(h - th) * Math.min(1, window.scrollY / max)}px)`;
+  };
+  const scrollTo = (clientY, grab) => {
+    const r = track.getBoundingClientRect(), th = thumb.offsetHeight;
+    const f = Math.max(0, Math.min(1, (clientY - r.top - grab) / Math.max(1, r.height - th)));
+    window.scrollTo(0, f * room());
+  };
+  let grab = null;
+  track.addEventListener("pointerdown", (e) => {
+    e.preventDefault();
+    const tr = thumb.getBoundingClientRect();
+    grab = e.target === thumb ? e.clientY - tr.top : thumb.offsetHeight / 2;   // 홈을 누르면 손잡이 가운데가 거기로
+    track.setPointerCapture(e.pointerId);
+    track.classList.add("on");
+    scrollTo(e.clientY, grab);
+  });
+  track.addEventListener("pointermove", (e) => { if (grab !== null) scrollTo(e.clientY, grab); });
+  const drop = () => { grab = null; track.classList.remove("on"); };
+  track.addEventListener("pointerup", drop);
+  track.addEventListener("pointercancel", drop);
+  window.addEventListener("scroll", paint, { passive: true });
+  window.addEventListener("resize", paint);
+  new ResizeObserver(paint).observe(document.body);
+  paint();
+})();
