@@ -639,8 +639,10 @@
   const POOL = (() => {
     let workers = null, ready = null, seq = 0;
     const waiting = new Map();
-    // 코어를 다 쓰지 않는다 — 하나는 화면 몫, 많아도 여섯.
-    const want = () => Math.max(1, Math.min(6, (navigator.hardwareConcurrency || 2) - 1));
+    // 코어를 다 쓰지 않는다 — 하나는 화면 몫, 많아도 여섯. 폰(손가락 화면)은 넷까지 (2026-10-11): 워커 하나가
+    // 약 38 MB라 여섯이면 카메라를 열 때 안드로이드가 탭을 내렸다. 데스크톱 잰 값: 6개 2.9초 · 4개 3.6초, 탭 메모리 −80 MB.
+    const cap = () => (window.matchMedia && matchMedia("(pointer: coarse)").matches ? 4 : 6);
+    const want = () => Math.max(1, Math.min(cap(), (navigator.hardwareConcurrency || 2) - 1));
     const failAll = (why) => {
       for (const [id, slot] of waiting) { clearTimeout(slot.timer); slot.fail(new Error(why)); }
       waiting.clear();
@@ -695,8 +697,17 @@
       }));
       return out;
     };
-    return { start, spread, kill, count: () => (workers ? workers.length : 0) };
+    // 쉬는 동안 워커를 내린다 (2026-10-11). 워커 여섯이 폰 메모리 약 280 MB를 들고 있었고, 사진을 찍으려 카메라를
+    // 열면 안드로이드가 이 탭을 통째로 내렸다 (선수: "사진 찍는데 메모리 땜에 안 된대"). 다음 계산 때 다시 띄운다
+    // (띄우는 데 1초 안팎). kill과 달리 다시 띄울 수 있게 ready를 비운다. 계산 중이면 건드리지 않는다.
+    const rest = () => {
+      if (waiting.size || !workers) return;
+      for (const w of workers) { try { w.terminate(); } catch (e) {} }
+      workers = null; ready = null;
+    };
+    return { start, spread, kill, rest, count: () => (workers ? workers.length : 0) };
   })();
+  document.addEventListener("visibilitychange", () => { if (document.visibilityState === "hidden") POOL.rest(); });
   const PIECE = 150;          // 워커에 한 번에 주는 일감 수
   async function runJobs(jobs, onProgress) {
     const ctx = ctxNow();
@@ -2587,6 +2598,8 @@
       try { end = PHOTO.analyzeEnd(img); } catch (e) { end = { error: String(e.message || e) }; console.error(e); }
       const took = ((performance.now() - t0) / 1000).toFixed(1);
       if (slot === 0 && end.whole) { single = null; corners = null; readSingle(); return; }
+      // 다 쓴 큰 것은 놓는다 — 사진 한 장에 약 90 MB였다. 펴진 그림(top)도 이제 그리지 않는다.
+      imgs[slot] = null; end.top = null; end.blobs = null; end.lines = null;
       ends[slot] = end;
       if (end.error) {
         drawImage(img);
@@ -2623,11 +2636,11 @@
     const PENDING = "carom-photo-pending";
     const mark = (k) => { try { sessionStorage.setItem(PENDING, JSON.stringify({ at: Date.now(), slot: k })); } catch (e) { /* 없어도 된다 */ } };
     const unmark = () => { try { sessionStorage.removeItem(PENDING); } catch (e) { /* 없어도 된다 */ } };
-    const take = (k) => { slot = k; file.value = ""; mark(k); file.click(); };
+    const take = (k) => { slot = k; file.value = ""; mark(k); POOL.rest(); file.click(); };
     const pick = document.getElementById("photo-pick");
     file.onchange = () => { unmark(); const f = file.files && file.files[0]; if (f) read(f); };
     pick.onchange = () => { unmark(); const f = pick.files && pick.files[0]; if (f) read(f); };
-    $("photo-gallery").onclick = () => { pick.value = ""; pick.click(); };
+    $("photo-gallery").onclick = () => { pick.value = ""; POOL.rest(); pick.click(); };
     // 카메라를 닫고 그냥 돌아왔으면 (탭이 살아 있으면) 표시를 지운다.
     document.addEventListener("visibilitychange", () => {
       if (document.visibilityState === "visible") setTimeout(() => { if (!(file.files && file.files.length)) unmark(); }, 2500);
