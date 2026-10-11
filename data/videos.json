@@ -1001,6 +1001,17 @@
    "scanned": true,
    "plays": 56,
    "retired": "2026-10-11"
+  },
+  "soop_161334175_HCMC2025": {
+   "vod_id": "161334175",
+   "url": "https://vod.sooplive.com/player/161334175",
+   "title": "[HCMC2025_SEMI FINAL] J.H. HEO vs B.J. HWANG",
+   "event": "HCMC2025",
+   "duration": 9095,
+   "gigabytes": 5.14,
+   "scanned": true,
+   "plays": 51,
+   "retired": "2026-10-12"
   }
  }
 }
