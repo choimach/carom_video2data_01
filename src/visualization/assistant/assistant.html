@@ -145,6 +145,9 @@
   .plate .cap {
     font: 700 11px/1 "Gothic A1", sans-serif; letter-spacing: .06em; color: var(--faint);
   }
+  .flip-row { display: flex; flex-direction: column; gap: 4px; margin-top: 6px; }
+  .flip-row button { align-self: flex-start; }
+  .flip-row .said b { color: #8b5cf6; }
   .plate .said { font-size: 13px; color: var(--ink); font-variant-numeric: tabular-nums; }
   .verdicts {
     margin-top: 10px; background: var(--surface); border: 1px solid var(--line);
@@ -295,6 +298,8 @@
   let cue = "white";
   let result = null;         // 실행 결과
   let picked = null;
+  // 고른 줄의 반대 회전 짝 (2026-10-11, 선수 요청). {result, key, busy | none | found} — 결과·고른 줄이 바뀌면 무효.
+  let opposite = null;
   let playing = null;   // {frame, timer}
   // 후보마다의 판단과, 실제로 쳐 본 결과. 이것이 곧 "버린 길"의 기록이다.
   let verdicts = {};    // {후보 key: "good" | "bad"}
@@ -1315,6 +1320,14 @@
                           stroke: "var(--warn)", "stroke-width": 11, "stroke-dasharray": "22 14",
                           "stroke-linecap": "round", opacity: .9 });
       }
+      // 반대 회전 짝 — 보라 점선 (oppositeHtml이 글로 설명한다)
+      const flip = oppositeNow();
+      if (flip && flip.found) {
+        trustedLine(svg, flip.found.shot.path, {
+          stroke: "#8b5cf6", "stroke-width": 8, "stroke-dasharray": "26 14",
+          "stroke-linecap": "round", "stroke-linejoin": "round", opacity: .9,
+        }, { opacity: .35, "stroke-dasharray": "8 16" }, cutAt(flip.found.shot));
+      }
       for (const e of shot.events.filter((e) => e.kind === "cushion")) {
         el(svg, "circle", { cx: e.p[0], cy: e.p[1], r: 13, fill: "var(--track)", opacity: .75 });
       }
@@ -1856,6 +1869,79 @@
   // 그래서 수구를 1적구 위에 겹쳐 그린 다음, 그 수구 위에 팁 동심원을 얹는다.
   let plateNumber = 0;
 
+  // ── 반대 회전 (2026-10-11) ─────────────────────────────────────────────
+  // 선수의 "당점 좌우 반대" 아홉 번을 재 보니 같은 길의 부호 오류가 아니었다: 좌우를 바꾸면 **다른 길**이 되고
+  // 그 길을 선수가 더 낫게 본 것이다 (ref/findings.md "하단 당점 좌우 반대"). 순위는 판단에 맞춰 바꾸지 않고,
+  // 누를 때만 좌우를 바꾼 당점으로 같은 1적구 먼저 득점하는 길을 찾아 나란히 보인다.
+  // 겨냥 ±3도 · 반대쪽 1~2.5팁 · 상하 다섯 · 강도 ±0.6 = 약 1,500줄 (워커).
+  const RAIL_SHORT = { top: "위", bottom: "아래", left: "왼쪽", right: "오른쪽" };
+  const oppositeNow = () => (opposite && opposite.result === result && opposite.key === picked ? opposite : null);
+  async function findOpposite(row) {
+    const h = row.hit, sign = Math.sign(h.side || 0), here = result, key = row.key;
+    opposite = { result: here, key, busy: true };
+    render();
+    const st = SIM.strengthOf(h.speed);
+    const speeds = [...new Set([st - 0.6, st, st + 0.6].map((s) => Math.round(Math.max(2, Math.min(7.5, s)) * 10) / 10))].map(SIM.speedFor);
+    const ups = [...new Set([h.vertical || 0, -1.5, -0.5, 0.5, 1.5].map((u) => Math.round(u * 100) / 100))];
+    const jobs = [];
+    for (let d = -3; d <= 3.0001; d += 0.25) {
+      for (const s of [1, 1.5, 2, 2.5]) for (const u of ups) for (const v of speeds) {
+        jobs.push([Math.round((h.deg + d) * 100) / 100, v, -sign * s, u, "flip"]);
+      }
+    }
+    let out;
+    try { out = await runJobs(jobs, () => {}); } catch (e) { out = { hits: [] }; }
+    if (result !== here || picked !== key) return;      // 그사이 다른 줄·배치로 바뀌었다
+    // 같은 1적구, 그리고 같은 차례 (공 먼저 / 쿠션 먼저) — 앞돌리기의 짝으로 뱅크샷을 내밀면 다른 공략이다.
+    const cushionFirst = (route) => route === "뱅크샷" || route === "걸어치기";
+    const mine = out.hits.filter((x) => x.judged.first === h.judged.first && cushionFirst(x.route) === !!firstCushion(row));
+    if (!mine.length) { opposite = { result: here, key, none: true, tried: jobs.length }; render(); return; }
+    // 같은 길(첫 세 쿠션 + 첫 쿠션 칸)이 가장 많이 나온 것 — 가장 넓은 길. 그 안에서 가운데 겨냥.
+    const groups = new Map();
+    for (const x of mine) { if (!groups.has(x.pathId)) groups.set(x.pathId, []); groups.get(x.pathId).push(x); }
+    const best = [...groups.values()].sort((a, b) => b.length - a.length)[0];
+    const degs = best.map((x) => x.deg).sort((a, b) => a - b), mid = degs[degs.length >> 1];
+    const pick = best.reduce((a, x) => (Math.abs(x.deg - mid) < Math.abs(a.deg - mid) ? x : a));
+    const ctx = ctxNow();
+    const shot = SEARCH.strike(ctx, pick.deg, pick.speed, pick.side, pick.vertical);
+    opposite = { result: here, key, n: mine.length, same: best.length, found: {
+      ...pick, shot, room: Math.round(SEARCH.trueRoom(ctx, pick) * 1000) / 1000,
+      strength: Math.round(SIM.strengthOf(pick.speed) * 10) / 10,
+      english: englishAfterFirst({ side: pick.side, shot }),
+      rails: shot.events.filter((e) => e.kind === "cushion").slice(0, 3).map((e) => RAIL_SHORT[e.detail] || e.detail),
+    } };
+    render();
+  }
+  function oppositeHtml(row) {
+    if (Math.abs(row.hit.side || 0) < 0.5) return "";
+    const o = oppositeNow();
+    const label = o && o.busy ? "반대 회전 찾는 중…" : o && (o.found || o.none) ? "반대 회전 숨기기" : "반대 회전 보기";
+    let say = "";
+    if (o && o.none) {
+      say = `<span class="said">좌우를 바꾼 당점으로 ${o.tried}번 쳐 봤지만 ${NAMES[row.first]}을 먼저 맞혀
+        득점하는 길이 없습니다 — 이 배치에서는 지금 회전이어야 합니다.</span>`;
+    } else if (o && o.found) {
+      const f = o.found;
+      say = `<span class="said"><b>보라 점선 — 반대 회전</b>: ${f.route} · ${NAMES[f.judged.first]}
+        ${f.face === "left" ? "왼쪽" : "오른쪽"}면 두께 <b>${asThickness(f.thickness)}</b> · 당점 <b>${asTip(f.side, f.vertical)}</b>
+        · 강도 <b>${f.strength.toFixed(1)}</b> · 쿠션 ${f.rails.join("–")}
+        · 1적구 뒤 첫 쿠션 ${f.english === "running" ? "정회전" : f.english === "reverse" ? "역회전" : "회전 거의 없음"}
+        · 여유 ${f.room}° <span style="color:var(--faint)">(득점한 ${o.n}줄 중 이 길 ${o.same}줄)</span></span>`;
+    }
+    return `<div class="flip-row"><button type="button" class="flip-spin"${o && o.busy ? " disabled" : ""}>${label}</button>${say}</div>`;
+  }
+  function armOpposite() {
+    const b = document.querySelector("#aim .flip-spin");
+    if (!b) return;
+    b.onclick = () => {
+      const row = chosenRow();
+      if (!row) return;
+      const o = oppositeNow();
+      if (o && (o.found || o.none)) { opposite = null; render(); return; }
+      if (!o) findOpposite(row);
+    };
+  }
+
   function aimPlate(row) {
     const side = row.hit.side || 0, vertical = row.hit.vertical || 0;
     const R = SIM.RADIUS, T = SIM.TIP_MM, id = `ov${++plateNumber}`;
@@ -1912,6 +1998,7 @@
         빗나감 ${Math.round(gap)} mm)`} · 당점 <b>${asTip(side, vertical)}</b>
         <span style="color:var(--faint)">— 바깥 원이 3팁(미스큐 한계)${firstBall(row)
           ? " · 수구 가장자리나 아래 막대를 끌면 두께가 바뀌고, 같은 길이 되도록 당점(과 강도 한 칸)을 다시 맞춥니다" : ""}</span></span>
+      ${oppositeHtml(row)}
       ${row.hit.refitLost ? `<span class="said" style="color:var(--warn, #b5462f)">이 두께로는 당점·강도로 같은 길을
         만들지 못했습니다 — 가장 가까운 것을 골랐지만 득점하지 않습니다. 두께를 되돌려 보세요.</span>` : ""}
       ${row.band && !firstCushion(row) ? `<span class="said" style="color:var(--soft)">${row.band.wide
@@ -2215,6 +2302,7 @@
     paintVerdicts();
     armTipDrag();
     armStrengthDrag();
+    armOpposite();
     // 긴 설명은 한 줄로. 근거를 자세히 쓴 것은 오른쪽 칸(detail)에 있다 —
     // 화면 하나에 다 담으려면 아래쪽이 길면 안 된다.
     document.getElementById("footer").innerHTML =
@@ -2846,6 +2934,17 @@
       notes: rekey(notes), renames: rekey(renames), better,
       // 사진으로 놓았다면 인식 요약 (사진 자체는 따로 — 아래 보내기)
       photo: photoPack ? photoPack.summary : null,
+      // 반대 회전 짝을 봤다면 (2026-10-11) — 선수가 어느 쪽을 낫게 보는지 프로 자료와 견주려고.
+      opposite: (() => {
+        const o = opposite && opposite.result === result ? opposite : null;
+        if (!o || !(o.found || o.none)) return null;
+        const f = o.found;
+        return f ? { of: nowKey.get(o.key) || o.key, route: f.route, first: f.judged.first, face: f.face,
+                     path: f.pathId, deg: f.deg, strength: f.strength,
+                     tips: [Math.round(f.side * 100) / 100, Math.round((f.vertical || 0) * 100) / 100],
+                     room: f.room, english: f.english, rails: f.rails.join("-") }
+          : { of: nowKey.get(o.key) || o.key, none: true };
+      })(),
       played,
       comment: comment.value.trim() || null,
     };
