@@ -45,9 +45,16 @@ const loose = (key) => key.split('@')[0];
 const family = (key) => key.split('|').slice(0, 3).join('|');
 // 같은 유형·공·면·쿠션 차례면 같은 줄로 본다 — 첫 쿠션 **칸**(@x,y)은 230 mm 눈금이라 한 칸 옆으로 가는 일이
 // 흔하고, 그때 열쇠만 보면 1등에 있는 같은 줄을 44등의 옛 칸에서 찾는다 (첫 실행에서 그랬다).
-function rankOf(key, keys) {
+// ★겹친 공략 (2026-10-11): 조언판은 같은 공·면에 첫 두 쿠션이 겹치는 후보를 맨 뒤로 보낸다 (DUP_MM) — 이름만 다른
+// 같은 샷이다. 기록의 `dup`이 그 짝이면 짝의 자리로 센다 (how 'twin'). 씨앗 1009377398의 빗겨치기 "2등 → 33"은
+// 5등 앞돌리기와 같은 길이었다 — 이름은 ⑤(맨 끝)이므로 밀려난 것이 아니다.
+function rankOf(key, keys, dups = {}) {
   const exact = keys.indexOf(key);
   const near = keys.findIndex((k) => loose(k) === loose(key));
+  if (near >= 0 && dups[keys[near]]) {
+    const twin = keys.indexOf(dups[keys[near]]);
+    if (twin >= 0 && twin < near) return { rank: twin + 1, how: 'twin' };
+  }
   if (near >= 0) return { rank: near + 1, how: exact === near ? 'same' : 'path' };
   const i = keys.findIndex((k) => family(k) === family(key));
   if (i >= 0) return { rank: i + 1, how: 'route' };
@@ -79,10 +86,12 @@ const BAD = new Set(['bad', 'thin']);   // 아니다 · "가능하지만 프로�
     await page.waitForTimeout(300);
     const text = await page.evaluate(() => navigator.clipboard.readText());
     const block = /```carom-feedback\n([\s\S]*?)\n```/.exec(text);
-    const keys = block ? JSON.parse(block[1]).candidates.map((c) => c.key) : [];
+    const cands = block ? JSON.parse(block[1]).candidates : [];
+    const keys = cands.map((c) => c.key);
+    const dups = Object.fromEntries(cands.filter((c) => c.dup).map((c) => [c.key, c.dup]));
     const then = (r.candidates || []).map((c) => c.key);
     const rows = Object.entries(r.verdicts).map(([key, verdict]) => ({
-      key, verdict, before: then.indexOf(key) + 1 || null, ...rankOf(key, keys),
+      key, verdict, before: then.indexOf(key) + 1 || null, ...rankOf(key, keys, dups),
     }));
     const top = keys[0] || null;
     const topVerdict = top ? (r.verdicts[top] || (Object.entries(r.verdicts).find(([k]) => loose(k) === loose(top)) || [])[1] || null) : null;

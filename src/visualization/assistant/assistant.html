@@ -2865,7 +2865,9 @@
           + aimWords(row)
           + (row.band && !firstCushion(row) ? `(프로 ${row.band.n}명 ${asThickness(row.band.mid)})` : "")
           + ` · 당점 ${asTip(row.hit.side, row.hit.vertical || 0)} · `
-          + `쿠션 ${(row.hit.judged.rails || []).length}개${row.key === picked ? "   ← 선택됨" : ""}`);
+          + `쿠션 ${(row.hit.judged.rails || []).length}개`
+          + (row.dupOf ? ` (= ${result.routes.findIndex((r) => r.key === row.dupOf) + 1}위와 같은 길)` : "")
+          + (row.key === picked ? "   ← 선택됨" : ""));
       });
     } else if (result) {
       lines.push("후보: 없음");
@@ -2928,6 +2930,8 @@
         deg: row.hit.deg, room: row.hit.room, rails: (row.hit.judged.rails || []).length,
         chosen: row.chosen, scored: row.scored, total: result.total,
         band: row.band ? [row.band.n, row.band.mid] : null,
+        // 겹친 공략이면 그 짝 (같은 공·면, 첫 두 쿠션이 겹침 — 이름만 다른 같은 샷, 2026-10-11)
+        ...(row.dupOf ? { dup: nowKey.get(row.dupOf) || row.dupOf } : {}),
       })),
       // 버린 길의 기록. 프로 영상에는 없는 것이고, 순위 계산이 채점받는 근거다.
       verdicts: rekey(verdicts),
