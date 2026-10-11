@@ -79,8 +79,40 @@ def features(branch, layout=None, cue=None):
         # ★역회전 (2026-10-07). 1적구 뒤 첫 쿠션에서 회전이 진행을 거스르는가. 선수의 "당점 좌우 반대"
         # 다섯 번이 모두 역회전 줄이었다. 프로가 고른 줄 21% · 버린 줄 43% (모든 유형에서 같은 방향).
         1.0 if branch.get("english") == "reverse" else 0.0,
+    ] + exp_terms(branch, layout, cue) + [
         1.0,                                 # 기준선
     ]
+
+
+# 실험 특징 (2026-10-11, HANDOFF 다음 일 ①·②). 켜면 NAMES에도 "기준" 앞에 붙는다.
+#   thin — 얇고(두께 < 1/4) 무회전(좌우 < 0.5팁)인 공 먼저 줄. 프로 4.5% 대 조언판 상위 3의 10%.
+#   emm  — 여유를 **접점 어긋남(mm)**으로: 출발 각 여유 × 수구–1적구 거리 (쿠션 먼저면 1쿠션까지).
+#          선수의 이유 "얇게 맞히는 건 정교한 작업이라 실수할 가능성" — 사람의 오차는 각이 아니라 접점으로 난다는 가설.
+EXP = []
+CUSHION_FIRST = ("뱅크샷", "걸어치기")
+
+
+def e_window(branch, layout, cue):
+    if not layout or not cue or cue not in layout:
+        return 0.0
+    if branch.get("route") in CUSHION_FIRST and branch.get("cush"):
+        target = branch["cush"][0]
+    else:
+        target = layout.get(branch.get("first"))
+    if not target:
+        return 0.0
+    d = math.hypot(target[0] - layout[cue][0], target[1] - layout[cue][1])
+    return d * math.radians(branch["room"])
+
+
+def exp_terms(branch, layout=None, cue=None):
+    out = []
+    if "thin" in EXP:
+        out.append(1.0 if (branch.get("route") not in CUSHION_FIRST and branch["thickness"] < 0.25
+                           and abs(branch["side"]) < 0.5) else 0.0)
+    if "emm" in EXP:
+        out.append(math.log1p(e_window(branch, layout, cue)) / 5.0)
+    return out
 
 
 BANK_NEAR_MM, BANK_FAR_MM = 250.0, 600.0
@@ -418,6 +450,7 @@ def main():
     parser.add_argument("--sigma", type=float, default=300.0, help="길 닮음 표의 폭 (mm)")
     parser.add_argument("--same-face", action="store_true", help="실험: 길 닮음에 공·면을 맞춘다")
     parser.add_argument("--sim3", action="store_true", help="실험: 첫 세 쿠션 닮음을 하나 더")
+    parser.add_argument("--exp", default="", help="실험 특징, 쉼표로: thin,emm")
     parser.add_argument("--dump", default=None, help="판별 (1등 자리, 길 거리)를 JSON으로 — 두 식을 짝지어 견줄 때")
     args = parser.parse_args()
     global VOTES, SIGMA, SIM_SAME_FACE, LABEL
@@ -427,6 +460,9 @@ def main():
     SIM_SAME_FACE = args.same_face
     global SIM3
     SIM3 = args.sim3
+    EXP[:] = [x for x in args.exp.split(",") if x]
+    labels = {"thin": "얇은무회전", "emm": "여유mm"}
+    NAMES[:] = NAMES[:-1] + [labels[x] for x in EXP] + ["기준"]
 
     rounds = load(args.limit)
     if len(rounds) < 30:
