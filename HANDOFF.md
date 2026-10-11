@@ -17,6 +17,7 @@
 **끝나면:** ① `retire_videos.py --delete` ② `enumerate_all.sh` (조각 3) ③ `node tools/alternatives_english.js` ④ 전: `check_verdicts.js --save data/_verdicts_before_more2.json`
 ⑤ `learn_choices.py` · `score_probability.py` · `fit_tip.js --export` → `app_data.py` → `build_assistant.py` ⑥ 후: check_verdicts · `check_app_ranking.js 160` (PAGE=옛 빌드와) ⑦ 나빠지지 않으면 두 곳 게시 (`build_mobile.py` + firebase, 아티팩트). 끝나면 이 절을 지운다.
 **대기 (2026-10-10 12:25~):** `tools/after_scan.sh 340433` (setsid, 로그 `data/_after_scan.log`)가 keep_up 끝을 기다렸다가 ①~④를 차례로 돈다 (10-10 12시 기준 스캔 2/22, 경기당 ~3시간 → 10-12 저녁~10-13, 그 뒤 열거 ~7시간). 로그가 "①~④ 끝"이면 ⑤부터 — **선수 (10-10): "끝나면 알아서 진행해줘"** → ⑤~⑦을 묻지 않고 잇는다 (나빠지면 게시하지 말고 보고). 실패면 로그 보고 그 단계부터.
+**10-11 17:13~:** 스캔 끝 (94개 · 4,264판) → after_scan이 ① 지움(18경기, 110 GB) · ② 열거 중. 옛 빌드(새 자료 + 옛 가중치)는 `~/.cache/carom_build_before/` — ⑥의 PAGE.
 **새 세션에서 이을 때 (2026-10-10 세션 닫음):** 스캔 사슬은 init 밑에서 따로 돈다 (닫아도 산다). 대기 고리는 죽었으니 `bash tools/state.sh`로 보고, 아직이면 대기 작업을 다시 걸고, 끝났으면 위 ①~⑦. 재학습 전후에 함께 볼 것 — `ref/findings.md`의
 "얇은 무회전" · "실수할 가능성"(여유를 두께 mm 창으로) · "당점 좌우 반대 7건 — 하단 당점" 절, 그리고 맞다인데 낮게 나온 줄 (씨앗 1130506331 10위 · 132034599 41위 · 3185162774 18위 · 3783979765 7위).
 덤: 온 두께 밀어치기 열린 문제 (`ref/findings.md`) — 두께 0.8 이상 판이 늘면 `rest_mm`으로 다시 잰다.
