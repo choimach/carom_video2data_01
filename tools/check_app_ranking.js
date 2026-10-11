@@ -57,7 +57,7 @@ const median = (v) => { const s = [...v].sort((x, y) => x - y); return s[Math.fl
 (async () => {
   const browser = await chromium.launch({ executablePath: SHELL, env: { ...process.env, LD_LIBRARY_PATH: LIBS } });
   const errors = [];
-  const top1 = [], top3 = [], started = Date.now(), perPlay = {}, english = {}, sideSame = [];
+  const top1 = [], top3 = [], started = Date.now(), perPlay = {}, english = {}, sideSame = [], sideBy = [];
   let tipCount = 0, center = 0;
   const strengths = [];
   // 공략 이름 집계 (2026-10-04): 선수가 3위에 올라온 뱅크샷을 세 번 다 "낮음/아니다"로 줬다 — 프로 자료로도 그런가.
@@ -109,6 +109,9 @@ const median = (v) => { const s = [...v].sort((x, y) => x - y); return s[Math.fl
     // 정규화된 틀이라 그대로 견준다.
     if (play.tip && got.topTip && Math.abs(play.tip[0]) >= 0.5 && Math.abs(got.topTip[0]) >= 0.5) {
       sideSame.push(Math.sign(play.tip[0]) === Math.sign(got.topTip[0]) ? 1 : 0);
+      // 위아래로 나눠 (2026-10-11, 선수: "하단 당점 좌우 반대") — 1등 당점이 아래(≤ −0.5팁)인가, 같은 유형인가.
+      sideBy.push({ same: sideSame[sideSame.length - 1], low: got.topTip[1] <= -0.5,
+                    route: !!(got.names && got.names[0] === play.route) });
     }
     if (gaps.length) { top1.push(gaps[0]); top3.push(Math.min(...gaps)); perPlay[play.id] = [gaps[0], Math.min(...gaps)]; }
     done++;
@@ -137,6 +140,11 @@ const median = (v) => { const s = [...v].sort((x, y) => x - y); return s[Math.fl
   }
   if (tipCount) console.log(`  1등이 정중앙(0.5팁 안) ${Math.round(100 * center / tipCount)}% — 프로 3% (tips.json v2)`);
   if (sideSame.length) console.log(`  1등 당점 좌우가 그 판 프로와 같음 ${Math.round(100 * sideSame.reduce((a, b) => a + b, 0) / sideSame.length)}% (${sideSame.length}판)`);
+  for (const [label, keep] of [['1등 당점 아래', (x) => x.low], ['1등 당점 가운데·위', (x) => !x.low],
+                                ['  같은 유형 · 아래', (x) => x.route && x.low], ['  같은 유형 · 가운데·위', (x) => x.route && !x.low]]) {
+    const r = sideBy.filter(keep);
+    if (r.length) console.log(`    ${label}: 좌우 같음 ${Math.round(100 * r.reduce((a, x) => a + x.same, 0) / r.length)}% (${r.length}판)`);
+  }
   const turned = (english.running || 0) + (english.reverse || 0);
   if (turned) console.log(`  1등 줄의 회전: 도는 쪽 ${english.running || 0} · 반대쪽 ${english.reverse || 0}`
     + ` (${Math.round(100 * (english.running || 0) / turned)}% 도는 쪽, 프로 73%) · 거의 없음 ${english.none || 0}`);
