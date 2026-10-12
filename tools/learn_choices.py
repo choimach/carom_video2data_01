@@ -381,6 +381,9 @@ def pro_branch(one):
     return min(zip(gaps, same), key=lambda t: np.inf if t[0] is None else t[0])[1]
 
 
+DROP = []   # --drop: 0으로 둘 특징의 자리 (실험)
+
+
 def as_arrays(rounds):
     """한 판을 (갈래별 특징, 고른 것의 자리)로.
 
@@ -391,6 +394,9 @@ def as_arrays(rounds):
     out = []
     for one in rounds:
         rows = [features(b, one["layout"], one["cue"]) for b in one["found"]]
+        for k in DROP:
+            for r in rows:
+                r[k] = 0.0
         chose = [i for i, b in enumerate(one["found"]) if b["key"] == one["chose"]]
         if not chose:
             continue
@@ -450,11 +456,13 @@ def main():
     parser.add_argument("--sigma", type=float, default=300.0, help="길 닮음 표의 폭 (mm)")
     parser.add_argument("--same-face", action="store_true", help="실험: 길 닮음에 공·면을 맞춘다")
     parser.add_argument("--sim3", action="store_true", help="실험: 첫 세 쿠션 닮음을 하나 더")
+    parser.add_argument("--drop", default="", help="실험: 뺄 특징 이름, 쉼표로 (예: 이웃프로수,유형빈도)")
     parser.add_argument("--exp", default="", help="실험 특징, 쉼표로: thin,emm")
     parser.add_argument("--dump", default=None, help="판별 (1등 자리, 길 거리)를 JSON으로 — 두 식을 짝지어 견줄 때")
     args = parser.parse_args()
     global VOTES, SIGMA, SIM_SAME_FACE, LABEL
     LABEL = args.label
+    DROP[:] = [NAMES.index(x) for x in args.drop.split(",") if x]
     VOTES = args.votes
     SIGMA = args.sigma
     SIM_SAME_FACE = args.same_face
