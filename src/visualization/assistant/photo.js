@@ -848,11 +848,12 @@ const PHOTO = (() => {
       }
     }
     if (!pick) return { error: "맞은편 레일이 안 보여 위치를 정하지 못했습니다. 모서리 하나와 맞은편 레일이 함께 나오게 찍어 주세요." };
-    let H = pick.H, matched = [];
+    let H = pick.H, matched = [], anchorPair = null;
     for (let round = 0; round < 3; round++) {
       matched = match(H);
       if (matched.length < 4) break;
       const anchor = [[CORNERS.reduce((b, c) => (dist(apply(H, c), pick.corner) < dist(apply(H, b), pick.corner) ? c : b)), pick.corner, 4]];
+      anchorPair = anchor[0];
       const next = fitHomography(anchor.concat(matched.map(([d, p]) => [d, p, 1])));
       if (!next) break;
       H = next;
@@ -866,7 +867,8 @@ const PHOTO = (() => {
     const Hi = inv(H);
     const foot = Hi ? apply(Hi, [img.width / 2, img.height - 1]) : [0, 0];
     const anchorWorld = [Math.max(-CUSHION, Math.min(L + CUSHION, foot[0])), Math.max(-CUSHION, Math.min(W + CUSHION, foot[1]))];
-    return { H, corners: [pick.corner], diamonds: matched.map(([, p]) => p), blobs, lines: lines.map((x) => x.l),
+    // pairs · anchorPair: 다이아몬드 하나 빼고 맞추기 (tools/check_photo_diamonds.js) — 정답 없이 틀을 잰다.
+    return { H, corners: [pick.corner], diamonds: matched.map(([, p]) => p), pairs: matched.map(([d, p]) => [d, p]), anchorPair, blobs, lines: lines.map((x) => x.l),
              balls: found, anchor: anchorWorld, warnings, top, score: pick.score };
   }
   // 예전 이름 (화면이 쓴다)
@@ -939,7 +941,7 @@ const PHOTO = (() => {
   // 화면이 쓰는 것: 펴진 그림 픽셀과 조언판 좌표의 관계 (배경으로 깔 때)
   const topFrame = { width: TOP_W, height: TOP_H, pad: PAD, px: PX };
   return { analyze, analyzeView, analyzeEnd, analyzePair, combineEnds, warpWorld, toImage, findTable, pickAssignment, warp, detectBalls, estimateCamera, correctParallax,
-           homography, apply, inv, orderCyclic, shrink, topFrame, L, W, R };
+           homography, fitHomography, apply, inv, orderCyclic, shrink, topFrame, L, W, R };
 })();
 
 if (typeof module !== "undefined") module.exports = PHOTO;
