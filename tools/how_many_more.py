@@ -89,6 +89,7 @@ def with_neighbours(rounds, rows):
         if not np.isfinite(gap[order[0]]):
             continue
         nearest.append(float(gap[order[0]]))
+        one["_near"] = float(gap[order[0]])
         votes, wins = {}, {}
         for j in order:
             key = picked[j]
@@ -128,6 +129,9 @@ def attach_features(rounds):
     return kept
 
 
+by_id = {}       # 판 id → 프로의 선택이 온 자리 (마지막 score() 것)
+
+
 def score(rounds, rows):
     ready, nearest = with_neighbours(rounds, rows)
     if len(ready) < 50:
@@ -137,14 +141,16 @@ def score(rounds, rows):
     ms = sorted({one.get("match") for _r, _c, one in data})
     where = {m: i % folds for i, m in enumerate(ms)}
     place = []
+    by_id.clear()
     for fold in range(folds):
         tr = [d for d in data if where[d[2].get("match")] != fold]
         te = [d for d in data if where[d[2].get("match")] == fold]
         if not tr or not te:
             continue
         w = fit(tr)
-        for branch_rows, chose, _one in te:
+        for branch_rows, chose, one in te:
             place.append(where_it_landed(branch_rows, chose, w))
+            by_id[one["id"]] = place[-1]
     p = np.array(place, float)
     return (float(np.mean(p == 1)), float(np.mean(p <= 3)), nearest,
             len(rows), len({r["match"] for r in rows}))
@@ -199,5 +205,55 @@ def main():
     return 0
 
 
+def rare(repeats=5):
+    """드문 배치에서는 자료가 값을 하나 (2026-10-12, 선수: "드문 배치 먼저 재 봐줘").
+
+    드문 정도 = **못 전체에서** 같은 경기를 뺀 가장 가까운 이웃까지의 거리. 못을 줄여도
+    이 갈래는 바꾸지 않는다 — 판마다 같은 칸에 머물러야 칸별 기울기를 견줄 수 있다.
+    칸을 셋으로 (흔함 · 중간 · 드묾), 못을 1/8 ~ 1로 줄여 가며 칸마다 1등 · 3등 안.
+    """
+    rounds = attach_features(load())
+    full = pool(1.0, 0)
+    score(rounds, full)
+    near = {one["id"]: one["_near"] for one in rounds if "_near" in one}
+    cut = np.quantile(list(near.values()), [1 / 3, 2 / 3])
+    band = {i: (0 if d <= cut[0] else 1 if d <= cut[1] else 2) for i, d in near.items()}
+    names = ("흔함", "중간", "드묾")
+    print(f"채점하는 판 {len(near)}개 · 최근접 거리 칸 경계 {cut[0]:.2f} / {cut[1]:.2f}\n")
+    print(f"{'못':<8}{'경기':>5}{'판':>6}" + "".join(f"{n + ' 1등':>12}{n + ' 3등안':>12}" for n in names))
+    curve = {b: [] for b in range(3)}
+    for fraction in FRACTIONS:
+        got = {b: [] for b in range(3)}
+        size = []
+        for repeat in range(repeats if fraction < 1.0 else 1):
+            rows = full if fraction == 1.0 else pool(fraction, 2000 + repeat)
+            if not score(rounds, rows):
+                continue
+            size.append((len(rows), len({r["match"] for r in rows})))
+            for b in range(3):
+                p = np.array([v for i, v in by_id.items() if band.get(i) == b], float)
+                got[b].append((np.mean(p == 1), np.mean(p <= 3), len(p)))
+        line = f"{fraction:<8.3f}{int(np.mean([s[1] for s in size])):>5}{int(np.mean([s[0] for s in size])):>6}"
+        for b in range(3):
+            f1 = float(np.mean([g[0] for g in got[b]])); f3 = float(np.mean([g[1] for g in got[b]]))
+            n = float(np.mean([g[2] for g in got[b]]))
+            curve[b].append((np.mean([s[0] for s in size]), f1, f3, n))
+            line += f"{f1:>12.1%}{f3:>12.1%}"
+        print(line)
+    print()
+    for b in range(3):
+        x = np.log2([c[0] for c in curve[b]])
+        s1 = np.polyfit(x, [c[1] for c in curve[b]], 1)[0]
+        s3 = np.polyfit(x, [c[2] for c in curve[b]], 1)[0]
+        n = curve[b][-1][3]
+        # 한 점의 흔들림 (이항) — 기울기가 이것보다 작으면 잡음과 못 가른다
+        se1 = math.sqrt(curve[b][-1][1] * (1 - curve[b][-1][1]) / n)
+        print(f"  {names[b]}: 두 배마다 1등 {s1 * 100:+.2f}점 · 3등 안 {s3 * 100:+.2f}점"
+              f"  (지금 1등 {curve[b][-1][1]:.1%}, 판 {n:.0f}, 한 점 흔들림 ±{se1 * 100:.1f})")
+    return 0
+
+
 if __name__ == "__main__":
+    if "--rare" in sys.argv:
+        raise SystemExit(rare())
     raise SystemExit(main())
