@@ -2857,7 +2857,14 @@
     }
     if (result && result.routes.length) {
       lines.push(`후보 ${result.routes.length}가지 (키스 제외 ${result.kisses}개):`);
+      // ★4위 아래 뱅크샷은 한 줄로 접는다 (2026-10-14, 선수: "4위 아래 뱅크샷을 더 보기로") — 후보 58개 중 42개가
+      // 뱅크샷인 판이 있었다. 판단·메모를 단 줄, 고른 줄, 득점 확률 카드의 줄은 접지 않는다.
+      // 아래 carom-feedback 기록에는 **전부** 담긴다 (잘린 후보를 "못 찾았다"로 읽은 적이 있다).
+      const keep = new Set([picked, ...Object.keys(verdicts), ...Object.keys(notes), ...Object.keys(renames),
+                            [...result.routes].sort((a, b) => b.chance - a.chance)[0].key]);
+      const folded = [];
       result.routes.forEach((row, index) => {
+        if (index >= 3 && row.route === "뱅크샷" && !keep.has(row.key)) { folded.push(index + 1); return; }
         lines.push(`  ${index + 1}. ${label(row)} — 여유 ${row.hit.room}° · `
           + `프로 ${row.chosen}/${result.total}명${row.chosen ? ` (득점 ${row.proRate}%)` : ""} · `
           + `1적구 ${Math.round(row.hit.pushed)} mm · 출발 ${Math.round(row.hit.deg)}° · `
@@ -2869,6 +2876,16 @@
           + (row.dupOf ? ` (= ${result.routes.findIndex((r) => r.key === row.dupOf) + 1}위와 같은 길)` : "")
           + (row.key === picked ? "   ← 선택됨" : ""));
       });
+      if (folded.length) {
+        // 이어진 순위는 a~b로
+        const spans = [];
+        for (const n of folded) {
+          const last = spans[spans.length - 1];
+          if (last && last[1] === n - 1) last[1] = n; else spans.push([n, n]);
+        }
+        lines.push(`  … 4위 아래 뱅크샷 ${folded.length}개는 접었습니다 (${spans.map(([s, e]) => (s === e ? `${s}` : `${s}~${e}`)).join(", ")}위)`
+          + " — 아래 기록에는 모두 있습니다");
+      }
     } else if (result) {
       lines.push("후보: 없음");
     } else {
