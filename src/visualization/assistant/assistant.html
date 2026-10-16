@@ -57,10 +57,15 @@
                  box-sizing: border-box; }
   #photo-panel[hidden] { display: none; }
   #photo-canvas { flex: 1 1 auto; min-width: 0; max-height: 100%; touch-action: none; object-fit: contain; }
-  #photo-panel .photo-side { flex: 0 0 170px; display: flex; flex-direction: column; gap: 8px; color: #ddd; font-size: 12.5px; }
+  /* 폰 가로 화면은 높이가 360px 안팎이라 안내 글 + 단추 다섯이면 맨 아래 "적용"이 화면 밖으로 잘렸다
+     (2026-10-16, 선수: "실행버튼이 보이지를 않아서 공략코스를 볼수 없어"). 적용을 맨 위에 두고, 나머지는 굴려 본다. */
+  #photo-panel .photo-side { flex: 0 0 170px; display: flex; flex-direction: column; gap: 6px; color: #ddd; font-size: 12.5px;
+                             min-height: 0; overflow-y: auto; }
   #photo-panel .photo-side p { margin: 0; line-height: 1.45; }
-  #photo-panel .photo-side button { padding: 10px; }
-  @media (orientation: portrait) { #photo-panel { flex-direction: column; } #photo-panel .photo-side { flex: 0 0 auto; } }
+  #photo-panel .photo-side button { padding: 8px 10px; flex: 0 0 auto; }
+  #photo-panel .photo-side #photo-apply { padding: 12px 10px; font-size: 15px; font-weight: 700; }
+  @media (orientation: portrait) { #photo-panel { flex-direction: column; } #photo-canvas { flex: 1 1 0; min-height: 0; }
+                                   #photo-panel .photo-side { flex: 0 1 auto; max-height: 45%; } }
   .bar { display: flex; flex-wrap: wrap; gap: 6px; align-items: center;
          padding: 8px 10px; border-top: 1px solid var(--line); }
   .bar .label { font-size: 13px; color: var(--soft); margin-right: 2px; }
@@ -260,6 +265,7 @@
   <div id="photo-panel" hidden>
     <canvas id="photo-canvas"></canvas>
     <div class="photo-side">
+      <button id="photo-apply" type="button" class="run">적용 — 공략 보기</button>
       <p id="photo-say">사진을 읽는 중…</p>
       <button id="photo-next" type="button" class="run" hidden>2장 찍기 (반대편 모서리)</button>
       <button id="photo-again1" type="button" hidden>1장 다시</button>
@@ -268,7 +274,6 @@
       <button id="photo-gallery" type="button" title="카메라 앱으로 먼저 찍어 두고 여기서 고릅니다 — 폰이 앱을 다시 열어 사진을 잃을 때">갤러리에서 고르기</button>
       <button id="photo-send-only" type="button" hidden title="판단 없이 찍은 사진만 올립니다 — 인식이 틀려도 됩니다">사진만 보내기</button>
       <button id="photo-cancel" type="button">취소</button>
-      <button id="photo-apply" type="button" class="run">적용</button>
     </div>
   </div>
 </div>
