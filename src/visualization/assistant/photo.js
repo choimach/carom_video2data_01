@@ -502,8 +502,12 @@ const PHOTO = (() => {
         const score = 0.55 * Math.min(1, circ) + 0.45 * Math.exp(-excess);
         if (!best || score > best.score) best = { c: k.c, r, score };
       }
-      if (!best) { warnings.push(`${{ white: "흰공", yellow: "노란공", red: "빨간공" }[colour]}을 찾지 못했습니다.`); continue; }
+      if (!best) continue;
       found[colour] = { world: topToWorld(best.c), confidence: Math.max(0, Math.min(1, best.score)), top: best.c };
+    }
+    fillByContrast(px, w, h, expectR, found);
+    for (const colour of ["white", "yellow", "red"]) {
+      if (!found[colour]) warnings.push(`${{ white: "흰공", yellow: "노란공", red: "빨간공" }[colour]}을 찾지 못했습니다.`);
     }
     const ids = Object.keys(found);
     for (let i = 0; i < ids.length; i++) for (let j = i + 1; j < ids.length; j++) {
@@ -515,6 +519,84 @@ const PHOTO = (() => {
       }
     }
     return { found, warnings };
+  }
+
+  // 정해 둔 색 범위로 못 찾은 공을 **천과 다른 것**으로 다시 찾는다 (2026-10-17). 실제 사진의 조명은 따뜻해서
+  // 빨간공이 H≈15(주황)로 나와 노란공 범위에 들고, 노란공 칸이 빨간공 자리를 잡았다. 선수: "사진 두장 찍었는데
+  // 흰공을 detect못함". 그래서 범위가 아니라 서로 견준다 — 천이 아닌 공 크기 덩어리 가운데 흰공 = 채도가 가장 낮은 것,
+  // 남은 둘 중 빨간공 = 색상이 0(빨강)에 더 가까운 것. 범위로 찾은 공은 그대로 두고, 빈 자리와 겹친 자리만 채운다.
+  function fillByContrast(px, w, h, expectR, found) {
+    // 천의 색: 경기 면 안쪽 픽셀의 색상 최빈값
+    const inside = (i) => { const x = i % w, y = (i - x) / w, q = topToWorld([x + 0.5, y + 0.5]); return q[0] > 0 && q[0] < L && q[1] > 0 && q[1] < W; };
+    const hist = new Array(180).fill(0), vs = [];
+    for (let i = 0; i < w * h; i += 3) if (inside(i) && px[i][1] > 60) { hist[px[i][0]]++; vs.push(px[i][2]); }
+    let cloth = 0;
+    for (let k = 1; k < 180; k++) if (hist[k] > hist[cloth]) cloth = k;
+    vs.sort((a, b) => a - b);
+    const clothV = vs.length ? vs[vs.length >> 1] : 200;
+    const hueGap = (a, b) => { const d = Math.abs(a - b) % 180; return Math.min(d, 180 - d); };
+    let mask = new Uint8Array(w * h);
+    for (let i = 0; i < w * h; i++) {
+      const [hh, ss, vv] = px[i];
+      mask[i] = inside(i) && vv > 0.45 * clothV && (ss < 90 || hueGap(hh, cloth) > 25) ? 1 : 0;
+    }
+    mask = close(open(mask, w, h, 2), w, h, 2);
+    // 공 하나 = 천이 아닌 덩어리 하나 (그림자는 어두워서 빠진다). 반사광으로 갈라진 색 덩어리도 같은 공으로 묶인다.
+    const expectArea = Math.PI * expectR * expectR, blobs = [];
+    for (const comp of components(mask, w, h)) {
+      const area = comp.pixels.length;
+      if (area < AREA_MIN * expectArea || area > AREA_MAX * expectArea) continue;
+      const set = new Set(comp.pixels), border = [];
+      for (const p of comp.pixels) {
+        const x = p % w, y = (p - x) / w;
+        if (!set.has(p - 1) || !set.has(p + 1) || !set.has(p - w) || !set.has(p + w)) border.push([x + 0.5, y + 0.5]);
+      }
+      const k = enclosing(border), r = Math.max(k.r, 0.5);
+      const circ = area / (Math.PI * r * r);
+      if (circ < MIN_CIRC) continue;
+      const ratio = r / expectR;
+      const excess = Math.max(0, R_OK[0] - ratio) / 0.3 + Math.max(0, ratio - R_OK[1]) / 0.8;
+      const score = 0.55 * Math.min(1, circ) + 0.45 * Math.exp(-excess);
+      if (score < 0.35) continue;
+      // 덩어리의 색: 채도는 중앙값, 색상은 채도가 있는 픽셀의 원형 평균 (빨강은 0/180을 넘나든다)
+      const sat = comp.pixels.map((p) => px[p][1]).sort((a, b) => a - b);
+      let cx = 0, cy = 0;
+      for (const p of comp.pixels) if (px[p][1] > 80) { const t = (px[p][0] / 90) * Math.PI; cx += Math.cos(t); cy += Math.sin(t); }
+      let hue = (Math.atan2(cy, cx) / Math.PI) * 90; if (hue < 0) hue += 180;
+      blobs.push({ c: k.c, r, set, world: topToWorld(k.c), score, s: sat[sat.length >> 1], redness: hueGap(hue, 0) });
+    }
+    // 범위로 찾은 공이 어느 덩어리에 들었나. 두 색이 한 덩어리에 들면 어느 쪽이 맞는지 모른다 — 둘 다 다시.
+    const owner = {};
+    for (const [colour, f] of Object.entries(found)) {
+      const at = Math.round(f.top[1]) * w + Math.round(f.top[0]);
+      const b = blobs.find((x) => x.set.has(at)) || blobs.find((x) => dist(x.c, f.top) < x.r + expectR);
+      if (b) (owner[blobs.indexOf(b)] = owner[blobs.indexOf(b)] || []).push(colour);
+    }
+    for (const list of Object.values(owner)) if (list.length > 1) list.forEach((c) => delete found[c]);
+    const ids = Object.keys(found);
+    for (let i = 0; i < ids.length; i++) for (let j = i + 1; j < ids.length; j++) {
+      const a = found[ids[i]], b = found[ids[j]];
+      if (a && b && dist(a.world, b.world) < 1.5 * R) { delete found[ids[i]]; delete found[ids[j]]; }
+    }
+    const missing = ["white", "yellow", "red"].filter((c) => !found[c]);
+    if (!missing.length) return;
+    const pool = blobs.filter((b) => !Object.values(found).some((f) => b.set.has(Math.round(f.top[1]) * w + Math.round(f.top[0])) || dist(f.top, b.c) < b.r))
+      .sort((a, b) => b.score - a.score).slice(0, missing.length + 1);
+    const take = (b, colour) => { found[colour] = { world: b.world, confidence: Math.min(0.6, b.score), top: b.c, contrast: true }; pool.splice(pool.indexOf(b), 1); };
+    if (missing.includes("white") && pool.length) {
+      const b = pool.reduce((a, c) => (c.s < a.s ? c : a));
+      if (b.s < 110) take(b, "white");
+    }
+    const coloured = ["red", "yellow"].filter((c) => missing.includes(c));
+    const strong = pool.filter((b) => b.s >= 90);
+    if (coloured.length === 2 && strong.length >= 2) {
+      const [a, b] = strong.slice(0, 2).sort((x, y) => x.redness - y.redness);
+      take(a, "red"); take(b, "yellow");
+    } else if (coloured.length && strong.length) {
+      // 색 공 덩어리가 하나뿐: 빈 칸이 하나면 그것, 둘이면 색상으로 (빨강 H < 8)
+      const b = strong[0];
+      take(b, coloured.length === 1 ? coloured[0] : b.redness < 8 ? "red" : "yellow");
+    }
   }
 
   // ── 진입점 ────────────────────────────────────────────────────────────
