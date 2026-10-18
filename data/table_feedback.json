@@ -53062,6 +53062,493 @@
    "opposite": null,
    "played": null,
    "comment": null
+  },
+  {
+   "at": "2026-10-18T08:30:59",
+   "table": [
+    2844,
+    1422
+   ],
+   "cue": "yellow",
+   "layout": {
+    "white": [
+     818,
+     789
+    ],
+    "yellow": [
+     317,
+     350
+    ],
+    "red": [
+     1809,
+     1367
+    ]
+   },
+   "want": {
+    "first": "any",
+    "face": "any"
+   },
+   "origin": "random",
+   "seed": 1658093566,
+   "picked": "옆돌리기|white|right|bottom-left-top@1,3",
+   "kisses": 84,
+   "candidates": [
+    {
+     "key": "옆돌리기|white|right|bottom-left-top@1,3",
+     "route": "옆돌리기",
+     "first": "white",
+     "face": "right",
+     "thickness": 0.517,
+     "tips": [
+      1,
+      -1
+     ],
+     "strength": 5.6,
+     "deg": 43.75,
+     "room": 0.446,
+     "rails": 3,
+     "chosen": 10,
+     "scored": 5,
+     "total": 40,
+     "band": [
+      7,
+      0.469
+     ]
+    },
+    {
+     "key": "빗겨치기|red|left|right-bottom-left@7,2",
+     "route": "빗겨치기",
+     "first": "red",
+     "face": "left",
+     "thickness": 0.581,
+     "tips": [
+      0,
+      2
+     ],
+     "strength": 5.6,
+     "deg": 33.5,
+     "room": 0.03,
+     "rails": 3,
+     "chosen": 2,
+     "scored": 1,
+     "total": 40,
+     "band": [
+      6,
+      0.485
+     ]
+    },
+    {
+     "key": "옆돌리기|white|right|bottom-top-right@2,3",
+     "route": "옆돌리기",
+     "first": "white",
+     "face": "right",
+     "thickness": 0.045,
+     "tips": [
+      -1,
+      1.73
+     ],
+     "strength": 5,
+     "deg": 46.25,
+     "room": 0.156,
+     "rails": 3,
+     "chosen": 10,
+     "scored": 5,
+     "total": 40,
+     "band": [
+      7,
+      0.469
+     ]
+    },
+    {
+     "key": "앞돌리기|white|left|right-top-left@7,1",
+     "route": "앞돌리기",
+     "first": "white",
+     "face": "left",
+     "thickness": 0.303,
+     "tips": [
+      0,
+      0
+     ],
+     "strength": 5,
+     "deg": 37.55826866899082,
+     "room": 0.062,
+     "rails": 3,
+     "chosen": 2,
+     "scored": 0,
+     "total": 40,
+     "band": [
+      273,
+      0.3
+     ]
+    },
+    {
+     "key": "빗겨치기|white|left|right-bottom-left@7,1",
+     "route": "빗겨치기",
+     "first": "white",
+     "face": "left",
+     "thickness": 0.198,
+     "tips": [
+      1.73,
+      1
+     ],
+     "strength": 6.3,
+     "deg": 37,
+     "room": 0.044,
+     "rails": 5,
+     "chosen": 4,
+     "scored": 1,
+     "total": 40,
+     "band": [
+      3,
+      0.385
+     ]
+    },
+    {
+     "key": "빗겨치기|red|left|right-bottom-left@7,3",
+     "route": "빗겨치기",
+     "first": "red",
+     "face": "left",
+     "thickness": 0.325,
+     "tips": [
+      -1,
+      1.73
+     ],
+     "strength": 5,
+     "deg": 33,
+     "room": 0.016,
+     "rails": 3,
+     "chosen": 2,
+     "scored": 1,
+     "total": 40,
+     "band": [
+      6,
+      0.485
+     ]
+    },
+    {
+     "key": "앞돌리기|red|left|right-bottom-top@7,3",
+     "route": "앞돌리기",
+     "first": "red",
+     "face": "left",
+     "thickness": 0.198,
+     "tips": [
+      1.73,
+      1
+     ],
+     "strength": 5.6,
+     "deg": 32.75,
+     "room": 0.115,
+     "rails": 4,
+     "chosen": 0,
+     "scored": 0,
+     "total": 40,
+     "band": [
+      273,
+      0.3
+     ]
+    },
+    {
+     "key": "뱅크샷|red|right|top-right-bottom@2,0",
+     "route": "뱅크샷",
+     "first": "red",
+     "face": "right",
+     "thickness": 0.168,
+     "tips": [
+      0,
+      2
+     ],
+     "strength": 5.6,
+     "deg": 337,
+     "room": 0.121,
+     "rails": 4,
+     "chosen": 3,
+     "scored": 1,
+     "total": 40,
+     "band": [
+      3,
+      0.249
+     ]
+    },
+    {
+     "key": "옆돌리기|white|left|bottom-right-top@5,3",
+     "route": "옆돌리기",
+     "first": "white",
+     "face": "left",
+     "thickness": 0.01,
+     "tips": [
+      -2,
+      0
+     ],
+     "strength": 7,
+     "deg": 36,
+     "room": 0.057,
+     "rails": 7,
+     "chosen": 2,
+     "scored": 1,
+     "total": 40,
+     "band": [
+      10,
+      0.426
+     ]
+    },
+    {
+     "key": "횡단|white|right|bottom-top-bottom@1,3",
+     "route": "횡단",
+     "first": "white",
+     "face": "right",
+     "thickness": 0.368,
+     "tips": [
+      0,
+      2
+     ],
+     "strength": 7,
+     "deg": 44.5,
+     "room": 0.049,
+     "rails": 5,
+     "chosen": 0,
+     "scored": 0,
+     "total": 40,
+     "band": [
+      10,
+      0.336
+     ]
+    },
+    {
+     "key": "옆돌리기|red|left|bottom-right-top@5,3",
+     "route": "옆돌리기",
+     "first": "red",
+     "face": "left",
+     "thickness": 0.073,
+     "tips": [
+      1,
+      0
+     ],
+     "strength": 5,
+     "deg": 32.5,
+     "room": 0.057,
+     "rails": 4,
+     "chosen": 0,
+     "scored": 0,
+     "total": 40,
+     "band": [
+      10,
+      0.426
+     ]
+    },
+    {
+     "key": "뱅크샷|white|left|top-right-bottom@1,0",
+     "route": "뱅크샷",
+     "first": "white",
+     "face": "left",
+     "thickness": 0.428,
+     "tips": [
+      0,
+      2
+     ],
+     "strength": 4.4,
+     "deg": 286,
+     "room": 0.062,
+     "rails": 3,
+     "chosen": 0,
+     "scored": 0,
+     "total": 40,
+     "band": [
+      3,
+      0.249
+     ]
+    },
+    {
+     "key": "앞돌리기|red|left|right-top-left@7,3",
+     "route": "앞돌리기",
+     "first": "red",
+     "face": "left",
+     "thickness": 0.198,
+     "tips": [
+      -1,
+      -1.73
+     ],
+     "strength": 5,
+     "deg": 32.75,
+     "room": 0.024,
+     "rails": 3,
+     "chosen": 0,
+     "scored": 0,
+     "total": 40,
+     "band": [
+      273,
+      0.3
+     ]
+    },
+    {
+     "key": "앞돌리기|red|left|right-top-left@7,2",
+     "route": "앞돌리기",
+     "first": "red",
+     "face": "left",
+     "thickness": 0.718,
+     "tips": [
+      -1.73,
+      1
+     ],
+     "strength": 7,
+     "deg": 33.75,
+     "room": 0.051,
+     "rails": 3,
+     "chosen": 0,
+     "scored": 0,
+     "total": 40,
+     "band": [
+      273,
+      0.3
+     ]
+    },
+    {
+     "key": "앞돌리기|red|left|right-left-bottom@7,3",
+     "route": "앞돌리기",
+     "first": "red",
+     "face": "left",
+     "thickness": 0.198,
+     "tips": [
+      0,
+      0
+     ],
+     "strength": 7,
+     "deg": 32.75,
+     "room": 0.015,
+     "rails": 5,
+     "chosen": 0,
+     "scored": 0,
+     "total": 40,
+     "band": [
+      273,
+      0.3
+     ]
+    },
+    {
+     "key": "뱅크샷|red|right|left-top-bottom@0,0",
+     "route": "뱅크샷",
+     "first": "red",
+     "face": "right",
+     "thickness": 0.502,
+     "tips": [
+      0,
+      2
+     ],
+     "strength": 5.6,
+     "deg": 218.25,
+     "room": 0.089,
+     "rails": 4,
+     "chosen": 3,
+     "scored": 1,
+     "total": 40,
+     "band": [
+      3,
+      0.249
+     ]
+    },
+    {
+     "key": "뱅크샷|white|right|top-right-bottom@4,0",
+     "route": "뱅크샷",
+     "first": "white",
+     "face": "right",
+     "thickness": 0.54,
+     "tips": [
+      -2,
+      0
+     ],
+     "strength": 6.3,
+     "deg": 347.75,
+     "room": 0.05,
+     "rails": 4,
+     "chosen": 1,
+     "scored": 0,
+     "total": 40,
+     "band": [
+      3,
+      0.249
+     ]
+    },
+    {
+     "key": "뱅크샷|red|left|top-right-bottom@2,0",
+     "route": "뱅크샷",
+     "first": "red",
+     "face": "left",
+     "thickness": 0.339,
+     "tips": [
+      2,
+      0
+     ],
+     "strength": 7,
+     "deg": 337,
+     "room": 0.051,
+     "rails": 4,
+     "chosen": 0,
+     "scored": 0,
+     "total": 40,
+     "band": [
+      3,
+      0.249
+     ]
+    },
+    {
+     "key": "뱅크샷|red|right|left-right-left@0,0",
+     "route": "뱅크샷",
+     "first": "red",
+     "face": "right",
+     "thickness": 0.591,
+     "tips": [
+      0,
+      2
+     ],
+     "strength": 5.6,
+     "deg": 176,
+     "room": 0.028,
+     "rails": 3,
+     "chosen": 3,
+     "scored": 1,
+     "total": 40,
+     "band": [
+      3,
+      0.249
+     ]
+    },
+    {
+     "key": "뱅크샷|red|left|left-top-bottom@0,0",
+     "route": "뱅크샷",
+     "first": "red",
+     "face": "left",
+     "thickness": 0.001,
+     "tips": [
+      -2,
+      0
+     ],
+     "strength": 5.6,
+     "deg": 215,
+     "room": 0.005,
+     "rails": 5,
+     "chosen": 0,
+     "scored": 0,
+     "total": 40,
+     "band": [
+      3,
+      0.249
+     ]
+    }
+   ],
+   "verdicts": {
+    "옆돌리기|white|right|bottom-top-right@2,3": "good",
+    "빗겨치기|red|left|right-bottom-left@7,2": "good"
+   },
+   "notes": {
+    "옆돌리기|white|right|bottom-left-top@1,3": [
+     "tip_other"
+    ]
+   },
+   "renames": {},
+   "better": null,
+   "photo": null,
+   "opposite": null,
+   "played": null,
+   "comment": null
   }
  ]
 }
