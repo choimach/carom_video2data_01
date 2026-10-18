@@ -66,6 +66,14 @@
   #photo-panel .photo-side #photo-apply { padding: 12px 10px; font-size: 15px; font-weight: 700; }
   @media (orientation: portrait) { #photo-panel { flex-direction: column; } #photo-canvas { flex: 1 1 0; min-height: 0; }
                                    #photo-panel .photo-side { flex: 0 1 auto; max-height: 45%; } }
+  /* 앱 안 카메라 (2026-10-18) — 카메라 앱을 따로 열면 폰이 이 탭을 내리거나 "메모리 부족"으로 못 찍었다 */
+  #cam-panel { position: fixed; inset: 0; z-index: 60; background: #000; display: flex; flex-direction: column; }
+  #cam-panel[hidden] { display: none; }
+  #cam-video { flex: 1 1 0; min-height: 0; width: 100%; object-fit: contain; }
+  #cam-panel .cam-bar { display: flex; gap: 8px; padding: 8px; justify-content: center; align-items: center; color: #ddd; font-size: 12.5px; }
+  #cam-shot { padding: 14px 28px; font-size: 16px; font-weight: 700; }
+  @media (orientation: landscape) { #cam-panel { flex-direction: row; } #cam-video { height: 100%; width: auto; flex: 1 1 0; min-width: 0; }
+                                    #cam-panel .cam-bar { flex-direction: column; } }
   .bar { display: flex; flex-wrap: wrap; gap: 6px; align-items: center;
          padding: 8px 10px; border-top: 1px solid var(--line); }
   .bar .label { font-size: 13px; color: var(--soft); margin-right: 2px; }
@@ -262,6 +270,15 @@
   </section>
   <footer id="footer"></footer>
   <!-- 사진으로 공 놓기 (2026-10-03). 사진 위에 잡은 네 모서리와 공을 보여 주고, 모서리는 끌어서 고친다. -->
+  <div id="cam-panel" hidden>
+    <video id="cam-video" autoplay playsinline muted></video>
+    <div class="cam-bar">
+      <button id="cam-shot" type="button" class="run">찍기</button>
+      <span id="cam-say"></span>
+      <button id="cam-app" type="button" title="폰의 카메라 앱으로 찍습니다 (예전 방식)">카메라 앱</button>
+      <button id="cam-cancel" type="button">취소</button>
+    </div>
+  </div>
   <div id="photo-panel" hidden>
     <canvas id="photo-canvas"></canvas>
     <div class="photo-side">
@@ -2729,7 +2746,42 @@
     const PENDING = "carom-photo-pending";
     const mark = (k) => { try { sessionStorage.setItem(PENDING, JSON.stringify({ at: Date.now(), slot: k })); } catch (e) { /* 없어도 된다 */ } };
     const unmark = () => { try { sessionStorage.removeItem(PENDING); } catch (e) { /* 없어도 된다 */ } };
-    const take = (k) => { slot = k; file.value = ""; mark(k); POOL.rest(); file.click(); };
+    const takeWithApp = (k) => { slot = k; file.value = ""; mark(k); POOL.rest(); file.click(); };
+    // 앱 안 카메라 (2026-10-18, 선수: "한번은 성공. 그다음부터는 메모리 부족으로 사진 못 찍는다고 계속 나와서").
+    // 카메라 앱을 따로 띄우면 앱 둘이 폰 메모리를 나눠 쓴다 — 카메라 앱이 거절하거나 폰이 이 탭을 내렸다.
+    // 여기서 영상으로 받아 한 장을 뜨고 바로 끈다. 인식은 긴 변 1600 px로 줄여 읽으므로 1920이면 넉넉하다.
+    // 안 되면 (권한 거부, 카메라 없음, 데스크톱) 예전처럼 카메라 앱으로.
+    const cam = { panel: $("cam-panel"), video: $("cam-video"), stream: null };
+    const camStop = () => {
+      if (cam.stream) cam.stream.getTracks().forEach((t) => t.stop());
+      cam.stream = null; cam.video.srcObject = null; cam.panel.hidden = true;
+    };
+    const take = async (k) => {
+      const coarse = window.matchMedia && matchMedia("(pointer: coarse)").matches;
+      if (!coarse || !(navigator.mediaDevices && navigator.mediaDevices.getUserMedia)) return takeWithApp(k);
+      slot = k; POOL.rest();
+      $("cam-say").textContent = k === 0 ? "1장 — 탁자 모서리에서" : "2장 — 반대편 모서리에서";
+      cam.panel.hidden = false;
+      try {
+        cam.stream = await navigator.mediaDevices.getUserMedia({ audio: false, video: {
+          facingMode: { ideal: "environment" }, width: { ideal: 1920 }, height: { ideal: 1440 }, aspectRatio: { ideal: 4 / 3 } } });
+        cam.video.srcObject = cam.stream;
+      } catch (e) { console.warn(e); camStop(); takeWithApp(k); }
+    };
+    $("cam-shot").onclick = async () => {
+      const v = cam.video;
+      if (!cam.stream || !v.videoWidth) return;
+      const c = document.createElement("canvas");
+      c.width = v.videoWidth; c.height = v.videoHeight;
+      c.getContext("2d").drawImage(v, 0, 0);
+      camStop();
+      const blob = await new Promise((go) => c.toBlob(go, "image/jpeg", 0.92));
+      c.width = c.height = 1;
+      if (blob) read(blob);
+    };
+    $("cam-app").onclick = () => { const k = slot; camStop(); takeWithApp(k); };
+    $("cam-cancel").onclick = () => camStop();
+    document.addEventListener("visibilitychange", () => { if (document.visibilityState === "hidden" && cam.stream) camStop(); });
     const pick = document.getElementById("photo-pick");
     file.onchange = () => { unmark(); const f = file.files && file.files[0]; if (f) read(f); };
     pick.onchange = () => { unmark(); const f = pick.files && pick.files[0]; if (f) read(f); };
