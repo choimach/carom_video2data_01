@@ -229,6 +229,9 @@ node --check build/sim.js
   ★**올리는 폰 판은 주석을 지우고 줄이고, 경기 이름은 g1·g2… 번호로 (2026-10-24, 선수: 분석하면 AI·SOOP이 보이나)** —
   원본과 claude.ai 조언판은 그대로. 줄이는 도구는 저장소 밖 `~/.cache/carom_tools` (`npm install --prefix ~/.cache/carom_tools esbuild@0.24.0`).
   압축 전후 같은 배치 셋 + 실제 사진 한 장에서 화면 글이 같았다. `pull_feedback.py`는 선수 기기(uid)만 받는다 — 새 폰이면 "받지 않은 기기"로 찍힌다.
+  ★**Firestore 규칙도 선수 기기만 쓴다 (2026-10-24, `carom_bot_01/firestore.rules`의 `owner()`)** — 폰을 바꾸거나 사이트 데이터를 지우면
+  "보내기 실패"가 난다: 새 uid를 `owner()`와 `pull_feedback.py`의 `OWNERS` **둘 다**에 더하고 `cd ../carom_bot_01 && firebase deploy --only firestore:rules --project carom001`.
+  App Check는 하지 않기로 했다 (선수: 폰 메모리가 늘어나는 건 원치 않음).
   선수가 폰에서 "결과 보내기"로 보낸 판단은 `python tools/pull_feedback.py --save`로 장부에 가져온다.
   사진으로 공을 놓고 보냈으면 **사진도 온다** (Firestore `users/{uid}/photos`, 줄인 JPEG) — `--save`가
   `data/photos/feedback/`에 저장하고, 기록의 `photo`에 인식 요약이 있다. 사진 인식이 틀린 판은 이것으로 고친다.
