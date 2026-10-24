@@ -22,6 +22,22 @@ LEDGER = os.path.join(ROOT, "data", "table_feedback.json")
 KEY = os.environ.get("CAROM_SERVICE_ACCOUNT", "/mnt/d/Data/Billiard/carom_bot_01/serviceAccount.json")
 
 
+def desk_line(record):
+    """데스크톱 조언판 씨앗 칸에 붙일 여섯 숫자 (흰·노·빨 x, y mm)와 수구.
+
+    선수 (2026-10-24): 폰에서 판단까지 하기는 불편하다 — 폰은 찍어 보내고, 판단은 데스크톱에서
+    같은 배치로 한다. 조언판 씨앗 칸은 숫자 여섯 개를 배치로 받는다 (`assistant.html` seedBox).
+    """
+    layout = record.get("layout")
+    if not layout and record.get("recognised"):     # 사진만 보내기: {x, y}로 온다
+        layout = {k: [v["x"], v["y"]] for k, v in record["recognised"].items()}
+    if not layout or not all(k in layout for k in ("white", "yellow", "red")):
+        return None
+    nums = " ".join(str(round(c)) for k in ("white", "yellow", "red") for c in layout[k])
+    cue = {"white": "흰공", "yellow": "노란공"}.get(record.get("cue"), "직접 고름")
+    return f"{nums}   (수구 {cue})"
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--save", action="store_true", help="새 기록을 장부에 쌓는다")
@@ -63,6 +79,9 @@ def main(argv=None):
             print(f"    더 나은 공략: {record['better']}")
         if record.get("comment"):
             print("    의견: " + record["comment"].replace("\n", "\n          "))
+        paste = desk_line(record)
+        if paste:
+            print(f"    데스크톱 씨앗 칸: {paste}")
     # 사진 (2026-10-04): users/{uid}/photos 의 feedbackId로 짝을 지어 data/photos/feedback/ 에 저장
     photos = {}
     for doc in db.collection_group("photos").stream():

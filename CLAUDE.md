@@ -229,6 +229,7 @@ node --check build/sim.js
   선수가 폰에서 "결과 보내기"로 보낸 판단은 `python tools/pull_feedback.py --save`로 장부에 가져온다.
   사진으로 공을 놓고 보냈으면 **사진도 온다** (Firestore `users/{uid}/photos`, 줄인 JPEG) — `--save`가
   `data/photos/feedback/`에 저장하고, 기록의 `photo`에 인식 요약이 있다. 사진 인식이 틀린 판은 이것으로 고친다.
+  ★**폰은 찍어 보내고, 판단은 데스크톱에서 (선수 2026-10-24: "mobile앱에서는 feedback작업을 직접하기는 불편해")** — `pull_feedback.py`가 기록마다 `데스크톱 씨앗 칸:` 여섯 숫자와 수구를 찍는다. 선수에게 그 줄을 건넨다.
   ⚠️ Firestore는 undefined 값과 **배열 안의 배열**을 받지 않는다 — 기록에 넣을 때 조심 (보내기가 통째로 실패한다).
   ⚠️ 같은 프로젝트의 **https://carom001.web.app 은 다른 앱**(저장소 `carom_bot_01`, 2026-09-10)이다 — 덮어쓰지 말 것.
   Firestore 규칙의 원본은 `carom_bot_01/firestore.rules` 한 곳이다 (이 저장소에서 규칙을 올리지 않는다).
