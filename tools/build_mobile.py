@@ -13,7 +13,9 @@
 """
 
 import datetime
+import json
 import os
+import re
 import shutil
 import subprocess
 
@@ -24,6 +26,55 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 BUILD = os.path.join(ROOT, "build")
 MOBILE = os.path.join(ROOT, "src", "visualization", "mobile")
 OUT = os.path.join(BUILD, "mobile")
+# 올리는 판을 줄이는 도구 — 저장소 밖에 둔다: npm install --prefix ~/.cache/carom_tools esbuild@0.24.0
+ESBUILD = os.environ.get("CAROM_ESBUILD", os.path.expanduser("~/.cache/carom_tools/node_modules/.bin/esbuild"))
+
+
+# ★폰 앱은 누구나 받아 볼 수 있다 (선수 2026-10-24: 분석하면 AI로 만든 것·SOOP에서 받은 것이 보이나,
+# 복사하기 쉬운가). 원본(src/)과 조언판(claude.ai)은 그대로 두고 **올리는 판만** 바꾼다:
+#   · 주석을 지우고 줄인다 — 주석에 대화 인용·날짜·claude.ai가 1,000줄 가까이 있었다.
+#   · 경기 이름을 뜻 없는 번호로 — "201755361_POWC2026"의 숫자가 SOOP VOD 번호였다.
+#     조언판은 경기 이름을 "같은 경기인가"(excludeMatch)로만 쓰므로 번호로 바꿔도 같다.
+# 복사 자체는 막을 수 없다 — 서버 없이 폰에서 도는 웹앱이라 받은 것이 곧 전부다.
+def squeeze(code, loader):
+    """주석을 지우고 줄인다. 이름 없는 형식(--format 없음)이라 맨 위 이름은 그대로 둔다 —
+    sim.js · route.js · search.js가 서로의 맨 위 이름을 부르고, 워커도 그것을 읽는다."""
+    done = subprocess.run([ESBUILD, f"--loader={loader}", "--minify", "--legal-comments=none",
+                           "--charset=utf8", "--log-level=warning"],
+                          input=code, capture_output=True, text=True)
+    if done.returncode:
+        raise SystemExit(f"esbuild 실패 ({loader}):\n{done.stderr[-2000:]}")
+    return done.stdout.strip()
+
+
+def blank_matches(html):
+    """자료 안의 경기 이름을 g1, g2, … 로. 같은 경기는 같은 번호."""
+    tag = '<script id="data" type="application/json">'
+    start = html.index(tag) + len(tag)
+    end = html.index("</script>", start)
+    data = json.loads(html[start:end])
+    names = {}
+    for play in data["plays"]:
+        if play.get("match") is not None:
+            play["match"] = names.setdefault(play["match"], f"g{len(names) + 1}")
+    body = json.dumps(data, ensure_ascii=False, separators=(",", ":")).replace("</", "<\\/")
+    return html[:start] + body + html[end:], len(names)
+
+
+def squeeze_page(html):
+    """페이지 안의 <style>·<script>(src 없는 것)를 줄이고 HTML 주석을 지운다."""
+    def one(m):
+        open_tag, body, close = m.group(1), m.group(3), m.group(4)
+        if m.group(2) == "style":
+            return open_tag + squeeze(body, "css") + close
+        if "src=" in open_tag or "application/json" in open_tag or not body.strip():
+            return m.group(0)
+        return open_tag + squeeze(body, "js") + close
+    parts = re.split(r"(<(?:script|style)[^>]*>.*?</(?:script|style)>)", html, flags=re.S)
+    for i in range(0, len(parts), 2):                    # 태그 바깥 HTML만
+        parts[i] = re.sub(r"<!--.*?-->", "", parts[i], flags=re.S)
+    html = "".join(parts)
+    return re.sub(r"(<(script|style)[^>]*>)(.*?)(</\2>)", one, html, flags=re.S)
 
 
 def icon(size):
@@ -72,8 +123,18 @@ def main():
     html += (f'\n<script>window.CAROM_BUILD = {stamp!r};</script>\n'
              '<script src="./mobile.js"></script>\n'
              '<script type="module" src="./cloud.js"></script>\n')
+    html, games = blank_matches(html)
+    html = squeeze_page(html)
     with open(os.path.join(OUT, "index.html"), "w", encoding="utf-8") as handle:
         handle.write(html)
+    for name in os.listdir(OUT):
+        loader = {".js": "js", ".css": "css"}.get(os.path.splitext(name)[1])
+        if loader:
+            path = os.path.join(OUT, name)
+            code = squeeze(open(path, encoding="utf-8").read(), loader)
+            with open(path, "w", encoding="utf-8") as handle:
+                handle.write(code)
+    print(f"경기 이름 {games}개를 번호로, 주석을 지우고 줄임")
     size = sum(os.path.getsize(os.path.join(d, f)) for d, _s, fs in os.walk(OUT) for f in fs)
     print(f"{OUT} — {stamp} · {size // 1024} KB")
     return 0

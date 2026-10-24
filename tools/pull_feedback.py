@@ -20,6 +20,10 @@ import sys
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 LEDGER = os.path.join(ROOT, "data", "table_feedback.json")
 KEY = os.environ.get("CAROM_SERVICE_ACCOUNT", "/mnt/d/Data/Billiard/carom_bot_01/serviceAccount.json")
+# ★선수 기기에서 온 것만 받는다 (2026-10-24). 로그인이 익명이라 누구나 기록을 써 넣을 수 있고,
+# 예전에는 모든 사용자의 것을 장부에 쌓았다 — 남이 넣은 판단이 채점에 섞일 수 있었다.
+# 폰을 바꾸거나 앱을 지웠다 다시 깔면 uid가 바뀐다: 아래 "받지 않은 기기"에 찍히면 확인하고 더한다.
+OWNERS = set(filter(None, os.environ.get("CAROM_FEEDBACK_UIDS", "iJAwbbAQRrZP7TVGoAKvskac2qC3").split(",")))
 
 
 def desk_line(record):
@@ -52,7 +56,12 @@ def main(argv=None):
     ledger = json.load(open(LEDGER, encoding="utf-8"))
     have = {(r.get("at"), r.get("seed")) for r in ledger["rounds"]}
     fresh = []
+    strangers = {}
     for doc in db.collection_group("feedback").stream():
+        uid = doc.reference.path.split("/")[1]
+        if uid not in OWNERS:
+            strangers[uid] = strangers.get(uid, 0) + 1
+            continue
         data = doc.to_dict()
         record = data.get("record") or {}
         if (record.get("at"), record.get("seed")) in have:
@@ -66,6 +75,8 @@ def main(argv=None):
     if args.count:
         print(len(fresh))
         return 0
+    for uid, n in sorted(strangers.items()):
+        print(f"받지 않은 기기 {uid}: 기록 {n}개 (선수의 새 폰이면 CAROM_FEEDBACK_UIDS / OWNERS에 더한다)")
     print(f"Firestore의 새 기록 {len(fresh)}개 (장부에는 {len(ledger['rounds'])}판)")
     for created, path, build, record in fresh:
         verdicts = record.get("verdicts") or {}
@@ -85,6 +96,8 @@ def main(argv=None):
     # 사진 (2026-10-04): users/{uid}/photos 의 feedbackId로 짝을 지어 data/photos/feedback/ 에 저장
     photos = {}
     for doc in db.collection_group("photos").stream():
+        if doc.reference.path.split("/")[1] not in OWNERS:
+            continue
         d = doc.to_dict()
         photos.setdefault(d.get("feedbackId"), []).append((d.get("slot", 0), d.get("jpeg")))
     for _created, path, build, record in fresh:
