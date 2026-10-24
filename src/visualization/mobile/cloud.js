@@ -9,6 +9,8 @@
 // 가져오기: tools/pull_feedback.py → data/table_feedback.json
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js";
 import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js";
+import { initializeAppCheck, ReCaptchaEnterpriseProvider }
+  from "https://www.gstatic.com/firebasejs/10.14.1/firebase-app-check.js";
 import { initializeFirestore, persistentLocalCache, persistentSingleTabManager,
          collection, doc, setDoc, serverTimestamp, waitForPendingWrites }
   from "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js";
@@ -22,6 +24,15 @@ const app = initializeApp({
   storageBucket: "carom001.firebasestorage.app",
   messagingSenderId: "439190673476",
 });
+// ★App Check (2026-10-24, 선수 요청). 로그인이 익명이라 누구나 기록을 써 넣을 수 있었다 — 이제
+// Firestore는 이 사이트에서 reCAPTCHA를 통과한 요청만 받는다 (콘솔에서 "강제"). 키는 콘솔이 만든
+// reCAPTCHA Enterprise 사이트 키 (공개되는 값). 등록한 도메인에서만 통하므로 시험 서버(localhost)에서는
+// 켜지 않는다 — 거기서는 보내기가 거절된다. 같은 프로젝트의 옛 앱(carom001.web.app)은 저장이 막힌다
+// (선수: 안 써도 됨). 폰에 쌓인 기록은 연결될 때 그때의 토큰을 붙여 올라간다.
+const APP_CHECK_KEY = "";
+if (APP_CHECK_KEY && location.hostname.endsWith(".web.app")) {
+  initializeAppCheck(app, { provider: new ReCaptchaEnterpriseProvider(APP_CHECK_KEY), isTokenAutoRefreshEnabled: true });
+}
 const auth = getAuth(app);
 // ★폰 안에 먼저 쓴다 (2026-10-03). 당구장 지하처럼 신호가 없는 곳에서 보내면 기록이 앱
 // 메모리에만 있다가 앱을 닫으면 사라졌다. 이 캐시는 IndexedDB에 남고, 다음에 연결되면
