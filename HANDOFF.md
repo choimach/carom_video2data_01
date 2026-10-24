@@ -15,13 +15,6 @@
 
 **기다림 (2026-10-17): 흰공을 못 찾은 두 장 — 선수가 10-18에 다시 찍어 '사진만 보내기'로 보내기로.** 오면 `pull_feedback.py --save` → `node tools/debug_photo.js data/photos/feedback/<사진> out.png`. 10-17에 `fillByContrast`(천이 아닌 덩어리로 견주기)를 넣었다 — 그것으로도 안 잡히면 원인을 그 사진에서 본다 (`ref/findings.md` "색 범위 대신").
 
-**기다림 (2026-10-24): App Check — 선수가 콘솔에서 reCAPTCHA Enterprise 키를 만들고 웹 앱을 등록해 주기로.**
-키(사이트 키)를 받으면: `src/visualization/mobile/cloud.js`의 `APP_CHECK_KEY`에 넣기 → `build_assistant.py` → `build_mobile.py` →
-`firebase deploy --only hosting --project carom001` → 헤드리스로 carom001-board.web.app 열어 토큰이 나오는지 (`getToken`) →
-선수가 "결과 보내기" 한 번 → 그다음에야 Firestore 강제 (서비스 계정에 `firebaseappcheck.services.update`가 있다:
-PATCH `firebaseappcheck.googleapis.com/v1/projects/439190673476/services/firestore.googleapis.com` `enforcementMode: ENFORCED`).
-옛 앱(carom001.web.app)은 저장이 막혀도 된다 (선수). 서비스 계정은 API 켜기·reCAPTCHA 키 만들기 권한이 없다 — 그래서 선수 몫.
-
 **끝 (2026-10-24): 폰 앱 안 카메라 — 당구장에서 세 번 다 잘 찍힘 (선수).** 보낸 한 장 (`data/photos/feedback/2026-10-24T022335_0.jpg`, 장부 마지막 판, 판단 0개): 공 셋 다 찾음, 다이아몬드 14, 점수 13.9, 0.96초, 경고 없음 — 겹쳐 그린 테두리가 쿠션에 맞는다.
 
 **끝 (2026-10-12 02:10): 남은 경기 3개 중 스캔된 것 1개 (HCMC2025) → 4,315판 재학습, 버전 101 게시** (두 곳). POWC2026 둘(201685041 · 201776661)은 보정 실패로 스캔 못 함 (전과 같음, 영상 12.8 GB 남김). 숫자는 `ref/findings.md` "경기 1개 더".
